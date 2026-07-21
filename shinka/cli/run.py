@@ -7,11 +7,16 @@ import argparse
 import json
 from dataclasses import asdict, fields
 from pathlib import Path
-from typing import Any, Dict, Optional, Union, get_args, get_origin
+from typing import Any, Dict, Optional, Union, get_args, get_origin, get_type_hints
 
 from shinka.core import ShinkaEvolveRunner, EvolutionConfig
 from shinka.database import DatabaseConfig
-from shinka.launch import LocalJobConfig
+from shinka.launch import (
+    JobConfig,
+    LocalJobConfig,
+    SecureJobConfig,
+    validate_secure_job_config,
+)
 from shinka.cli.run_config import load_optional_yaml_config
 
 SUPPORTED_INITIAL_EXTENSIONS: dict[str, str] = {
@@ -49,6 +54,8 @@ INITIAL_EXTENSION_PRIORITY: list[str] = [
     ".f03",
     ".f08",
 ]
+
+
 def _positive_int(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
@@ -70,8 +77,8 @@ def _build_parser() -> argparse.ArgumentParser:
     description = (
         "Run async Shinka evolution from a task directory.\n\n"
         "Task directory contract:\n"
-        "  - evaluate.py\n"
-        "  - seed_repo/ git repository, unless evo.seed_repo_path or "
+        "  - evaluator code (evaluate.py for trusted-local compatibility)\n"
+        "  - seed_repo/ candidate, unless evo.seed_repo_path or "
         "--seed-repo-path is provided"
     )
     epilog = (
@@ -162,6 +169,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     override_group = parser.add_argument_group("overrides")
     override_group.add_argument(
+        "--evaluation-mode",
+        choices=("trusted_local", "secure"),
+        default=None,
+        help=(
+            "Select the evaluation boundary explicitly. secure is required for "
+            "sealed/private/adversarial tasks; trusted_local is public/cooperative only."
+        ),
+    )
+    override_group.add_argument(
         "--set",
         dest="overrides",
         action="append",
@@ -220,10 +236,23 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _field_types() -> Dict[str, Dict[str, Any]]:
+    evo_hints = get_type_hints(EvolutionConfig)
+    db_hints = get_type_hints(DatabaseConfig)
+    local_job_hints = get_type_hints(LocalJobConfig)
+    secure_job_hints = get_type_hints(SecureJobConfig)
     return {
-        "evo": {field.name: field.type for field in fields(EvolutionConfig)},
-        "db": {field.name: field.type for field in fields(DatabaseConfig)},
-        "job": {field.name: field.type for field in fields(LocalJobConfig)},
+        "evo": {field.name: evo_hints[field.name] for field in fields(EvolutionConfig)},
+        "db": {field.name: db_hints[field.name] for field in fields(DatabaseConfig)},
+        "job": {
+            **{
+                field.name: local_job_hints[field.name]
+                for field in fields(LocalJobConfig)
+            },
+            **{
+                field.name: secure_job_hints[field.name]
+                for field in fields(SecureJobConfig)
+            },
+        },
     }
 
 
@@ -374,31 +403,41 @@ def _build_default_db_values() -> Dict[str, Any]:
     return asdict(DatabaseConfig())
 
 
-def _build_default_job_values(evaluate_path: Path) -> Dict[str, Any]:
-    return asdict(LocalJobConfig(eval_program_path=str(evaluate_path)))
+def _build_default_job_values(
+    *,
+    task_dir: Path,
+    evaluation_mode: str,
+) -> Dict[str, Any]:
+    if evaluation_mode == "secure":
+        return asdict(SecureJobConfig(evaluator_repo_path=str(task_dir)))
+    return asdict(LocalJobConfig(eval_program_path=str(task_dir / "evaluate.py")))
 
 
-def _resolve_job_eval_program_path(*, task_dir: Path, job_values: Dict[str, Any]) -> None:
-    raw_path = job_values.get("eval_program_path")
-    if raw_path is None:
-        return
-    eval_path = Path(str(raw_path))
-    if not eval_path.is_absolute():
-        eval_path = (task_dir / eval_path).resolve()
-    else:
-        eval_path = eval_path.resolve()
-    job_values["eval_program_path"] = str(eval_path)
+def _resolve_job_paths(
+    *,
+    task_dir: Path,
+    job_values: Dict[str, Any],
+    evaluation_mode: str,
+) -> None:
+    field_names = (
+        ("evaluator_repo_path", "dependency_manifest_path")
+        if evaluation_mode == "secure"
+        else ("eval_program_path",)
+    )
+    for field_name in field_names:
+        raw_path = job_values.get(field_name)
+        if raw_path is None:
+            continue
+        path = Path(str(raw_path))
+        path = (task_dir / path).resolve() if not path.is_absolute() else path.resolve()
+        job_values[field_name] = str(path)
 
 
-def _validate_task_dir(task_dir: Path) -> Path:
+def _validate_task_dir(task_dir: Path) -> None:
     if not task_dir.exists():
         raise FileNotFoundError(f"Task dir does not exist: {task_dir}")
     if not task_dir.is_dir():
         raise FileNotFoundError(f"Task dir is not a directory: {task_dir}")
-    evaluate_path = task_dir / "evaluate.py"
-    if not evaluate_path.exists():
-        raise FileNotFoundError(f"Missing evaluate.py in task dir: {task_dir}")
-    return evaluate_path
 
 
 def _resolve_seed_repo_path(
@@ -406,6 +445,7 @@ def _resolve_seed_repo_path(
     task_dir: Path,
     cli_seed_repo_path: Optional[Path],
     evo_overrides: Dict[str, Any],
+    evaluation_mode: str,
 ) -> Path:
     raw_seed_path = evo_overrides.get("seed_repo_path")
     if raw_seed_path:
@@ -421,7 +461,11 @@ def _resolve_seed_repo_path(
         seed_repo_path = seed_repo_path.resolve()
     if not seed_repo_path.exists():
         raise FileNotFoundError(f"Seed repo does not exist: {seed_repo_path}")
-    if not (seed_repo_path / ".git").exists():
+    if seed_repo_path.is_symlink() or not seed_repo_path.is_dir():
+        raise FileNotFoundError(
+            f"Seed candidate is missing or unsafe: {seed_repo_path}"
+        )
+    if evaluation_mode == "trusted_local" and not (seed_repo_path / ".git").exists():
         raise FileNotFoundError(f"Seed repo is not a git repository: {seed_repo_path}")
     return seed_repo_path
 
@@ -431,8 +475,8 @@ def _build_runner(
     args: argparse.Namespace,
     evo_config: EvolutionConfig,
     db_config: DatabaseConfig,
-    job_config: LocalJobConfig,
-    evaluate_str: str,
+    job_config: JobConfig,
+    evaluate_str: Optional[str],
 ) -> ShinkaEvolveRunner:
     runner_kwargs: Dict[str, Any] = {
         "evo_config": evo_config,
@@ -452,6 +496,28 @@ def _build_runner(
     return ShinkaEvolveRunner(**runner_kwargs)
 
 
+def _resolve_secure_evo_paths(
+    *,
+    task_dir: Path,
+    evo_values: Dict[str, Any],
+) -> None:
+    profiles = dict(evo_values.get("agent_auth_profiles") or {})
+    for agent, raw_path in profiles.items():
+        path = Path(str(raw_path)).expanduser()
+        profiles[agent] = str(
+            (task_dir / path).resolve() if not path.is_absolute() else path.resolve()
+        )
+    evo_values["agent_auth_profiles"] = profiles
+    for field_name in ("secure_state_root", "headless_session_home_root"):
+        raw_path = evo_values.get(field_name)
+        if not raw_path:
+            continue
+        path = Path(str(raw_path)).expanduser()
+        evo_values[field_name] = str(
+            (task_dir / path).resolve() if not path.is_absolute() else path.resolve()
+        )
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -460,7 +526,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     results_dir = args.results_dir.resolve()
 
     try:
-        evaluate_path = _validate_task_dir(task_dir)
+        _validate_task_dir(task_dir)
         allowed_types = _field_types()
         file_overrides, runner_config = load_optional_yaml_config(
             task_dir=task_dir,
@@ -473,11 +539,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             **file_overrides["evo"],
             **parsed_overrides["evo"],
         }
+        if args.evaluation_mode is not None:
+            merged_evo_overrides["evaluation_mode"] = args.evaluation_mode
+        evaluation_mode = str(
+            merged_evo_overrides.get("evaluation_mode", "trusted_local")
+        )
+        if evaluation_mode not in {"trusted_local", "secure"}:
+            raise ValueError("evaluation_mode must be 'trusted_local' or 'secure'")
         language = str(merged_evo_overrides.get("language", "python"))
         seed_repo_path = _resolve_seed_repo_path(
             task_dir=task_dir,
             cli_seed_repo_path=args.seed_repo_path,
             evo_overrides=merged_evo_overrides,
+            evaluation_mode=evaluation_mode,
         )
         evo_values = _build_default_evo_values(
             language=language,
@@ -490,15 +564,25 @@ def main(argv: Optional[list[str]] = None) -> int:
         evo_values["seed_repo_path"] = str(seed_repo_path)
         evo_values["results_dir"] = str(results_dir)
         evo_values["num_generations"] = args.num_generations
+        evo_values["evaluation_mode"] = evaluation_mode
+        if evaluation_mode == "secure":
+            _resolve_secure_evo_paths(task_dir=task_dir, evo_values=evo_values)
 
         db_values = _build_default_db_values()
         db_values.update(file_overrides["db"])
         db_values.update(parsed_overrides["db"])
 
-        job_values = _build_default_job_values(evaluate_path)
+        job_values = _build_default_job_values(
+            task_dir=task_dir,
+            evaluation_mode=evaluation_mode,
+        )
         job_values.update(file_overrides["job"])
         job_values.update(parsed_overrides["job"])
-        _resolve_job_eval_program_path(task_dir=task_dir, job_values=job_values)
+        _resolve_job_paths(
+            task_dir=task_dir,
+            job_values=job_values,
+            evaluation_mode=evaluation_mode,
+        )
 
         if args.max_evaluation_jobs is None:
             args.max_evaluation_jobs = runner_config.get("max_evaluation_jobs")
@@ -513,9 +597,33 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         evo_config = EvolutionConfig(**evo_values)
         db_config = DatabaseConfig(**db_values)
-        job_config = LocalJobConfig(**job_values)
-
-        evaluate_str = evaluate_path.read_text(encoding="utf-8")
+        if evaluation_mode == "secure":
+            job_config = SecureJobConfig(**job_values)
+            validate_secure_job_config(
+                job_config,
+                mutation_image=evo_config.mutation_image,
+            )
+            evaluator_root = Path(job_config.evaluator_repo_path or "")
+            evaluator_entrypoint = evaluator_root / job_config.evaluator_entrypoint
+            if (
+                evaluator_root.is_symlink()
+                or not evaluator_root.is_dir()
+                or evaluator_entrypoint.is_symlink()
+                or not evaluator_entrypoint.is_file()
+            ):
+                raise FileNotFoundError(
+                    "Secure evaluator repository or entrypoint is missing/unsafe: "
+                    f"{evaluator_entrypoint}"
+                )
+            evaluate_str = None
+        else:
+            job_config = LocalJobConfig(**job_values)
+            evaluate_path = Path(job_config.eval_program_path or "")
+            if evaluate_path.is_symlink() or not evaluate_path.is_file():
+                raise FileNotFoundError(
+                    f"Trusted-local evaluator is missing or unsafe: {evaluate_path}"
+                )
+            evaluate_str = evaluate_path.read_text(encoding="utf-8")
 
         runner = _build_runner(
             args=args,

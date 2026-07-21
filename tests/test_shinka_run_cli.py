@@ -460,6 +460,77 @@ def test_shinka_run_requires_evaluate_file(tmp_path):
     assert exc_info.value.code == 2
 
 
+def test_shinka_run_builds_explicit_secure_configuration(tmp_path, monkeypatch):
+    _reset_dummy_runner()
+    task_dir = _make_task_dir(tmp_path)
+    (task_dir / "auth").mkdir()
+    results_dir = tmp_path / "secure-results"
+    image = "example.invalid/shinka@sha256:" + "a" * 64
+    monkeypatch.setattr(cli_run, "ShinkaEvolveRunner", _DummyRunner)
+
+    exit_code = cli_run.main(
+        [
+            "--task-dir",
+            str(task_dir),
+            "--results_dir",
+            str(results_dir),
+            "--num_generations",
+            "2",
+            "--evaluation-mode",
+            "secure",
+            "--set",
+            'evo.llm_models=["headless/codex@test"]',
+            "--set",
+            f"evo.mutation_image={image}",
+            "--set",
+            'evo.agent_auth_profiles={"codex":"auth"}',
+            "--set",
+            "evo.agent_network=disabled",
+            "--set",
+            f"job.build_image={image}",
+            "--set",
+            f"job.runtime_image={image}",
+            "--set",
+            'job.candidate_command=["candidate","--serve"]',
+            "--set",
+            'job.public_metric_allowlist=["score"]',
+        ]
+    )
+
+    assert exit_code == 0
+    assert _DummyRunner.run_calls == 1
+    evo_config = _DummyRunner.last_kwargs["evo_config"]
+    job_config = _DummyRunner.last_kwargs["job_config"]
+    assert evo_config.evaluation_mode == "secure"
+    assert evo_config.agent_auth_profiles == {
+        "codex": str((task_dir / "auth").resolve())
+    }
+    assert isinstance(job_config, cli_run.SecureJobConfig)
+    assert job_config.evaluator_repo_path == str(task_dir.resolve())
+    assert _DummyRunner.last_kwargs["evaluate_str"] is None
+
+
+def test_shinka_run_secure_mode_reports_missing_image(tmp_path, capsys):
+    task_dir = _make_task_dir(tmp_path)
+    with pytest.raises(SystemExit) as exc_info:
+        cli_run.main(
+            [
+                "--task-dir",
+                str(task_dir),
+                "--results_dir",
+                str(tmp_path / "secure-results"),
+                "--num_generations",
+                "2",
+                "--evaluation-mode",
+                "secure",
+                "--set",
+                'job.candidate_command=["candidate","--serve"]',
+            ]
+        )
+    assert exc_info.value.code == 2
+    assert "evo.mutation_image" in capsys.readouterr().err
+
+
 def test_dataclass_defaults_match_shared_baseline():
     evo_config = cli_run.EvolutionConfig()
     db_config = cli_run.DatabaseConfig()
