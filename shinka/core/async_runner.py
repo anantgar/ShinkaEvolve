@@ -41,7 +41,14 @@ from shinka.llm import (
 )
 from shinka.llm.providers import LLMRouteError
 from shinka.embed import AsyncEmbeddingClient
-from shinka.launch import JobScheduler, JobConfig, LocalJobConfig
+from shinka.launch import (
+    JobScheduler,
+    JobConfig,
+    LocalJobConfig,
+    SecureEvaluationScheduler,
+    SecureJobConfig,
+    validate_secure_job_config,
+)
 from shinka.run_manifest import ensure_wandb_run_id, write_run_manifest
 from shinka.edit.async_apply import (
     apply_patch_async,
@@ -87,6 +94,12 @@ from shinka.repo import (
     build_summary_template,
     validate_summary,
 )
+from shinka.repo.secure_worktree import WorktreeManager as SecureWorktreeManager
+from shinka.secure.configuration import (
+    SecureRuntimeSettings,
+    validate_secure_runtime_configuration,
+)
+from shinka.secure.sessions import ProposalSessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +277,29 @@ def _llm_client_kwargs_for_text_requests(
     }
 
 
+def _safe_llm_metadata_kwargs(llm_kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove runtime-only auth and session-home values before persistence."""
+
+    sensitive_fragments = (
+        "api_key",
+        "auth",
+        "credential",
+        "cookie",
+        "header",
+        "jobs_db",
+        "password",
+        "provider_proxy",
+        "secret",
+        "session_home",
+        "token",
+    )
+    return {
+        key: value
+        for key, value in llm_kwargs.items()
+        if not any(fragment in key.lower() for fragment in sensitive_fragments)
+    }
+
+
 def _validate_evo_config_model_env_access(evo_config: EvolutionConfig) -> None:
     # TODO: sample from different harnesses
     llm_models = list(evo_config.llm_models or [])
@@ -284,6 +320,7 @@ def _validate_evo_config_model_env_access(evo_config: EvolutionConfig) -> None:
     validate_model_env_access(
         llm_models=_dedupe_model_names(llm_models),
         embedding_models=_dedupe_model_names(embedding_models),
+        check_headless_command=evo_config.evaluation_mode != "secure",
     )
 
 
@@ -319,6 +356,11 @@ class ShinkaEvolveRunner:
             evaluate_str: Optional string content for evaluate script
                 (will be saved to results dir and path updated in job_config)
         """
+        if evo_config.evaluation_mode not in {"trusted_local", "secure"}:
+            raise ValueError("evaluation_mode must be 'trusted_local' or 'secure'")
+        self.evaluation_mode = evo_config.evaluation_mode
+        self.secure_runtime_settings: Optional[SecureRuntimeSettings] = None
+
         pricing_snapshot = (
             load_run_pricing_snapshot(Path(evo_config.results_dir))
             if evo_config.results_dir is not None
@@ -342,6 +384,21 @@ class ShinkaEvolveRunner:
         self.banner_style = banner_style
         self.enable_deadlock_debugging = debug
         log_filename = f"{self.results_dir}/evolution_run.log"
+
+        if self.evaluation_mode == "secure":
+            if not isinstance(job_config, SecureJobConfig):
+                raise ValueError(
+                    "Secure mode requires SecureJobConfig; trusted-local "
+                    "LocalJobConfig cannot define a security boundary"
+                )
+            validate_secure_job_config(
+                job_config,
+                mutation_image=evo_config.mutation_image,
+            )
+            self.secure_runtime_settings = validate_secure_runtime_configuration(
+                evo_config,
+                results_dir=Path(self.results_dir),
+            )
 
         if self.verbose:
             # Set up logging like the sync version
@@ -367,6 +424,17 @@ class ShinkaEvolveRunner:
         else:
             # Ensure results directory exists even when not verbose
             Path(self.results_dir).mkdir(parents=True, exist_ok=True)
+
+        configured_session_root = evo_config.headless_session_home_root
+        if configured_session_root:
+            session_root: Optional[Path] = Path(configured_session_root)
+        elif self.secure_runtime_settings is not None:
+            session_root = self.secure_runtime_settings.state_root / "headless-sessions"
+        else:
+            session_root = None
+        self.proposal_sessions = (
+            ProposalSessionStore(session_root) if session_root is not None else None
+        )
 
         self.pricing_snapshot = pricing_snapshot
         write_run_pricing_snapshot(pricing_snapshot, Path(self.results_dir))
@@ -409,9 +477,9 @@ class ShinkaEvolveRunner:
         self._configure_local_job_runtime(cpu_count)
 
         if self.evo_config.num_generations is None:
-            assert self.evo_config.max_api_costs is not None, (
-                "Max API costs must be specified if num_generations is not specified"
-            )
+            assert (
+                self.evo_config.max_api_costs is not None
+            ), "Max API costs must be specified if num_generations is not specified"
             logger.info(
                 f"No target generations specified, running indefinitely until cost limit of ${self.evo_config.max_api_costs:.2f} is reached"
             )
@@ -487,6 +555,41 @@ class ShinkaEvolveRunner:
                 "llm_models must be a list of headless model strings, "
                 f"got {evo_config.llm_models!r}"
             )
+        mutation_llm_kwargs = dict(evo_config.llm_kwargs)
+        if self.secure_runtime_settings is not None:
+            secure_settings = self.secure_runtime_settings
+            assert evo_config.mutation_image is not None
+            assert isinstance(job_config, SecureJobConfig)
+            mutation_llm_kwargs.update(
+                {
+                    "headless_secure": True,
+                    "headless_mutation_image": evo_config.mutation_image,
+                    "headless_auth_profiles": {
+                        agent: str(Path(path).expanduser().resolve())
+                        for agent, path in evo_config.agent_auth_profiles.items()
+                    },
+                    "headless_credentials": {
+                        agent: dict(values)
+                        for agent, values in secure_settings.credentials.items()
+                    },
+                    "headless_network": secure_settings.network.value,
+                    "headless_provider_network": evo_config.agent_provider_network,
+                    "headless_provider_proxy": evo_config.agent_provider_proxy,
+                    "headless_sandbox_user": evo_config.sandbox_user,
+                    "headless_dedicated_container_vm": (
+                        evo_config.dedicated_container_vm
+                    ),
+                    "headless_container_executable": job_config.container_executable,
+                    "headless_jobs_db": str(secure_settings.state_root / "jobs.sqlite"),
+                    "headless_resource_limits": {
+                        "cpus": secure_settings.limits.cpus,
+                        "memory_bytes": secure_settings.limits.memory_bytes,
+                        "pids": secure_settings.limits.pids,
+                        "open_files": secure_settings.limits.open_files,
+                        "output_bytes": secure_settings.limits.output_bytes,
+                    },
+                }
+            )
         self.llm = AsyncLLMClient(
             model_names=evo_config.llm_models,
             headless_timeout_seconds=evo_config.headless_proposal_timeout_seconds,
@@ -497,7 +600,7 @@ class ShinkaEvolveRunner:
             rate_limiter=self.llm_rate_limiter,
             request_class="mutation",
             **_llm_kwargs_with_headless_work_dir(
-                evo_config.llm_kwargs,
+                mutation_llm_kwargs,
                 Path(self.results_dir),
             ),
         )
@@ -510,30 +613,70 @@ class ShinkaEvolveRunner:
         else:
             self.embedding_client = None
 
-        # Job scheduler
-        self.scheduler = JobScheduler(
-            job_type=evo_config.job_type, config=job_config, verbose=verbose
-        )
-
-        self.seed_repo_commit: Optional[str] = None
-
         seed_repo_path = evo_config.seed_repo_path
         if seed_repo_path is None:
             raise ValueError("seed_repo_path must be specified")
-        worktree_root = evo_config.worktree_root or str(Path(self.results_dir) / "worktrees")
-        self.repo_worktree_manager = WorktreeManager(
-            seed_repo_path=seed_repo_path,
-            worktree_root=worktree_root,
-            mutable_paths=evo_config.mutable_paths,
-            immutable_paths=evo_config.immutable_paths,
-            hidden_paths=getattr(evo_config, "agent_hidden_paths", []),
-            ignore_paths=evo_config.ignore_paths,
-            base_ref=evo_config.base_ref,
-            max_file_bytes=evo_config.max_file_bytes,
-            allow_binary_files=evo_config.allow_binary_files,
-            allow_deletions=evo_config.allow_deletions,
-            allow_lockfile_changes=evo_config.allow_lockfile_changes,
+
+        if self.secure_runtime_settings is not None:
+            assert isinstance(job_config, SecureJobConfig)
+            assert evo_config.mutation_image is not None
+            self.scheduler = SecureEvaluationScheduler(
+                config=job_config,
+                state_root=str(self.secure_runtime_settings.state_root),
+                candidate_source=seed_repo_path,
+                mutation_image=evo_config.mutation_image,
+                task_id=Path(self.results_dir).name,
+                objective=(
+                    evo_config.task_sys_msg
+                    or "Improve the candidate while preserving correctness."
+                ),
+                mutable_paths=list(evo_config.mutable_paths),
+                agent_omitted_paths=list(evo_config.agent_hidden_paths),
+                verbose=verbose,
+            )
+            logger.info(
+                "Secure evaluation mode enabled: candidate artifacts and "
+                "container boundaries are mandatory"
+            )
+        else:
+            self.scheduler = JobScheduler(
+                job_type=evo_config.job_type,
+                config=job_config,
+                verbose=verbose,
+            )
+            logger.warning(
+                "Trusted-local evaluation enabled: repo_path is exposed to a "
+                "host evaluator and is suitable only for public/cooperative tasks"
+            )
+
+        self.seed_repo_commit: Optional[str] = None
+
+        worktree_root = evo_config.worktree_root or str(
+            Path(self.results_dir) / "worktrees"
         )
+        manager_kwargs = {
+            "seed_repo_path": seed_repo_path,
+            "worktree_root": worktree_root,
+            "mutable_paths": evo_config.mutable_paths,
+            "immutable_paths": evo_config.immutable_paths,
+            "ignore_paths": evo_config.ignore_paths,
+            "base_ref": evo_config.base_ref,
+            "max_file_bytes": evo_config.max_file_bytes,
+            "allow_binary_files": evo_config.allow_binary_files,
+            "allow_deletions": evo_config.allow_deletions,
+            "allow_lockfile_changes": evo_config.allow_lockfile_changes,
+        }
+        if self.secure_runtime_settings is not None:
+            self.repo_worktree_manager = SecureWorktreeManager(
+                **manager_kwargs,
+                omitted_paths=list(evo_config.agent_hidden_paths),
+                artifact_store=self.scheduler.coordinator.artifacts,
+            )
+        else:
+            self.repo_worktree_manager = WorktreeManager(
+                **manager_kwargs,
+                hidden_paths=list(evo_config.agent_hidden_paths),
+            )
 
         # Prompt sampler
         self.prompt_sampler = PromptSampler(
@@ -656,9 +799,9 @@ class ShinkaEvolveRunner:
         self.start_time = None
 
         # In-flight cost estimation for accurate budget enforcement
-        self.completed_proposal_costs: List[
-            float
-        ] = []  # Track costs of completed proposals
+        self.completed_proposal_costs: List[float] = (
+            []
+        )  # Track costs of completed proposals
         self.avg_proposal_cost = 0.0  # Running average cost per proposal
         self._sampling_seconds_ewma: Optional[float] = None
         self._evaluation_seconds_ewma: Optional[float] = None
@@ -688,9 +831,9 @@ class ShinkaEvolveRunner:
         self._prompt_percentile_recompute_pending = False
 
         # Database retry mechanism
-        self.failed_jobs_for_retry: Dict[
-            str, AsyncRunningJob
-        ] = {}  # Jobs that failed DB write
+        self.failed_jobs_for_retry: Dict[str, AsyncRunningJob] = (
+            {}
+        )  # Jobs that failed DB write
         self.MAX_DB_RETRY_ATTEMPTS = (
             5  # Maximum number of retry attempts for DB operations
         )
@@ -1018,9 +1161,7 @@ class ShinkaEvolveRunner:
         buffer_max = max(0, getattr(self.evo_config, "proposal_buffer_max", 0))
         hard_cap = getattr(self.evo_config, "proposal_target_hard_cap", None)
         if hard_cap is not None and hard_cap < base_target:
-            if not getattr(
-                self, "_warned_invalid_proposal_target_hard_cap", False
-            ):
+            if not getattr(self, "_warned_invalid_proposal_target_hard_cap", False):
                 logger.warning(
                     "Ignoring proposal_target_hard_cap=%s because it is below "
                     "max_evaluation_jobs=%s and would disable oversubscription.",
@@ -1512,13 +1653,17 @@ class ShinkaEvolveRunner:
             name="prompt_percentile_recompute",
         )
 
-    async def _recompute_prompt_percentiles_async(self, recompute_interval: int) -> None:
+    async def _recompute_prompt_percentiles_async(
+        self, recompute_interval: int
+    ) -> None:
         """Refresh prompt fitness percentiles without blocking side-effect workers."""
         try:
             loop = asyncio.get_event_loop()
             if hasattr(self.db, "config"):
 
-                def load_program_scores_thread_safe() -> Tuple[List[float], Dict[str, float]]:
+                def load_program_scores_thread_safe() -> (
+                    Tuple[List[float], Dict[str, float]]
+                ):
                     thread_db = None
                     try:
                         thread_db = ProgramDatabase(self.db.config, read_only=True)
@@ -1563,9 +1708,7 @@ class ShinkaEvolveRunner:
                 len(all_correct_scores),
             )
         except Exception as recompute_err:
-            logger.warning(
-                "Failed to recompute prompt percentiles: %s", recompute_err
-            )
+            logger.warning("Failed to recompute prompt percentiles: %s", recompute_err)
         finally:
             rerun_requested = self._prompt_percentile_recompute_pending
             self._prompt_percentile_recompute_pending = False
@@ -1691,7 +1834,9 @@ class ShinkaEvolveRunner:
                 commit_sha=parent_commit,
             )
             summary_version = "repo-individual-v1"
-            summary_path.parent.mkdir(parents=True, exist_ok=True) # TODO: should be able to remove
+            summary_path.parent.mkdir(
+                parents=True, exist_ok=True
+            )  # TODO: should be able to remove
             summary_path.write_text(summary_text, encoding="utf-8")
 
         gen_dir = f"{self.results_dir}/{FOLDER_PREFIX}_0"
@@ -1706,7 +1851,7 @@ class ShinkaEvolveRunner:
         try:
             if self.verbose:
                 logger.info(f"Starting initial repo evaluation: {worktree.path}")
-            
+
             # Run the evaluation synchronously for generation 0
             loop = asyncio.get_event_loop()
             evaluation_started_at = time.time()
@@ -1741,7 +1886,12 @@ class ShinkaEvolveRunner:
         combined_score = metrics_val.get("combined_score", 0.0)
         public_metrics = metrics_val.get("public", {})
         private_metrics = metrics_val.get("private", {})
-        text_feedback = metrics_val.get("text_feedback", "")
+        text_feedback = (
+            metrics_val.get("public_feedback", "")
+            if self.evaluation_mode == "secure"
+            else metrics_val.get("text_feedback", "")
+        )
+        secure_identities = results.get("secure_identities", {})
         stdout_log = truncate_log_tail(
             results.get("stdout_log", ""),
             self.db_config.max_stdout_log_chars,
@@ -1766,6 +1916,8 @@ class ShinkaEvolveRunner:
                 "sampling_worker_capacity": self.max_proposal_jobs,
                 "evaluation_worker_capacity": self.max_evaluation_jobs,
                 "postprocess_worker_capacity": self.max_db_workers,
+                "evaluation_mode": self.evaluation_mode,
+                "secure_identities": secure_identities,
             },
             pipeline_started_at=pipeline_started_at,
             sampling_started_at=pipeline_started_at,
@@ -1786,7 +1938,11 @@ class ShinkaEvolveRunner:
             repo_summary=summary_text,
             summary_version=summary_version,
             changed_files=[],
-            artifact_uri=str(worktree.path),
+            artifact_uri=(
+                f"cas:{parent_commit}"
+                if self.evaluation_mode == "secure"
+                else str(worktree.path)
+            ),
             mutable_paths=self.evo_config.mutable_paths,
             immutable_paths=self.evo_config.immutable_paths,
             combined_score=combined_score,
@@ -1800,10 +1956,15 @@ class ShinkaEvolveRunner:
         )
 
         if self.verbose and not evaluation_failed:
-            logger.info(f"Initial repo evaluated - correct: {initial_program.correct}, "
-                        f"combined_score: {initial_program.combined_score}")
+            logger.info(
+                f"Initial repo evaluated - correct: {initial_program.correct}, "
+                f"combined_score: {initial_program.combined_score}"
+            )
 
         await self.async_db.add_program_async(initial_program, verbose=self.verbose)
+        evaluation_job_id = secure_identities.get("evaluation_job_id")
+        if evaluation_job_id:
+            await self._acknowledge_persisted_evaluation(evaluation_job_id)
         self.total_api_cost += e_cost
 
         # Add the initial repo to meta memory tracking
@@ -1872,7 +2033,6 @@ class ShinkaEvolveRunner:
             logger.info(f"Setup initial repo: {initial_program.id}")
             logger.info("Generation 0 completed during setup")
 
-
     async def _verify_database_ready(self):
         """Verify that the database is ready for sampling with programs."""
         if self.verbose:
@@ -1899,7 +2059,6 @@ class ShinkaEvolveRunner:
             logger.info(
                 "Database verification completed - ready for proposal generation"
             )
-
 
     async def _job_monitor_task(self):
         """Monitor running jobs and process completed ones."""
@@ -1932,9 +2091,7 @@ class ShinkaEvolveRunner:
                                         f"{job.generation} - {status_results[i]}"
                                     )
                                 else:
-                                    status_display.append(
-                                        f"{job.generation} - unknown"
-                                    )
+                                    status_display.append(f"{job.generation} - unknown")
 
                             logger.debug(
                                 f"Job statuses ({len(monitored_jobs)}): gen [{', '.join(status_display)}]"
@@ -2299,7 +2456,9 @@ class ShinkaEvolveRunner:
                     and self._get_in_flight_work_count() == 0
                     and self.completed_generations < self.evo_config.num_generations
                 ):
-                    missing_generations = await self._get_missing_persisted_generations()
+                    missing_generations = (
+                        await self._get_missing_persisted_generations()
+                    )
                     await self._record_generation_event(
                         generation=self.next_generation_to_submit,
                         status="stopped_generation_budget_exhausted",
@@ -2591,7 +2750,9 @@ class ShinkaEvolveRunner:
         novelty_total_cost = 0.0
         novelty_explanation = ""
         last_failure_stage = "proposal"
-        last_failure_reason = "Agent failed to generate a valid proposal after all attempts"
+        last_failure_reason = (
+            "Agent failed to generate a valid proposal after all attempts"
+        )
         proposal_accepted = False
         parent_program: Optional[Program] = None
         archive_programs: List[Program] = []
@@ -2657,7 +2818,7 @@ class ShinkaEvolveRunner:
                     parent_commit=parent_commit,
                     generation=generation,
                     individual_id=individual_id,
-                ) # create new worktree per attempt
+                )  # create new worktree per attempt
 
                 # Choose between fix mode and normal patch mode
                 if needs_fix:
@@ -2689,7 +2850,9 @@ class ShinkaEvolveRunner:
                 code_diff, meta_patch_data, success = agent_result
                 api_costs += meta_patch_data.get("api_costs", 0.0)
 
-                snapshot = self.repo_worktree_manager.diff_parent(worktree.path, parent_commit)
+                snapshot = self.repo_worktree_manager.diff_parent(
+                    worktree.path, parent_commit
+                )
                 self.repo_worktree_manager.validate_snapshot(worktree, snapshot)
 
                 stashed_parent_id = WorktreeManager.read_parent_id(worktree.path)
@@ -2715,9 +2878,7 @@ class ShinkaEvolveRunner:
                 # We have a successful patch, continue novelty check
                 meta_patch_data["api_costs"] = api_costs
             except Exception as e:
-                logger.warning(
-                    f"Error in repo patch generation attempt: {e}"
-                )
+                logger.warning(f"Error in repo patch generation attempt: {e}")
                 last_failure_stage = "repo patch generation"
                 last_failure_reason = str(e)
                 continue
@@ -2725,7 +2886,7 @@ class ShinkaEvolveRunner:
             # Get code embedding (only once per successful patch)
             if self.verbose:
                 logger.info(f"Getting code embedding for generation {generation}...")
-                
+
             snapshot = self.repo_worktree_manager.commit_child(worktree)
             child_commit = snapshot.commit_sha or parent_commit
             summary_path = worktree.path / self.evo_config.summary_filename
@@ -2750,10 +2911,12 @@ class ShinkaEvolveRunner:
                     "changed_files": changed_files,
                     "mutable_paths": self.evo_config.mutable_paths,
                     "immutable_paths": self.evo_config.immutable_paths,
+                    "candidate_digest": getattr(snapshot, "candidate_digest", None),
+                    "candidate_artifact_uri": getattr(snapshot, "artifact_uri", None),
                 }
             )
             text_embedding, e_cost = await self._get_text_embedding_async(summary_text)
-            
+
             embed_cost += e_cost
             if self.verbose:
                 logger.info(
@@ -3098,14 +3261,14 @@ class ShinkaEvolveRunner:
 
         reason = (failure_reason or "").lower()
         error_attempt = str((meta_patch_data or {}).get("error_attempt") or "").lower()
-        last_error_msg = str((meta_patch_data or {}).get("last_error_msg") or "").lower()
+        last_error_msg = str(
+            (meta_patch_data or {}).get("last_error_msg") or ""
+        ).lower()
         combined = " ".join(
             part for part in [reason, error_attempt, last_error_msg] if part
         )
 
-        if (
-            (meta_patch_data or {}).get("route_failure_class")
-        ):
+        if (meta_patch_data or {}).get("route_failure_class"):
             return str((meta_patch_data or {})["route_failure_class"])
         if (
             "could not extract code" in combined
@@ -3113,7 +3276,10 @@ class ShinkaEvolveRunner:
             or "no evolve-block regions found" in combined
         ):
             return "llm_output_invalid"
-        if "did not apply any changes" in combined or "no repository changes" in combined:
+        if (
+            "did not apply any changes" in combined
+            or "no repository changes" in combined
+        ):
             return "no_diff"
         if "summary" in combined and any(
             marker in combined
@@ -3318,8 +3484,8 @@ class ShinkaEvolveRunner:
         failure_reason: str,
     ) -> None:
         """Record one terminal pre-eval failure via attempt_log plus failure.json."""
-        terminal_failure_cost = float(api_costs) + float(embed_cost) + float(
-            novelty_cost
+        terminal_failure_cost = (
+            float(api_costs) + float(embed_cost) + float(novelty_cost)
         )
         self.total_api_cost += terminal_failure_cost
         if terminal_failure_cost > 0.0:
@@ -3364,9 +3530,7 @@ class ShinkaEvolveRunner:
                 "code_diff_available": bool(code_diff),
                 "patch_type": (meta_patch_data or {}).get("patch_type"),
                 "patch_name": (meta_patch_data or {}).get("patch_name"),
-                "patch_description": (meta_patch_data or {}).get(
-                    "patch_description"
-                ),
+                "patch_description": (meta_patch_data or {}).get("patch_description"),
                 "system_prompt_id": (meta_patch_data or {}).get("system_prompt_id"),
                 "model_name": (meta_patch_data or {}).get("model_name"),
                 "api_costs": api_costs,
@@ -3477,10 +3641,23 @@ class ShinkaEvolveRunner:
                 meta_recommendations=meta_recs,
             )
             if worktree is not None:
-                agent_worktree = self.repo_worktree_manager.create_agent_worktree_view(
-                    worktree,
-                    hidden_paths=self._agent_hidden_paths_for_worktree(worktree.path),
+                presentation_paths = self._agent_hidden_paths_for_worktree(
+                    worktree.path
                 )
+                if self.evaluation_mode == "secure":
+                    agent_worktree = (
+                        self.repo_worktree_manager.create_agent_worktree_view(
+                            worktree,
+                            omitted_paths=presentation_paths,
+                        )
+                    )
+                else:
+                    agent_worktree = (
+                        self.repo_worktree_manager.create_agent_worktree_view(
+                            worktree,
+                            hidden_paths=presentation_paths,
+                        )
+                    )
                 self.repo_worktree_manager.write_parent_id(
                     worktree,
                     parent_program.id,
@@ -3511,7 +3688,10 @@ Required constraints:
   modify only configured mutable paths, plus the summary file at `{required_summary_display}`.
 - Immutable paths are read-only in the generation view; do not chmod, chown,
   edit, delete, or touch them.
-- Evaluation code, private tests, and hidden paths are deliberately unavailable during generation.
+- Immutable and hidden paths are policy/prompt-scope controls, not secrecy boundaries.
+- In secure mode, evaluator and private assets are absent because this view was
+  materialized only from the sanitized candidate artifact. Trusted-local mode
+  is appropriate only when all repository content is public and cooperative.
 - Do not modify `.git/` or any other Shinka control files under `.shinka/`.
 - Complete the existing summary template at `{required_summary_display}` after generating changes.
 - Preserve the summary schema/headings and replace every `TODO_AGENT_SUMMARY` placeholder.
@@ -3539,7 +3719,7 @@ Required constraints:
                     individual_id=agent_target_worktree.individual_id,
                     generation=generation,
                     parent_id=parent_program.id,
-                    parent_commit=agent_target_worktree.parent_commit,
+                    parent_commit=self._worktree_parent_identity(agent_target_worktree),
                 )
                 summary_written = await write_file_async(
                     str(required_summary_path),
@@ -3569,13 +3749,40 @@ Required constraints:
             llm_kwargs = self.llm.get_kwargs(model_sample_probs=model_sample_probs)
             headless_session_name = None
             if agent_target_worktree is not None:
-                session_short_id = agent_target_worktree.individual_id.replace("-", "")[:12]
+                session_short_id = agent_target_worktree.individual_id.replace("-", "")[
+                    :12
+                ]
                 headless_session_name = f"shinka-gen-{generation}-{session_short_id}"
                 llm_kwargs = {
                     **llm_kwargs,
                     "headless_work_dir": str(agent_target_worktree.path),
                     "headless_session_name": headless_session_name,
                 }
+                if self.proposal_sessions is not None:
+                    session = self.proposal_sessions.get_or_create(
+                        agent_target_worktree.individual_id,
+                        session_name=headless_session_name,
+                    )
+                    llm_kwargs.update(
+                        {
+                            "headless_session_home": str(
+                                self.proposal_sessions.home_path(session)
+                            ),
+                            "headless_session_key": session.home_key,
+                        }
+                    )
+                if (
+                    self.evaluation_mode == "secure"
+                    and agent_target_worktree is not None
+                ):
+                    llm_kwargs.update(
+                        {
+                            "headless_parent_digest": (
+                                self._worktree_parent_identity(agent_target_worktree)
+                            ),
+                            "headless_job_id": agent_target_worktree.individual_id,
+                        }
+                    )
 
             # Update LLM selection with submission
             model_name = llm_kwargs.get("model_name", "unknown")
@@ -3589,12 +3796,23 @@ Required constraints:
                 last_diff = None
                 response_kwargs = {}
                 response = None
+                attempt_llm_kwargs = dict(llm_kwargs)
+                if self.evaluation_mode == "secure":
+                    parent_reference = self.repo_worktree_manager.snapshot_candidate(
+                        agent_target_worktree
+                    )
+                    attempt_llm_kwargs["headless_parent_digest"] = (
+                        parent_reference.digest
+                    )
+                    attempt_llm_kwargs["headless_attempt_id"] = (
+                        f"{agent_target_worktree.individual_id}-{patch_attempt + 1}"
+                    )
 
                 try:
                     response = await self.llm.query(
                         msg=patch_msg,
                         system_msg=patch_sys,
-                        llm_kwargs=llm_kwargs,
+                        llm_kwargs=attempt_llm_kwargs,
                         model_sample_probs=model_sample_probs,
                         model_posterior=model_posterior,
                     )
@@ -3606,7 +3824,7 @@ Required constraints:
                     if agent_target_worktree is not None:
                         failed_snapshot = self.repo_worktree_manager.diff_parent(
                             agent_target_worktree.path,
-                            agent_target_worktree.parent_commit,
+                            self._worktree_parent_identity(agent_target_worktree),
                         )
                         last_diff = failed_snapshot.diff or None
                         last_diff_summary = {
@@ -3660,9 +3878,9 @@ Required constraints:
 
                 total_costs += response.cost if response.cost else 0.0
                 response_kwargs = getattr(response, "kwargs", {}) or {}
-                agent_dir_raw = response_kwargs.get("headless_work_dir") or llm_kwargs.get(
+                agent_dir_raw = response_kwargs.get(
                     "headless_work_dir"
-                )
+                ) or llm_kwargs.get("headless_work_dir")
                 error_str = None
                 summary_text = ""
                 num_applied = 0
@@ -3678,7 +3896,10 @@ Required constraints:
                         if agent_target_worktree is not None
                         else None
                     )
-                    if expected_agent_dir is not None and agent_dir != expected_agent_dir:
+                    if (
+                        expected_agent_dir is not None
+                        and agent_dir != expected_agent_dir
+                    ):
                         error_str = (
                             f"Headless agent ran in unexpected worktree: {agent_dir}"
                         )
@@ -3706,7 +3927,7 @@ Required constraints:
                     if agent_target_worktree is not None:
                         source_snapshot = self.repo_worktree_manager.diff_parent(
                             agent_target_worktree.path,
-                            agent_target_worktree.parent_commit,
+                            self._worktree_parent_identity(agent_target_worktree),
                         )
                         last_diff = source_snapshot.diff
                         num_applied = len(source_snapshot.changed_files)
@@ -3723,7 +3944,9 @@ Required constraints:
                             error_str = str(exc)
 
                         if error_str is None and num_applied == 0:
-                            error_str = "Agent did not apply any changes to the worktree."
+                            error_str = (
+                                "Agent did not apply any changes to the worktree."
+                            )
 
                         if error_str is None and worktree is not None:
                             if agent_worktree is not None:
@@ -3744,7 +3967,7 @@ Required constraints:
                             )
                             canonical_snapshot = self.repo_worktree_manager.diff_parent(
                                 worktree.path,
-                                worktree.parent_commit,
+                                self._worktree_parent_identity(worktree),
                             )
                             self.repo_worktree_manager.validate_snapshot(
                                 worktree,
@@ -3758,7 +3981,9 @@ Required constraints:
                             }
                     else:
                         last_diff = response.content or None
-                        num_applied = 1 if summary_path and summary_path.is_file() else 0
+                        num_applied = (
+                            1 if summary_path and summary_path.is_file() else 0
+                        )
                         diff_summary = {
                             "summary_path": str(summary_path) if summary_path else None
                         }
@@ -3810,10 +4035,16 @@ Required constraints:
                             "headless_usage_unknown", True
                         ),
                         "repo_policy_path": str(policy_path) if policy_path else None,
-                        "headless_prompt_path": response_kwargs.get("headless_prompt_path"),
-                        "headless_stdout_path": response_kwargs.get("headless_stdout_path"),
-                        "headless_stderr_path": response_kwargs.get("headless_stderr_path"),
-                        **llm_kwargs,
+                        "headless_prompt_path": response_kwargs.get(
+                            "headless_prompt_path"
+                        ),
+                        "headless_stdout_path": response_kwargs.get(
+                            "headless_stdout_path"
+                        ),
+                        "headless_stderr_path": response_kwargs.get(
+                            "headless_stderr_path"
+                        ),
+                        **_safe_llm_metadata_kwargs(llm_kwargs),
                         "llm_result": response.to_dict() if response else None,
                     }
                     if not fix_mode:
@@ -3869,9 +4100,9 @@ Required constraints:
                 "api_costs": total_costs,
                 "patch_type": patch_type,
                 "patch_name": patch_name if "patch_name" in locals() else None,
-                "patch_description": patch_description
-                if "patch_description" in locals()
-                else None,
+                "patch_description": (
+                    patch_description if "patch_description" in locals() else None
+                ),
                 "error_attempt": (
                     "Agent returned no response after model retries."
                     if terminal_model_failure
@@ -3890,17 +4121,23 @@ Required constraints:
                 "patch_attempt": patch_attempt + 1,
                 "terminal_model_failure": terminal_model_failure,
                 "route_failure_class": (
-                    route_failure_class
-                    if "route_failure_class" in locals()
-                    else None
+                    route_failure_class if "route_failure_class" in locals() else None
                 ),
                 "headless_session_name": response_kwargs.get(
                     "headless_session_name",
-                    llm_kwargs.get("headless_session_name") if "llm_kwargs" in locals() else None,
+                    (
+                        llm_kwargs.get("headless_session_name")
+                        if "llm_kwargs" in locals()
+                        else None
+                    ),
                 ),
                 "headless_session_id": response_kwargs.get(
                     "headless_session_id",
-                    llm_kwargs.get("headless_session_name") if "llm_kwargs" in locals() else None,
+                    (
+                        llm_kwargs.get("headless_session_name")
+                        if "llm_kwargs" in locals()
+                        else None
+                    ),
                 ),
                 "headless_usage_unknown": response_kwargs.get(
                     "headless_usage_unknown", True
@@ -3909,10 +4146,10 @@ Required constraints:
                 "headless_prompt_path": response_kwargs.get("headless_prompt_path"),
                 "headless_stdout_path": response_kwargs.get("headless_stdout_path"),
                 "headless_stderr_path": response_kwargs.get("headless_stderr_path"),
-                **llm_kwargs,
-                "llm_result": response.to_dict()
-                if "response" in locals() and response
-                else None,
+                **_safe_llm_metadata_kwargs(llm_kwargs),
+                "llm_result": (
+                    response.to_dict() if "response" in locals() and response else None
+                ),
             }
             if fix_mode:
                 meta_patch_data["num_applied"] = 0
@@ -4033,23 +4270,25 @@ Required constraints:
                 failure_reason=failure_reason,
                 meta_patch_data=meta_patch_data,
             )
-            failure_json_path, failure_payload = await self._write_failure_artifact_async(
-                generation=generation,
-                exec_fname=exec_fname,
-                parent_program=parent_program,
-                archive_programs=archive_programs,
-                top_k_programs=top_k_programs,
-                meta_patch_data=meta_patch_data,
-                embed_cost=embed_cost,
-                novelty_cost=novelty_cost,
-                api_costs=api_costs,
-                failure_stage=failure_stage,
-                failure_class=failure_class,
-                failure_reason=failure_reason,
-                code_embedding=code_embedding,
-                proposal_started_at=proposal_started_at,
-                sampling_worker_id=sampling_worker_id,
-                active_proposals_at_start=active_proposals_at_start,
+            failure_json_path, failure_payload = (
+                await self._write_failure_artifact_async(
+                    generation=generation,
+                    exec_fname=exec_fname,
+                    parent_program=parent_program,
+                    archive_programs=archive_programs,
+                    top_k_programs=top_k_programs,
+                    meta_patch_data=meta_patch_data,
+                    embed_cost=embed_cost,
+                    novelty_cost=novelty_cost,
+                    api_costs=api_costs,
+                    failure_stage=failure_stage,
+                    failure_class=failure_class,
+                    failure_reason=failure_reason,
+                    code_embedding=code_embedding,
+                    proposal_started_at=proposal_started_at,
+                    sampling_worker_id=sampling_worker_id,
+                    active_proposals_at_start=active_proposals_at_start,
+                )
             )
             metadata = with_pipeline_timing(
                 {
@@ -4148,6 +4387,7 @@ Required constraints:
         """Persist a completed evaluation job without blocking on slower side effects."""
         postprocess_worker_id = None
         source_job_id = str(job.job_id)
+        evaluation_mode = getattr(self, "evaluation_mode", "trusted_local")
         try:
             logger.info(
                 f"🔄 SAFE PROCESSING: Starting job {job.job_id} (gen {job.generation})"
@@ -4196,7 +4436,12 @@ Required constraints:
                 combined_score = metrics_val.get("combined_score", 0.0)
                 public_metrics = metrics_val.get("public", {})
                 private_metrics = metrics_val.get("private", {})
-                text_feedback = metrics_val.get("text_feedback", "")
+                text_feedback = (
+                    metrics_val.get("public_feedback", "")
+                    if evaluation_mode == "secure"
+                    else metrics_val.get("text_feedback", "")
+                )
+                secure_identities = results.get("secure_identities", {})
                 stdout_log = truncate_log_tail(
                     results.get("stdout_log", ""),
                     self.db_config.max_stdout_log_chars,
@@ -4217,6 +4462,7 @@ Required constraints:
                 public_metrics = {}
                 private_metrics = {}
                 text_feedback = "Job completed but results could not be retrieved"
+                secure_identities = {}
                 stdout_log = ""
                 stderr_log = "Results retrieval failed"
 
@@ -4252,7 +4498,11 @@ Required constraints:
                 repo_summary=job.repo_summary,
                 summary_version=job.summary_version,
                 changed_files=job.changed_files,
-                artifact_uri=job.repo_path,
+                artifact_uri=(
+                    f"cas:{secure_identities['candidate_digest']}"
+                    if secure_identities.get("candidate_digest")
+                    else job.repo_path
+                ),
                 mutable_paths=getattr(self.evo_config, "mutable_paths", []),
                 immutable_paths=getattr(self.evo_config, "immutable_paths", []),
                 agent_session_id=job.agent_session_id,
@@ -4270,6 +4520,8 @@ Required constraints:
                         "stderr_log": stderr_log,
                         "results_missing": results is None,
                         "safe_processing": True,
+                        "evaluation_mode": evaluation_mode,
+                        "secure_identities": secure_identities,
                         "source_job_id": source_job_id,
                         "source_generation": job.generation,
                         "timeline_lane_mode": "pool_slots",
@@ -4318,6 +4570,7 @@ Required constraints:
                     logger.info(
                         f"✅ DB SUCCESS: Program {program.id} successfully added to database for {job.job_id} (gen {job.generation})"
                     )
+                    await self._acknowledge_persisted_evaluation(job.job_id)
                 else:
                     existing_program = None
                     if hasattr(self.async_db, "get_program_by_source_job_id_async"):
@@ -4392,6 +4645,7 @@ Required constraints:
                             "⏭️  SKIP DUPLICATE SIDE EFFECTS: Job %s already fully processed",
                             job.job_id,
                         )
+                        await self._acknowledge_persisted_evaluation(job.job_id)
                         return CompletedJobPersistResult(job=job, success=True)
 
                     logger.info(
@@ -4399,6 +4653,7 @@ Required constraints:
                         job.job_id,
                         existing_program.id,
                     )
+                    await self._acknowledge_persisted_evaluation(job.job_id)
                     return CompletedJobPersistResult(
                         job=job,
                         success=True,
@@ -4602,10 +4857,14 @@ Required constraints:
                 program.metadata = with_pipeline_timing(
                     base_metadata,
                     pipeline_started_at=float(
-                        base_metadata.get("pipeline_started_at", job.proposal_started_at)
+                        base_metadata.get(
+                            "pipeline_started_at", job.proposal_started_at
+                        )
                     ),
                     sampling_started_at=float(
-                        base_metadata.get("sampling_started_at", job.proposal_started_at)
+                        base_metadata.get(
+                            "sampling_started_at", job.proposal_started_at
+                        )
                     ),
                     sampling_finished_at=float(
                         base_metadata.get(
@@ -4750,8 +5009,7 @@ Required constraints:
         finally:
             self._completed_jobs_pending = max(
                 0,
-                int(getattr(self, "_completed_jobs_pending", 0))
-                - len(completed_jobs),
+                int(getattr(self, "_completed_jobs_pending", 0)) - len(completed_jobs),
             )
 
         self._record_progress()
@@ -4765,9 +5023,7 @@ Required constraints:
                     f"${self.total_api_cost:.4f}/"
                     f"${self.evo_config.max_api_costs:.2f}"
                 )
-                cost_pct = (
-                    self.total_api_cost / self.evo_config.max_api_costs
-                ) * 100
+                cost_pct = (self.total_api_cost / self.evo_config.max_api_costs) * 100
                 cost_info = f" (cost: {cost_str}, {cost_pct:.1f}%)"
             else:
                 cost_info = f" (cost: ${self.total_api_cost:.4f})"
@@ -4793,9 +5049,7 @@ Required constraints:
                     f"${self.total_api_cost:.4f}/"
                     f"${self.evo_config.max_api_costs:.2f}"
                 )
-                cost_pct = (
-                    self.total_api_cost / self.evo_config.max_api_costs
-                ) * 100
+                cost_pct = (self.total_api_cost / self.evo_config.max_api_costs) * 100
                 cost_info = f", cost: {cost_str} ({cost_pct:.1f}%)"
             else:
                 cost_info = f", cost: ${self.total_api_cost:.4f}"
@@ -5200,6 +5454,22 @@ Required constraints:
         await self.evaluation_slot_pool.release(job.evaluation_worker_id)
         job.evaluation_slot_released = True
 
+    async def _acknowledge_persisted_evaluation(self, job_id: Any) -> None:
+        acknowledge = getattr(self.scheduler, "acknowledge_persisted", None)
+        if acknowledge is None:
+            return
+        try:
+            await asyncio.to_thread(acknowledge, job_id)
+        except Exception as exc:
+            # The database row is already durable; coordinator reconciliation
+            # can retry cleanup after a restart.
+            logger.warning(
+                "Secure evaluation %s was persisted but cleanup acknowledgement "
+                "failed: %s",
+                job_id,
+                exc,
+            )
+
     async def _submit_evaluation_job_with_slot(
         self,
         exec_fname: str,
@@ -5235,15 +5505,21 @@ Required constraints:
 
     def _agent_hidden_paths_for_worktree(self, worktree_path: Path) -> List[str]:
         hidden_paths = list(getattr(self.evo_config, "agent_hidden_paths", []) or [])
-        eval_program_path = getattr(self.job_config, "eval_program_path", None)
+        eval_program_path = (
+            getattr(self.job_config, "eval_program_path", None)
+            if self.evaluation_mode == "trusted_local"
+            else None
+        )
         if eval_program_path:
             eval_path = Path(str(eval_program_path))
             rel_eval_path: Optional[str] = None
             if eval_path.is_absolute():
                 try:
-                    rel_eval_path = eval_path.resolve().relative_to(
-                        worktree_path.resolve()
-                    ).as_posix()
+                    rel_eval_path = (
+                        eval_path.resolve()
+                        .relative_to(worktree_path.resolve())
+                        .as_posix()
+                    )
                 except ValueError:
                     rel_eval_path = None
             else:
@@ -5260,6 +5536,10 @@ Required constraints:
                     hidden_paths.append(normalized)
 
         return list(dict.fromkeys(hidden_paths))
+
+    @staticmethod
+    def _worktree_parent_identity(worktree: Any) -> str:
+        return str(getattr(worktree, "parent_digest", worktree.parent_commit))
 
     def _get_evaluation_runtime_limit_seconds(self) -> Optional[float]:
         """Return the wall-clock runtime limit for a single evaluation job."""

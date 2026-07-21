@@ -89,7 +89,14 @@ def write_run_manifest(
         "db": _jsonable(db_config),
         "job": _jsonable(job_config),
     }
-    eval_path = Path(getattr(job_config, "eval_program_path", ""))
+    evaluation_mode = getattr(evo_config, "evaluation_mode", "trusted_local")
+    if evaluation_mode == "secure":
+        evaluator_root = Path(getattr(job_config, "evaluator_repo_path", ""))
+        eval_path = evaluator_root / getattr(
+            job_config, "evaluator_entrypoint", "evaluate.py"
+        )
+    else:
+        eval_path = Path(getattr(job_config, "eval_program_path", ""))
     if not eval_path.is_absolute():
         eval_path = Path.cwd() / eval_path
 
@@ -110,6 +117,17 @@ def write_run_manifest(
         "codex": ["codex", "--version"],
     }
 
+    if evaluation_mode == "secure":
+        headless_version = "containerized; qualified by pinned image labels"
+        native_cli_versions = {}
+    else:
+        headless_version = _command_output([*headless_command, "--version"])
+        native_cli_versions = {
+            agent: _command_output(native_commands[agent])
+            for agent in sorted(agents)
+            if agent in native_commands
+        }
+
     manifest = {
         "schema_version": "shinka-run-manifest-v1",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -128,13 +146,21 @@ def write_run_manifest(
             "path": str(eval_path),
             "sha256": _sha256_file(eval_path),
         },
+        "evaluation_boundary": {
+            "mode": evaluation_mode,
+            "secure": evaluation_mode == "secure",
+            "compatibility_note": (
+                None
+                if evaluation_mode == "secure"
+                else "trusted_local exposes repo_path to a host evaluator and is public/cooperative only"
+            ),
+            "mutation_image": getattr(evo_config, "mutation_image", None),
+            "build_image": getattr(job_config, "build_image", None),
+            "runtime_image": getattr(job_config, "runtime_image", None),
+        },
         "providers": {
-            "headless": _command_output([*headless_command, "--version"]),
-            "native_cli_versions": {
-                agent: _command_output(native_commands[agent])
-                for agent in sorted(agents)
-                if agent in native_commands
-            },
+            "headless": headless_version,
+            "native_cli_versions": native_cli_versions,
         },
         "proposal_timeouts": {
             "default_seconds": getattr(

@@ -24,6 +24,8 @@ class EvolutionConfig:
     base_ref: str = "HEAD"
     mutable_paths: List[str] = field(default_factory=list)
     immutable_paths: List[str] = field(default_factory=list)
+    # Prompt/presentation scope only. This is not a secrecy boundary; secure
+    # evaluation keeps evaluator and private assets outside candidate artifacts.
     agent_hidden_paths: List[str] = field(default_factory=list)
     ignore_paths: List[str] = field(default_factory=lambda: [".git", ".shinka"])
     allow_deletions: bool = True
@@ -33,12 +35,32 @@ class EvolutionConfig:
     summary_filename: str = ".shinka/individual.md"
     summary_max_chars: int = 12000
 
+    # Evaluation boundary. trusted_local preserves the historical repo_path
+    # subprocess behavior for public/cooperative tasks; secure selects the
+    # isolated artifact/container path.
+    evaluation_mode: str = "trusted_local"
+    secure_state_root: Optional[str] = None
+    mutation_image: Optional[str] = None
+    agent_auth_profiles: Dict[str, str] = field(default_factory=dict)
+    agent_credential_env_names: Dict[str, List[str]] = field(default_factory=dict)
+    agent_network: str = "provider_only"
+    agent_provider_network: Optional[str] = None
+    agent_provider_proxy: Optional[str] = None
+    sandbox_user: Optional[str] = None
+    dedicated_container_vm: bool = False
+    sandbox_cpus: float = 2.0
+    sandbox_memory_bytes: int = 2 * 1024 * 1024 * 1024
+    sandbox_pids: int = 128
+    sandbox_open_files: int = 1024
+    sandbox_output_bytes: int = 64 * 1024 * 1024
+
     # Headless proposal execution. Coding agents may legitimately inspect,
     # test, and optimize for a long time before producing a candidate.
     headless_proposal_timeout_seconds: float = 7200.0
     headless_cleanup_grace_seconds: float = 60.0
     headless_output_mode: str = "json"
     headless_model_timeouts: Dict[str, float] = field(default_factory=dict)
+    headless_session_home_root: Optional[str] = None
 
     # Provider controls are independent from the model-quality bandit.
     route_failure_threshold: int = 3

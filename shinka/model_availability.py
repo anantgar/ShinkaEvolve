@@ -16,7 +16,6 @@ from shinka.llm.providers.model_resolver import resolve_model_backend
 from shinka.llm.providers.pricing import get_all_providers, get_models_by_provider
 from shinka.llm.providers.headless import check_headless_available
 
-
 PROVIDER_ENV_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "anthropic": ("ANTHROPIC_API_KEY",),
     "azure": ("AZURE_OPENAI_API_KEY", "AZURE_API_ENDPOINT", "AZURE_API_VERSION"),
@@ -172,6 +171,7 @@ def validate_model_env_access(
     *,
     llm_models: Iterable[str] = (),
     embedding_models: Iterable[str] = (),
+    check_headless_command: bool = True,
 ) -> None:
     llm_models = list(llm_models)
     embedding_models = list(embedding_models)
@@ -180,7 +180,7 @@ def validate_model_env_access(
         for model_name in llm_models
         if resolve_model_backend(model_name).provider == "headless"
     ]
-    if headless_models:
+    if headless_models and check_headless_command:
         try:
             check_headless_available()
         except ValueError as exc:
