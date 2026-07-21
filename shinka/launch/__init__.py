@@ -6,6 +6,11 @@ from .scheduler import (
     SlurmEnvJobConfig,
 )
 from .local import ProcessWithLogging
+from .secure import (
+    SecureEvaluationScheduler,
+    SecureJobConfig,
+    validate_secure_job_config,
+)
 
 __all__ = [
     "JobScheduler",
@@ -15,4 +20,7 @@ __all__ = [
     "SlurmCondaJobConfig",
     "SlurmEnvJobConfig",
     "ProcessWithLogging",
+    "SecureEvaluationScheduler",
+    "SecureJobConfig",
+    "validate_secure_job_config",
 ]
