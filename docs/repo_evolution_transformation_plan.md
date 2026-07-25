@@ -326,7 +326,7 @@ After the repo path is green:
 1. Review and integrate `codex/secure-runtime-integration` narrowly; do not merge the mixed `codex/sandbox-eval` bundle.
 2. Complete security review and post-rebase focused/full testing for the secure vertical slice.
 3. Keep `trusted_local` explicitly limited to public/cooperative evaluation; require `secure` for private, sealed, or adversarial tasks.
-4. Qualify a pinned universal Headless-agent image and persistent per-proposal agent home; record the image digest in the run manifest.
+4. Use the published, qualified universal Headless-agent image by immutable digest and keep the persistent per-proposal agent home; record the image digest in the run manifest.
 5. Run one low-budget, model-backed canary on a public, non-sensitive task after the above integration.
 6. Rebase and review the NNUE benchmark as an independent feature branch.
 7. Recover the paper-task and open-problem benchmark catalog from the mixed sandbox branch as separate reviewable changes.

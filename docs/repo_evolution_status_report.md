@@ -4,7 +4,9 @@
 
 The repo-only core on `main` is implemented and tested (`777 passed` on 2026-07-21). The `codex/secure-runtime-integration` branch adds the smallest secure evaluation slice and durable Headless proposal sessions without importing the stale branch's benchmark catalogs, NNUE work, or unrelated refactors.
 
-The new path has automated fake-agent and contract coverage. It has not run a real agent, built or published an image, executed a benchmark, or been qualified as an operational deployment.
+The new path has automated fake-agent and contract coverage. The universal
+Headless image is published and its container boundary is qualified, but no
+real agent, benchmark, or production deployment has run yet.
 
 ## Evaluation Modes
 
@@ -32,8 +34,9 @@ Focused secure-runtime, Headless, CLI, recovery, and existing compatibility test
 The Docker qualification passed locally on 2026-07-25 against a freshly built
 arm64 image using Docker Desktop. The publish workflow now pulls the exact
 multi-architecture manifest digest it produced and reruns the same qualification
-on a dedicated Linux runner. No test triggered provider credentials or a real
-agent call.
+on a dedicated Linux runner; the published reference is
+`ghcr.io/anantgar/shinka-headless-agents@sha256:7624da6fd6e8138d15b9553732e683d30832d3f090dfb00ad426e528c3dcfc7f`.
+No test triggered provider credentials or a real agent call.
 
 ## Benchmark Branches
 
@@ -41,7 +44,7 @@ The paper/open-problem catalog and Stockfish NNUE work are not present on this b
 
 ## Required Manual Follow-Up
 
-1. Build, publish, and pin the universal Headless image by immutable digest.
+1. Configure the published image by immutable digest in the secure runtime.
 2. Configure operator credentials/auth profiles without placing secrets in proposal metadata or candidate artifacts.
 3. Run a deliberately bounded real-agent canary against a public evaluator.
 4. Review, rebase, and run the paper/open-problem and NNUE benchmark experiments separately.
