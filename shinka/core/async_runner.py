@@ -1840,7 +1840,13 @@ class ShinkaEvolveRunner:
         metrics_val = results.get("metrics", {})
         combined_score = metrics_val.get("combined_score", 0.0)
         public_metrics = metrics_val.get("public", {})
-        private_metrics = metrics_val.get("private", {})
+        # Secure schedulers deliberately do not return evaluator-private
+        # metrics through the evolution-facing result contract. Keep this
+        # fallback empty as defense in depth if an alternate scheduler leaks
+        # the legacy field.
+        private_metrics = (
+            {} if self.evaluation_mode == "secure" else metrics_val.get("private", {})
+        )
         text_feedback = (
             metrics_val.get("public_feedback", "")
             if self.evaluation_mode == "secure"
@@ -4390,7 +4396,13 @@ Required constraints:
                 metrics_val = results.get("metrics", {})
                 combined_score = metrics_val.get("combined_score", 0.0)
                 public_metrics = metrics_val.get("public", {})
-                private_metrics = metrics_val.get("private", {})
+                # Never persist evaluator-private metrics from secure results
+                # into Program rows, prompts, or downstream logging.
+                private_metrics = (
+                    {}
+                    if evaluation_mode == "secure"
+                    else metrics_val.get("private", {})
+                )
                 text_feedback = (
                     metrics_val.get("public_feedback", "")
                     if evaluation_mode == "secure"

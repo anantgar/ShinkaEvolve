@@ -73,6 +73,8 @@ RUN set -eu; \
 RUN groupadd --gid 65532 shinka \
     && useradd --uid 65532 --gid 65532 --home-dir /headless-home \
         --shell /bin/sh shinka \
+    && mkdir -p /headless-home \
+    && chown 65532:65532 /headless-home \
     && command -v headless \
     && command -v agy \
     && command -v claude \
@@ -85,6 +87,7 @@ RUN groupadd --gid 65532 shinka \
 ENV AGY_CLI_DISABLE_AUTO_UPDATE=true \
     DISABLE_AUTOUPDATER=1 \
     GEMINI_CLI_NO_UPDATE_NOTIFIER=true \
+    HOME=/headless-home \
     NODE_USE_ENV_PROXY=1 \
     NO_UPDATE_NOTIFIER=1 \
     OPENCODE_DISABLE_AUTOUPDATE=true \

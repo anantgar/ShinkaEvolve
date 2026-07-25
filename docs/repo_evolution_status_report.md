@@ -19,17 +19,21 @@ The new path has automated fake-agent and contract coverage. It has not run a re
 
 1. Candidate repositories are normalized, sanitized, and stored as content-addressed immutable artifacts.
 2. Headless mutation and candidate execution use restricted container interfaces; evaluator code and private inputs remain trusted-side.
-3. Result files are checked against the exact job/candidate identity, schema, metric allow-list, and bounded public-feedback contract before publication.
+3. Result files are checked against the exact job/candidate identity, schema, metric allow-list, and bounded public-feedback contract before publication. The evolution-facing metrics and `public_result.json` omit private metrics, evaluator diagnostics/state, timing/resource details, and private artifact contents; separate non-secret lineage digests are retained only for audit and cleanup.
 4. Local SQLite job state records launch intent and supports restart reconciliation, acknowledgement, cancellation, and cleanup.
 5. Configuration and CLI wiring require an explicit evaluation mode and validate pinned images, evaluator setup, auth profiles, credential environment names, network policy, and resource limits.
-6. Each proposal chain has a durable private Headless session home. Persisted session metadata contains only opaque proposal/session identifiers, a home key, schema version, and creation time; credentials are runtime-only.
+6. Each proposal chain has a durable private Headless session home. Persisted session metadata contains only opaque proposal/session identifiers, a home key, schema version, and creation time; credentials are copied only into the runtime container, redacted from returned logs, removed from known durable paths, and cause the session home to be purged if an exact credential copy is detected.
 7. Trusted-local `repo_path` evaluation remains available and is explicitly labeled public/cooperative compatibility behavior.
 
 ## Automated Evidence
 
-Focused secure-runtime, Headless, CLI, recovery, and existing compatibility tests use fake agents and fake container runners: `137 passed, 1 skipped`. The full non-integration Python suite completed with `821 passed, 2 deselected` on 2026-07-21.
+Focused secure-runtime, Headless, CLI, recovery, and existing compatibility tests use fake agents and fake container runners. On 2026-07-25, the rebased branch passed the focused suite (`152 passed, 2 deselected`) and the full non-integration Python suite (`827 passed, 1 skipped, 2 deselected`).
 
-The Docker qualification test was skipped because no Docker executable or pre-existing pinned qualification image was available. No test triggered a download, credential setup, or external provider call.
+The Docker qualification passed locally on 2026-07-25 against a freshly built
+arm64 image using Docker Desktop. The publish workflow now pulls the exact
+multi-architecture manifest digest it produced and reruns the same qualification
+on a dedicated Linux runner. No test triggered provider credentials or a real
+agent call.
 
 ## Benchmark Branches
 

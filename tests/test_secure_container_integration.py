@@ -11,6 +11,17 @@ from shinka.secure.containers import ContainerMount, ContainerPlan, DockerEngine
 from shinka.secure.contracts import ResourceLimits
 
 
+_UNIVERSAL_HEADLESS_AGENTS = (
+    "antigravity",
+    "claude",
+    "codex",
+    "cursor",
+    "gemini",
+    "opencode",
+    "pi",
+)
+
+
 @pytest.mark.integration
 def test_live_container_enforces_candidate_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -19,10 +30,15 @@ def test_live_container_enforces_candidate_boundary(
 
     image = os.environ.get("SHINKA_SECURE_QUALIFICATION_IMAGE")
     if not image:
-        pytest.skip("set SHINKA_SECURE_QUALIFICATION_IMAGE to a pinned shell image")
+        pytest.skip(
+            "set SHINKA_SECURE_QUALIFICATION_IMAGE to a pinned universal Headless image"
+        )
     executable = os.environ.get("SHINKA_CONTAINER_EXECUTABLE", "docker")
     if shutil.which(executable) is None:
         pytest.skip("Docker-compatible CLI is unavailable")
+    allow_rootful_dedicated_vm = os.environ.get(
+        "SHINKA_SECURE_ALLOW_ROOTFUL_DEDICATED_VM", ""
+    ).lower() in {"1", "true", "yes"}
 
     candidate = tmp_path / "candidate"
     evaluator = tmp_path / "evaluator-private"
@@ -82,8 +98,11 @@ printf secure-ok
         workdir="/candidate",
     )
 
-    engine = DockerEngine(executable)
-    engine.preflight(images=(image,))
+    engine = DockerEngine(
+        executable,
+        allow_rootful_dedicated_vm=allow_rootful_dedicated_vm,
+    )
+    engine.preflight(images=(image,), required_agents=_UNIVERSAL_HEADLESS_AGENTS)
     handle = engine.create(plan)
     try:
         result = engine.run_capture(

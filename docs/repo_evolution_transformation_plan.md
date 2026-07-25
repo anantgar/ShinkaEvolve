@@ -24,7 +24,7 @@ This does **not** establish production readiness:
 
 1. Mainline validation uses fake agents; a model-backed generation has not yet been run end to end.
 2. The current worktree/evaluator path is trusted-local. `agent_hidden_paths` and immutable paths are not secrecy boundaries.
-3. Secure artifact, container, evaluator-process, and durable job work exists only in the unmerged `codex/sandbox-eval` branch. That branch is intentionally not merge-ready: it is a large, stale-base bundle that also contains unrelated benchmark and documentation changes.
+3. The secure artifact, container, evaluator-process, durable-job, and Headless-session work is implemented and automatically tested on the rebased `codex/secure-runtime-integration` branch. It is not yet merged into `main` or operationally qualified. `codex/sandbox-eval` remains only a stale extraction source and is not merge-ready: it is a large bundle containing unrelated benchmark and documentation changes.
 4. The Stockfish NNUE benchmark exists only in the unmerged `codex/assess-shinkaevolve-for-nnue` branch and must be rebased before integration.
 
 The phase descriptions below retain the original design rationale and acceptance criteria. Use the next-objectives section, rather than the historical task wording, to schedule remaining work.
@@ -76,8 +76,8 @@ Make the data model and config contract explicit.
 
 Tasks:
 
-1. Standardize the summary path as `.shinka/individual.md`.
-2. Remove hardcoded `summary.md` expectations from active code.
+1. Use `.shinka/individual.md` as the canonical summary path.
+2. Remove any remaining hardcoded `summary.md` expectations from active code and docs.
 3. Make `seed_repo_path` required.
 4. Define omitted or empty `mutable_paths` as whole-repository mutation except protected, immutable, and hidden paths.
 5. Decide whether `agent_model` is real or redundant with `llm_models`.
@@ -323,9 +323,9 @@ After the repo path is green:
 
 ## Next Objectives
 
-1. Create a clean branch from current `main` and split/rebase `codex/sandbox-eval`; do not merge its mixed 249-file change as-is.
-2. Integrate the smallest secure vertical slice: isolated mutation container, immutable candidate artifact, evaluator/candidate process boundary, durable local job record, and recovery/cleanup tests.
-3. Update public documentation to call the existing `repo_path` route trusted-local and reserve private or reward-hacking-sensitive evaluation for the secure runtime.
+1. Review and integrate `codex/secure-runtime-integration` narrowly; do not merge the mixed `codex/sandbox-eval` bundle.
+2. Complete security review and post-rebase focused/full testing for the secure vertical slice.
+3. Keep `trusted_local` explicitly limited to public/cooperative evaluation; require `secure` for private, sealed, or adversarial tasks.
 4. Qualify a pinned universal Headless-agent image and persistent per-proposal agent home; record the image digest in the run manifest.
 5. Run one low-budget, model-backed canary on a public, non-sensitive task after the above integration.
 6. Rebase and review the NNUE benchmark as an independent feature branch.

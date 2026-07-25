@@ -21,7 +21,7 @@ The upstream baseline is SakanaAI/ShinkaEvolve: https://github.com/SakanaAI/Shin
    Coding agents such as Codex or Cursor run in a child worktree and modify files there. ShinkaEvolve should not ask agents to emit diffs and should not apply patches to code strings. A worktree isolates lineage and mutation scope; it does not isolate secrets or untrusted code at an operating-system boundary.
 
 4. Summaries represent individuals.
-   Each individual must include a compact `summary.md`-style document that captures the mutation idea, changed files, validation, risks, and lineage. The system should embed and compare this summary, not the full repository. The current `.shinka/` summary is an ignored sidecar persisted in the database, not part of the executable Git commit; retain both when reproducing a run.
+   Each individual must include the compact `.shinka/individual.md` document that captures the mutation idea, changed files, validation, risks, and lineage. The system should embed and compare this summary, not the full repository. The `.shinka/` summary is an ignored sidecar persisted in the database, not part of the executable Git commit; retain both when reproducing a run.
 
 5. Git is the source of truth for artifacts.
    Each individual should correspond to a commit. The database stores commit identity, summary text, changed files, metrics, and lineage metadata.
@@ -111,7 +111,7 @@ The database continues to call the row model `Program` and table `programs`; it 
 
 ## Summary File
 
-The summary file is the compact representation of an individual. The project should standardize one path. The current code mostly points toward `.shinka/individual.md`, while some active paths expect `summary.md`. One path should be chosen and used everywhere.
+The summary file is the compact representation of an individual. The canonical path is `.shinka/individual.md` and must be used consistently by code, prompts, tests, and documentation.
 
 Recommended default:
 

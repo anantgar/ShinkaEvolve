@@ -5,7 +5,7 @@ Audited task: `Run circle packing experiment` (`019f3e52-ab25-7681-b96a-7ae1ab0c
 Base repository commit: `fa8ff96`  
 Headless CLI reviewed: `@roberttlange/headless` 0.4.0
 
-> Historical note: this audit uses “hidden” to mean omitted from an agent's prompt-visible worktree. That is not a security boundary in current mainline; sealed evaluators and private data require the planned secure runtime.
+> Historical note: this audit uses “hidden” to mean omitted from an agent's prompt-visible worktree. That is not a security boundary. The secure runtime is implemented and tested on `codex/secure-runtime-integration`; until it is merged and operationally qualified, current mainline remains trusted-local and unsuitable for sealed/private evaluation.
 
 ## Executive conclusion
 

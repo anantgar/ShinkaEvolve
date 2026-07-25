@@ -138,6 +138,11 @@ runner = ShinkaEvolveRunner(
 runner.run()
 ```
 
+This `LocalJobConfig` example uses `trusted_local` compatibility evaluation and
+is appropriate only for public evaluators and cooperative candidates. Use
+`evaluation_mode="secure"` with `SecureJobConfig` for private, sealed, or
+adversarial evaluation.
+
 The CLI split and precedence rules are documented in [CLI Usage](cli_usage.md).
 For a fuller API walkthrough, see [Getting Started](getting_started.md).
 

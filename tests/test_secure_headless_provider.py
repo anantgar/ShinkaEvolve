@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from shinka.llm.providers import headless
 from shinka.secure.artifacts import ContentAddressedStore
 
@@ -31,6 +33,10 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
     control.mkdir(parents=True)
     auth = tmp_path / "auth"
     auth.mkdir()
+    (auth / ".codex").mkdir()
+    (auth / ".codex" / "auth.json").write_text(
+        '{"token":"auth-secret-value"}', encoding="utf-8"
+    )
     session_home = tmp_path / "session-home"
     session_home.mkdir()
     state_root = tmp_path / "state"
@@ -51,8 +57,8 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
             f"turn {turns}\n", encoding="utf-8"
         )
         return SimpleNamespace(
-            stdout=b'{"usage":{"inputTokens":2,"outputTokens":1}}\n',
-            stderr=b"",
+            stdout=b'{"usage":{"inputTokens":2,"outputTokens":1},"log":"fake-secret auth-secret-value"}\n',
+            stderr=b"stderr fake-secret auth-secret-value",
             container_name=f"fake-{turns}",
         )
 
@@ -81,6 +87,20 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
         "headless_timeout_seconds": 10,
     }
 
+    overlapping_home = state_root / "session-home"
+    overlapping_home.mkdir()
+    with pytest.raises(headless.LLMProcessError, match="state and session"):
+        headless.query_headless(
+            None,
+            "headless/codex@test",
+            "mutate",
+            "system",
+            [],
+            None,
+            headless_attempt_id="overlap-attempt",
+            **{**common, "headless_session_home": str(overlapping_home)},
+        )
+
     for attempt in ("attempt-1", "attempt-2"):
         parent, _metadata = artifact_store.put_tree(
             worktree,
@@ -91,8 +111,8 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
         result = headless.query_headless(
             None,
             "headless/codex@test",
-            "mutate",
-            "system",
+            "mutate fake-secret auth-secret-value",
+            "system fake-secret auth-secret-value",
             [],
             None,
             headless_attempt_id=attempt,
@@ -103,6 +123,18 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
         assert str(auth) not in serialized
         assert str(session_home) not in serialized
         assert "jobs.sqlite" not in serialized
+        stdout_path = Path(result.kwargs["headless_stdout_path"])
+        stderr_path = Path(result.kwargs["headless_stderr_path"])
+        prompt_path = Path(result.kwargs["headless_prompt_path"])
+        assert worktree not in stdout_path.parents
+        assert worktree not in stderr_path.parents
+        assert worktree not in prompt_path.parents
+        assert "fake-secret" not in stdout_path.read_text()
+        assert "fake-secret" not in stderr_path.read_text()
+        assert "auth-secret-value" not in stdout_path.read_text()
+        assert "auth-secret-value" not in stderr_path.read_text()
+        assert "fake-secret" not in prompt_path.read_text()
+        assert "auth-secret-value" not in prompt_path.read_text()
         assert result.kwargs["headless_secure"] is True
         assert result.kwargs["headless_session_name"] == "proposal-session"
 

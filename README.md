@@ -360,6 +360,8 @@ Class defaults below come from `shinka/database/dbase.py` (`DatabaseConfig`). Hy
 
 Repo evolution uses an external **`evaluate.py`** plus a git-backed **`seed_repo/`**. Each individual is a repository commit edited by a Headless coding agent in a worktree. Unless `mutable_paths` is explicitly non-empty, the agent may add, modify, rename, and delete normal repository files. Hidden paths only reduce prompt-visible scope; use the current evaluator only with public, trusted-local tasks.
 
+For private, sealed, or adversarial evaluation, select `evaluation_mode="secure"` with `SecureJobConfig`. The `LocalJobConfig`/`repo_path` route shown in this example is `trusted_local` compatibility behavior for public evaluators and cooperative candidates only.
+
 <table>
 <tr>
 <td width="50%">
