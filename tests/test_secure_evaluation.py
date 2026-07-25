@@ -6,6 +6,7 @@ import shutil
 import tarfile
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,6 +25,7 @@ from shinka.secure.contracts import (
     EvaluatorContract,
     JobSpec,
     JobStatus,
+    NetworkMode,
     ResourceLimits,
     ResultManifest,
 )
@@ -44,8 +46,14 @@ from shinka.secure.mutation import (
     AgentSpec,
     _agent_command,
     _copy_minimal_auth_profile,
+    _auth_secret_values,
+    _purge_directory_contents,
+    _reject_exact_secret_copies,
+    _remove_persisted_credentials,
+    run_agent_in_workspace,
 )
 from shinka.secure.protocol import encode_frame, read_frame
+from shinka.launch.secure import SecureEvaluationScheduler
 
 DIGEST = "sha256:" + "1" * 64
 OTHER_DIGEST = "sha256:" + "2" * 64
@@ -144,6 +152,198 @@ def test_private_result_namespaces_never_enter_public_view() -> None:
             public_metric_allowlist=("score",),
             public_feedback_enabled=True,
         )
+
+
+def test_secure_scheduler_result_never_exposes_private_metrics(tmp_path: Path) -> None:
+    sentinel = "PRIVATE-SCHEDULER-SENTINEL-8d2a"
+    spec = _spec()
+    manifest = _success(
+        spec,
+        private_metrics={"hidden": sentinel},
+        operator_diagnostics={"trace": sentinel},
+        phase_timings={"evaluation": sentinel},
+        resources={"cpu": sentinel},
+    )
+
+    class _Jobs:
+        @staticmethod
+        def get(_job_id: str):
+            return SimpleNamespace(state=JobPhase.RESULT_VALIDATED)
+
+    class _Coordinator:
+        jobs = _Jobs()
+
+        @staticmethod
+        def get_result(_job_id: str) -> ResultManifest:
+            return manifest
+
+    scheduler = object.__new__(SecureEvaluationScheduler)
+    scheduler.coordinator = _Coordinator()
+    scheduler._handles = {}
+
+    result = scheduler.get_job_results("job", str(tmp_path / "results"))
+
+    assert "private" not in result["metrics"]
+    assert sentinel not in json.dumps(result, sort_keys=True)
+    public_result = (tmp_path / "results" / "public_result.json").read_text()
+    assert sentinel not in public_result
+
+
+def test_auth_redaction_handles_opaque_token_files(tmp_path: Path) -> None:
+    token = tmp_path / "antigravity-oauth-token"
+    token.write_text("opaque-token-value-123\n", encoding="utf-8")
+
+    assert "opaque-token-value-123" in _auth_secret_values(tmp_path)
+
+
+def test_durable_session_home_does_not_retain_credentials(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    auth = home / ".codex" / "auth.json"
+    config = home / ".codex" / "config.toml"
+    auth.parent.mkdir(parents=True)
+    auth.write_text('{"token":"private"}', encoding="utf-8")
+    config.write_text("model = 'test'\n", encoding="utf-8")
+    (home / ".claude.json").write_text('{"token":"legacy"}', encoding="utf-8")
+
+    _remove_persisted_credentials(home)
+
+    assert not auth.exists()
+    assert not (home / ".claude.json").exists()
+    assert config.exists()
+
+
+def test_durable_session_home_secret_copy_is_detected_and_purged(
+    tmp_path: Path,
+) -> None:
+    auth = tmp_path / "auth"
+    auth_file = auth / ".codex" / "auth.json"
+    auth_file.parent.mkdir(parents=True)
+    auth_file.write_text('{"token":"auth-secret-value"}', encoding="utf-8")
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "stolen.txt").write_text("fake-secret", encoding="utf-8")
+
+    with pytest.raises(SecurityPolicyError, match="Headless session home"):
+        _reject_exact_secret_copies(
+            home,
+            credential_environment={"OPENAI_API_KEY": "fake-secret"},
+            auth_root=auth,
+            label="Headless session home",
+            include_all_credential_values=True,
+        )
+
+    _purge_directory_contents(home)
+    assert not any(home.iterdir())
+
+
+def test_invalid_session_home_cannot_trigger_symlink_target_cleanup(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / ".git").mkdir(parents=True)
+    auth = tmp_path / "auth" / ".codex"
+    auth.mkdir(parents=True)
+    (auth / "auth.json").write_text('{"token":"auth-secret"}', encoding="utf-8")
+    target = tmp_path / "target"
+    (target / ".codex").mkdir(parents=True)
+    target_auth = target / ".codex" / "auth.json"
+    target_auth.write_text("must-survive", encoding="utf-8")
+    session_link = tmp_path / "session-link"
+    session_link.symlink_to(target, target_is_directory=True)
+    store = EvaluationJobStore(tmp_path / "jobs.sqlite")
+
+    with pytest.raises(SecurityPolicyError, match="session home"):
+        run_agent_in_workspace(
+            engine=object(),
+            workspace=workspace,
+            image=IMAGE,
+            limits=_limits(),
+            network=NetworkMode.DISABLED,
+            provider_network=None,
+            provider_proxy=None,
+            sandbox_user="65532:65532",
+            prompt="prompt",
+            agent=AgentSpec(agent="codex"),
+            auth_profile=auth.parent,
+            credential_environment={},
+            job_id="job",
+            attempt_id="symlink-session-attempt",
+            parent_digest=DIGEST,
+            mutation_store=store,
+            timeout_seconds=10,
+            session_home=session_link,
+            session_name="session",
+        )
+
+    assert target_auth.read_text(encoding="utf-8") == "must-survive"
+
+
+def test_agent_purges_durable_session_after_credential_copy(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / ".git").mkdir(parents=True)
+    auth = tmp_path / "auth" / ".codex"
+    auth.mkdir(parents=True)
+    (auth / "auth.json").write_text('{"token":"auth-secret"}', encoding="utf-8")
+    session_home = tmp_path / "session-home"
+    session_home.mkdir()
+    store = EvaluationJobStore(tmp_path / "state" / "jobs.sqlite")
+
+    class _Engine:
+        def __init__(self) -> None:
+            self.plan = None
+            self.removed = False
+
+        def create(self, plan):
+            self.plan = plan
+            return SimpleNamespace(container_id="fake-container")
+
+        def run_capture(self, _handle, **_kwargs):
+            session_mount = next(
+                mount for mount in self.plan.mounts if mount.target == "/headless-home"
+            )
+            (session_mount.source / "stolen.txt").write_text(
+                "fake-secret", encoding="utf-8"
+            )
+            return SimpleNamespace(
+                exit_code=0,
+                stdout=b"",
+                stderr=b"",
+                timed_out=False,
+                output_limited=False,
+            )
+
+        def remove(self, _handle, *, force: bool):
+            assert force is True
+            self.removed = True
+
+    engine = _Engine()
+    with pytest.raises(SecurityPolicyError, match="Headless session home"):
+        run_agent_in_workspace(
+            engine=engine,
+            workspace=workspace,
+            image=IMAGE,
+            limits=_limits(),
+            network=NetworkMode.DISABLED,
+            provider_network=None,
+            provider_proxy=None,
+            sandbox_user="65532:65532",
+            prompt="prompt",
+            agent=AgentSpec(agent="codex"),
+            auth_profile=auth.parent,
+            credential_environment={"OPENAI_API_KEY": "fake-secret"},
+            job_id="job",
+            attempt_id="session-leak-attempt",
+            parent_digest=DIGEST,
+            mutation_store=store,
+            timeout_seconds=10,
+            session_home=session_home,
+            session_name="session",
+        )
+
+    assert engine.removed is True
+    assert not any(session_home.iterdir())
 
 
 def test_container_plan_has_hardened_exact_policy(tmp_path: Path) -> None:

@@ -6,6 +6,7 @@ import fnmatch
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -97,6 +98,19 @@ _AGENT_CREDENTIAL_ENV: dict[str, frozenset[str]] = {
 
 _AGENT_REQUIRED_AUTH_PATHS: dict[str, tuple[str, ...]] = {
     "antigravity": (".gemini/antigravity-cli/antigravity-oauth-token",),
+}
+
+# These files are copied into the container's HOME so the selected CLI can
+# authenticate. They must not remain in a durable proposal session home after
+# the turn; the auth profile is recopied on the next turn instead.
+_AGENT_PERSISTED_CREDENTIAL_PATHS: dict[str, tuple[str, ...]] = {
+    "antigravity": (".gemini/antigravity-cli/antigravity-oauth-token",),
+    "claude": (".claude.json", ".claude/.credentials.json", ".claude/auth.json"),
+    "codex": (".codex/auth.json",),
+    "cursor": (".cursor/cli-config.json",),
+    "gemini": (".gemini/google_accounts.json",),
+    "opencode": (".config/opencode",),
+    "pi": (".pi/agent/auth.json",),
 }
 
 _OPAQUE_JSON_AUTH_FILES = frozenset({"antigravity-oauth-token"})
@@ -353,7 +367,11 @@ def _auth_secret_values(root: Path) -> list[str]:
         ):
             continue
         try:
-            if path.suffix.lower() == ".json" or path.name in _OPAQUE_JSON_AUTH_FILES:
+            if path.name in _OPAQUE_JSON_AUTH_FILES:
+                raw = path.read_text(encoding="utf-8").strip()
+                if len(raw) >= 8:
+                    values.add(raw)
+            elif path.suffix.lower() == ".json":
                 import json
 
                 visit(json.loads(path.read_text(encoding="utf-8")))
@@ -396,7 +414,11 @@ def _auth_sensitive_values(root: Path) -> list[str]:
                 or path.stat().st_size > 8 * 1024 * 1024
             ):
                 continue
-            if path.suffix.lower() == ".json" or path.name in _OPAQUE_JSON_AUTH_FILES:
+            if path.name in _OPAQUE_JSON_AUTH_FILES:
+                raw = path.read_text(encoding="utf-8").strip()
+                if len(raw) >= 8:
+                    values.add(raw)
+            elif path.suffix.lower() == ".json":
                 import json
 
                 visit(json.loads(path.read_text(encoding="utf-8")))
@@ -414,13 +436,23 @@ def _reject_exact_secret_copies(
     *,
     credential_environment: Mapping[str, str],
     auth_root: Path,
+    label: str = "Mutation output",
+    include_all_credential_values: bool = False,
 ) -> None:
-    secrets = {
-        value.encode("utf-8")
-        for name, value in credential_environment.items()
-        if len(value) >= 12 and _SECRET_FIELD.search(name)
-    }
-    secrets.update(value.encode("utf-8") for value in _auth_sensitive_values(auth_root))
+    if include_all_credential_values:
+        credential_values = (
+            value for value in credential_environment.values() if len(value) >= 8
+        )
+        auth_values = _auth_secret_values(auth_root)
+    else:
+        credential_values = (
+            value
+            for name, value in credential_environment.items()
+            if len(value) >= 12 and _SECRET_FIELD.search(name)
+        )
+        auth_values = _auth_sensitive_values(auth_root)
+    secrets = {value.encode("utf-8") for value in credential_values}
+    secrets.update(value.encode("utf-8") for value in auth_values)
     if not secrets:
         return
     for path in workspace.rglob("*"):
@@ -435,7 +467,7 @@ def _reject_exact_secret_copies(
                     if any(secret in data for secret in secrets):
                         relative = path.relative_to(workspace).as_posix()
                         raise SecurityPolicyError(
-                            f"Mutation output copied an authentication secret into {relative}"
+                            f"{label} copied an authentication secret into {relative}"
                         )
                     carry = data[-max_secret:]
         except SecurityPolicyError:
@@ -444,6 +476,39 @@ def _reject_exact_secret_copies(
             raise SecurityPolicyError(
                 "Mutation output could not be scanned for credential copies"
             ) from exc
+
+
+def _purge_directory_contents(root: Path) -> None:
+    """Delete all contents of a proposal-scoped directory after a secret leak."""
+
+    if root.is_symlink() or not root.is_dir():
+        raise SecurityPolicyError("Secret-leak cleanup target must be a real directory")
+    for child in root.iterdir():
+        if child.is_symlink() or child.is_file():
+            child.unlink()
+        elif child.is_dir():
+            shutil.rmtree(child)
+        else:
+            raise SecurityPolicyError(
+                "Secret-leak cleanup found an unsafe filesystem entry"
+            )
+
+
+def _remove_persisted_credentials(home: Path, agent: str | None = None) -> None:
+    """Remove copied credential material while retaining other session state."""
+
+    agents = (agent,) if agent is not None else _AGENT_PERSISTED_CREDENTIAL_PATHS
+    paths: set[Path] = set()
+    for selected_agent in agents:
+        paths.update(
+            home / relative
+            for relative in _AGENT_PERSISTED_CREDENTIAL_PATHS.get(selected_agent, ())
+        )
+    for path in paths:
+        if path.is_symlink() or path.is_file():
+            path.unlink(missing_ok=True)
+        elif path.is_dir():
+            shutil.rmtree(path)
 
 
 def run_agent_in_workspace(
@@ -477,6 +542,46 @@ def run_agent_in_workspace(
         raise SecurityPolicyError(
             "Mutation workspace must be a synthetic Git repository"
         )
+    auth_source = Path(auth_profile).expanduser()
+    if auth_source.is_symlink() or not auth_source.is_dir():
+        raise SecurityPolicyError("Agent auth profile must be a real directory")
+    auth_source = auth_source.resolve()
+
+    def _overlaps(left: Path, right: Path) -> bool:
+        try:
+            left.relative_to(right)
+            return True
+        except ValueError:
+            pass
+        try:
+            right.relative_to(left)
+            return True
+        except ValueError:
+            return False
+
+    if _overlaps(auth_source, workspace):
+        raise SecurityPolicyError(
+            "Agent auth profile must be outside the mutation workspace"
+        )
+    resolved_session_home: Path | None = None
+    if session_home is not None:
+        unresolved_session_home = Path(session_home).expanduser()
+        if unresolved_session_home.is_symlink() or not unresolved_session_home.is_dir():
+            raise SecurityPolicyError("Headless session home must be a real directory")
+        resolved_session_home = unresolved_session_home.resolve()
+        if _overlaps(resolved_session_home, workspace):
+            raise SecurityPolicyError(
+                "Headless session home must be outside the mutation workspace"
+            )
+        if _overlaps(auth_source, resolved_session_home):
+            raise SecurityPolicyError(
+                "Agent auth profile must be outside the Headless session home"
+            )
+        mutation_state_root = Path(mutation_store.path).expanduser().resolve().parent
+        if _overlaps(mutation_state_root, resolved_session_home):
+            raise SecurityPolicyError(
+                "Headless session home must be outside secure mutation state"
+            )
     permitted_credentials = _AGENT_CREDENTIAL_ENV[agent.agent]
     unexpected = sorted(set(credential_environment) - permitted_credentials)
     if unexpected:
@@ -503,17 +608,21 @@ def run_agent_in_workspace(
             _copy_minimal_auth_profile(auth_profile, auth, agent.agent)
             prepare_bind_source(workspace, writable=True)
             prepare_bind_source(auth, writable=False)
-            resolved_session_home: Path | None = None
-            if session_home is not None:
-                unresolved_session_home = session_home.expanduser()
-                if (
-                    unresolved_session_home.is_symlink()
-                    or not unresolved_session_home.is_dir()
-                ):
-                    raise SecurityPolicyError(
-                        "Headless session home must be a real directory"
+            if resolved_session_home is not None:
+                # Remove known auth files and reject exact copies left by an
+                # earlier turn before the durable home is exposed to the agent.
+                _remove_persisted_credentials(resolved_session_home)
+                try:
+                    _reject_exact_secret_copies(
+                        resolved_session_home,
+                        credential_environment=credential_environment,
+                        auth_root=auth,
+                        label="Headless session home",
+                        include_all_credential_values=True,
                     )
-                resolved_session_home = unresolved_session_home.resolve()
+                except SecurityPolicyError:
+                    _purge_directory_contents(resolved_session_home)
+                    raise
                 prepare_bind_source(resolved_session_home, writable=True)
             redaction_values = [
                 *credential_environment.values(),
@@ -604,11 +713,32 @@ def run_agent_in_workspace(
                         -4000:
                     ],
                 )
-            _reject_exact_secret_copies(
-                workspace,
-                credential_environment=credential_environment,
-                auth_root=auth,
-            )
+            leak_error: SecurityPolicyError | None = None
+            try:
+                _reject_exact_secret_copies(
+                    workspace,
+                    credential_environment=credential_environment,
+                    auth_root=auth,
+                )
+            except SecurityPolicyError as exc:
+                leak_error = exc
+            if resolved_session_home is not None:
+                try:
+                    _reject_exact_secret_copies(
+                        resolved_session_home,
+                        credential_environment=credential_environment,
+                        auth_root=auth,
+                        label="Headless session home",
+                        include_all_credential_values=True,
+                    )
+                except SecurityPolicyError as exc:
+                    # A durable session home is reused by later agent turns. If
+                    # any credential value was copied there, discard all of its
+                    # contents rather than preserving an unknown stolen copy.
+                    _purge_directory_contents(resolved_session_home)
+                    leak_error = leak_error or exc
+            if leak_error is not None:
+                raise leak_error
             mutation_store.mark_mutation_output_pending(attempt_id)
             return WorkspaceAgentResult(
                 stdout=_redact(result.stdout, redaction_values),
@@ -624,29 +754,39 @@ def run_agent_in_workspace(
         )
         raise
     finally:
+        cleanup_error: Exception | None = None
         try:
             if handle is not None:
                 engine.remove(handle, force=True)
-                mutation_store.mark_mutation_cleaned(attempt_id)
-            else:
-                mutation_store.mark_mutation_cleaned(attempt_id)
         except Exception as exc:
-            mutation_store.fail_mutation(
-                attempt_id, failure_class=FailureClass.CLEANUP_FAILED
-            )
+            cleanup_error = exc
+        try:
+            mutation_store.mark_mutation_cleaned(attempt_id)
+        except Exception as exc:
+            cleanup_error = cleanup_error or exc
+        try:
+            if resolved_session_home is not None:
+                _remove_persisted_credentials(
+                    resolved_session_home
+                )
+        except Exception as exc:
+            cleanup_error = cleanup_error or exc
+        try:
+            normalize_candidate_permissions(workspace)
+        except Exception as exc:
+            cleanup_error = cleanup_error or exc
+        if cleanup_error is not None:
+            try:
+                mutation_store.fail_mutation(
+                    attempt_id, failure_class=FailureClass.CLEANUP_FAILED
+                )
+            except Exception:
+                pass
             raise SecureExecutionError(
                 FailureClass.CLEANUP_FAILED,
-                "Mutation container cleanup failed",
-                private_diagnostic=str(exc),
-            ) from exc
-        finally:
-            try:
-                normalize_candidate_permissions(workspace)
-            except Exception:
-                mutation_store.fail_mutation(
-                    attempt_id, failure_class=FailureClass.MUTATION_FAILED
-                )
-                raise
+                "Mutation cleanup failed",
+                private_diagnostic=str(cleanup_error),
+            ) from cleanup_error
 
 
 class SecureMutationBackend:

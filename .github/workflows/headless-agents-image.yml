@@ -15,6 +15,8 @@ on:
 permissions:
   contents: read
   packages: write
+  attestations: write
+  id-token: write
 
 jobs:
   publish:
@@ -64,7 +66,54 @@ jobs:
           sbom: true
 
       - name: Report immutable reference
+        id: reference
         env:
           IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/shinka-headless-agents
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: echo "Use ${IMAGE_NAME}@${IMAGE_DIGEST}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          image_ref="${IMAGE_NAME}@${IMAGE_DIGEST}"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          echo "Use ${image_ref}" >> "$GITHUB_STEP_SUMMARY"
+
+    outputs:
+      image_ref: ${{ steps.reference.outputs.image_ref }}
+
+  qualify:
+    name: Qualify published image
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SHINKA_SECURE_QUALIFICATION_IMAGE: ${{ needs.publish.outputs.image_ref }}
+      SHINKA_SECURE_ALLOW_ROOTFUL_DEDICATED_VM: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install project
+        run: uv sync --dev
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull exact published digest
+        run: docker pull "$SHINKA_SECURE_QUALIFICATION_IMAGE"
+
+      - name: Run Docker qualification
+        run: uv run pytest -q -rs tests/test_secure_container_integration.py

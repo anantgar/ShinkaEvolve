@@ -304,7 +304,6 @@ class SecureEvaluationScheduler:
             "metrics": {
                 "combined_score": manifest.combined_score,
                 "public": dict(manifest.public_metrics),
-                "private": dict(manifest.private_metrics),
                 "public_feedback": manifest.public_feedback or "",
             },
             "secure_identities": identities,

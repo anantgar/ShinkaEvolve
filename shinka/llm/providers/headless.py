@@ -26,7 +26,12 @@ from shinka.secure.containers import DockerEngine
 from shinka.secure.contracts import NetworkMode, ResourceLimits
 from shinka.secure.errors import FailureClass, SecureExecutionError, SecurityPolicyError
 from shinka.secure.jobs import EvaluationJobStore
-from shinka.secure.mutation import AgentSpec, run_agent_in_workspace
+from shinka.secure.mutation import (
+    AgentSpec,
+    _auth_secret_values,
+    _redact,
+    run_agent_in_workspace,
+)
 
 from .result import QueryResult
 from .errors import (
@@ -871,6 +876,29 @@ def _resolve_text_output_mode(configured_mode: str | None) -> str:
     return mode
 
 
+def _redacted_text(value: str, secrets: list[str]) -> str:
+    return _redact(value.encode("utf-8"), secrets).decode("utf-8", errors="replace")
+
+
+def _redacted_history(
+    history: list[dict], secrets: list[str]
+) -> list[dict]:
+    redacted: list[dict] = []
+    for item in history:
+        if not isinstance(item, dict):
+            redacted.append(item)
+            continue
+        redacted.append(
+            {
+                key: _redacted_text(value, secrets)
+                if isinstance(value, str)
+                else value
+                for key, value in item.items()
+            }
+        )
+    return redacted
+
+
 def _query_result(
     *,
     content: str,
@@ -956,6 +984,9 @@ def _secure_query(
         "headless_session_name", None
     )
     session_home = _validated_session_home(kwargs.pop("headless_session_home", None))
+    # The durable home key is an internal handle, not agent/evolution result
+    # data. It must not survive in QueryResult.kwargs or persisted metadata.
+    kwargs.pop("headless_session_key", None)
     parsed = parse_headless_model(model)
 
     if not work_dir_raw or not image or not jobs_db_raw or not parent_digest:
@@ -980,8 +1011,45 @@ def _secure_query(
         raise LLMAuthenticationError(
             "Secure agent credentials must be an explicit mapping"
         )
+    auth_profile = Path(auth_profiles[parsed.agent]).expanduser()
+    redaction_values = list(
+        dict.fromkeys(
+            [
+                *(str(value) for value in credentials.values()),
+                *_auth_secret_values(auth_profile),
+            ]
+        )
+    )
 
     work_dir = Path(work_dir_raw).resolve()
+    state_root = Path(jobs_db_raw).expanduser().resolve().parent
+
+    def _overlaps(left: Path, right: Path) -> bool:
+        try:
+            left.relative_to(right)
+            return True
+        except ValueError:
+            pass
+        try:
+            right.relative_to(left)
+            return True
+        except ValueError:
+            return False
+
+    if _overlaps(work_dir, state_root):
+        raise LLMProcessError(
+            "Secure Headless state must be outside the agent workspace"
+        )
+    if session_home is not None:
+        resolved_session_home = session_home.resolve()
+        if _overlaps(work_dir, resolved_session_home):
+            raise LLMProcessError(
+                "Secure Headless session data must be outside the agent workspace"
+            )
+        if _overlaps(state_root, resolved_session_home):
+            raise LLMProcessError(
+                "Secure Headless state and session data must be separate"
+            )
     try:
         artifact_store = ContentAddressedStore(
             Path(jobs_db_raw).resolve().parent / "artifacts"
@@ -999,16 +1067,28 @@ def _secure_query(
             )
     except SecureExecutionError as exc:
         raise LLMProcessError(str(exc)) from exc
-    control = work_dir / ".shinka"
-    control.mkdir(parents=True, mode=0o700, exist_ok=True)
-    prompt = _render_prompt(
-        work_dir=work_dir,
-        msg=msg,
-        system_msg=system_msg,
-        msg_history=msg_history,
+    attempt_root = (
+        state_root
+        / "headless-attempts"
+        / uuid.uuid5(uuid.NAMESPACE_URL, str(attempt_id)).hex
     )
-    prompt_path = control / f"secure_prompt_{uuid.uuid4().hex[:8]}.md"
+    attempt_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(attempt_root, 0o700)
+    prompt = _redact(
+        _render_prompt(
+            work_dir=work_dir,
+            msg=msg,
+            system_msg=system_msg,
+            msg_history=msg_history,
+        ).encode("utf-8"),
+        redaction_values,
+    ).decode("utf-8", errors="replace")
+    safe_msg = _redacted_text(msg, redaction_values)
+    safe_system_msg = _redacted_text(system_msg, redaction_values)
+    safe_msg_history = _redacted_history(msg_history, redaction_values)
+    prompt_path = attempt_root / "prompt.md"
     prompt_path.write_text(prompt, encoding="utf-8")
+    os.chmod(prompt_path, 0o600)
     try:
         network = NetworkMode(network_raw)
         limits = ResourceLimits(**limits_raw)
@@ -1038,7 +1118,7 @@ def _secure_query(
                 model=parsed.agent_model,
                 effort=parsed.effort,
             ),
-            auth_profile=Path(auth_profiles[parsed.agent]),
+            auth_profile=auth_profile,
             credential_environment={
                 str(key): str(value) for key, value in credentials.items()
             },
@@ -1060,15 +1140,20 @@ def _secure_query(
     except (ValueError, OSError) as exc:
         raise LLMProcessError(str(exc)) from exc
 
-    stdout_path = control / f"secure_agent_{attempt_id}.stdout.log"
-    stderr_path = control / f"secure_agent_{attempt_id}.stderr.log"
-    stdout_path.write_bytes(result.stdout)
-    stderr_path.write_bytes(result.stderr)
+    redacted_stdout = _redact(result.stdout, redaction_values)
+    redacted_stderr = _redact(result.stderr, redaction_values)
+    stdout_path = attempt_root / "stdout.log"
+    stderr_path = attempt_root / "stderr.log"
+    stdout_path.write_bytes(redacted_stdout)
+    stderr_path.write_bytes(redacted_stderr)
+    os.chmod(stdout_path, 0o600)
+    os.chmod(stderr_path, 0o600)
     headless_usage = _extract_headless_usage(
-        result.stdout.decode("utf-8", errors="replace")
+        redacted_stdout.decode("utf-8", errors="replace")
     )
     query_usage = _query_usage_from_headless(headless_usage)
     content = _worktree_completion_content(work_dir)
+    safe_content = _redacted_text(content, redaction_values)
     result_kwargs = {
         **kwargs,
         "model_name": model,
@@ -1089,12 +1174,12 @@ def _secure_query(
         "headless_secure": True,
     }
     return _query_result(
-        content=content,
+        content=safe_content,
         usage=query_usage,
         model=model,
-        msg=msg,
-        system_msg=system_msg,
-        msg_history=msg_history,
+        msg=safe_msg,
+        system_msg=safe_system_msg,
+        msg_history=safe_msg_history,
         kwargs=result_kwargs,
         model_posteriors=model_posteriors,
     )

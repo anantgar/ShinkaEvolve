@@ -224,6 +224,11 @@ runner = ShinkaEvolveRunner(
 runner.run()
 ```
 
+This `LocalJobConfig` example uses `trusted_local` compatibility evaluation and
+is appropriate only for public evaluators and cooperative candidates. Use
+`evaluation_mode="secure"` with `SecureJobConfig` for private, sealed, or
+adversarial evaluation.
+
 Dynamic backend model formats:
 
 ```python

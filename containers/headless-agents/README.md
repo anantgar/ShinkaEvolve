@@ -17,8 +17,9 @@ headless <agent> [--model <model>] [--reasoning-effort <effort>] --allow yolo --
 ```
 
 The manual `Publish Headless agents image` GitHub workflow builds AMD64 and
-ARM64, publishes `ghcr.io/<owner>/shinka-headless-agents`, and reports the
-immutable manifest digest. A local equivalent is:
+ARM64, publishes `ghcr.io/<owner>/shinka-headless-agents`, reports the
+immutable manifest digest, pulls that exact digest, and runs the Docker
+qualification. A local equivalent is:
 
 ```bash
 docker buildx build \
