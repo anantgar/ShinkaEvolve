@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
 from shinka.launch import JobScheduler, LocalJobConfig, SlurmCondaJobConfig
+from shinka.launch.scheduler import SlurmEnvJobConfig
+from shinka.launch.slurm import submit_conda, submit_local_conda
 
 
 def test_local_job_config_exposes_runtime_thread_and_verbosity_fields():
@@ -14,8 +16,6 @@ def test_local_job_config_exposes_runtime_thread_and_verbosity_fields():
 
     assert config.numeric_threads_per_job == 3
     assert config.eval_verbose is False
-from shinka.launch.scheduler import SlurmEnvJobConfig
-from shinka.launch.slurm import submit_conda, submit_local_conda
 
 
 def test_slurm_env_config_rejects_conda_and_activate_script() -> None:
