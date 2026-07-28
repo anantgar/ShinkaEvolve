@@ -15,10 +15,12 @@ from shinka.cli import run as cli_run
 from shinka.llm.client import get_async_client_llm, get_client_llm
 from shinka.llm.kwargs import sample_model_kwargs
 from shinka.llm.providers.headless import (
+    _subprocess_env,
     parse_headless_model,
     query_headless,
     query_headless_async,
 )
+from shinka.llm.providers import headless_docker
 from shinka.llm.providers import LLMAuthenticationError, LLMTimeoutError
 from shinka.llm.providers.model_resolver import resolve_model_backend
 from shinka.model_availability import validate_model_env_access
@@ -309,8 +311,26 @@ def test_query_headless_parses_appended_usage(tmp_path, monkeypatch):
     assert result.thinking_tokens == 5
     assert result.kwargs["headless_usage_unknown"] is False
     assert result.kwargs["headless_usage"]["totalTokens"] == 15
+    assert "final assistant message" not in result.content
+    assert "Headless agent completed" in result.content
     stdout_path = Path(result.kwargs["headless_stdout_path"])
     assert '"usage"' in stdout_path.read_text(encoding="utf-8")
+
+
+def test_durable_session_env_keeps_wrapper_auth_home(monkeypatch, tmp_path):
+    auth_home = tmp_path / "auth-home"
+    session_home = tmp_path / "session-home"
+    monkeypatch.setenv("HOME", str(auth_home))
+
+    env = _subprocess_env(
+        parse_headless_model("headless/codex"),
+        session_home,
+    )
+
+    assert env is not None
+    assert env["HOME"] == str(session_home)
+    assert env[headless_docker.AUTH_HOME_ENV] == str(auth_home)
+    assert env[headless_docker.SESSION_ROOT_ENV] == str(session_home)
 
 
 def test_query_headless_reuses_named_session_in_json_mode(tmp_path, monkeypatch):
@@ -509,6 +529,8 @@ def test_shinka_run_full_headless_cli_mutation_succeeds(tmp_path, monkeypatch):
             "--no-verbose",
             "--set",
             'evo.llm_models=["headless/codex@test-model?effort=low"]',
+            "--set",
+            'evo.llm_kwargs={"headless_response_mode":"text"}',
             "--set",
             "evo.llm_dynamic_selection=null",
             "--set",

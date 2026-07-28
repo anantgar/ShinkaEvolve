@@ -137,8 +137,14 @@ container RAM on every proposal.
 files, capped at 4 MiB per file and 16 MiB in total, and prints a warning for
 anything it skips. Directory seed paths are never copied wholesale. It also
 rewrites the Codex config down to its model keys, keeps npm pointed at the host
-cache so the staged home does not trigger a package re-download per proposal,
-and drops `--session`, which Headless rejects together with `--docker`.
+cache so the staged home does not trigger a package re-download per proposal.
+By default it drops `--session` because the staged home is temporary. To keep
+Headless's native conversation state across disposable Docker containers, set
+`SHINKA_HEADLESS_DOCKER_SESSION_ROOT` to an absolute, private directory outside
+the proposal worktree. The wrapper then forwards `--session` and maps that
+directory to Headless's `HEADLESS_DOCKER_SESSION_ROOT`. Repo mutation output is
+read from the files the agent edits in the proposal worktree, not from its final
+assistant message; stdout is retained only for diagnostics and usage accounting.
 
 | Variable | Description |
 |----------|-------------|
@@ -147,6 +153,7 @@ and drops `--session`, which Headless rejects together with `--docker`.
 | `SHINKA_HEADLESS_DOCKER_ARGS` | Extra `docker run` arguments, parsed as a shell word list. |
 | `SHINKA_HEADLESS_DOCKER_SEED_EXTRA` | Additional home-relative paths to stage, separated by `os.pathsep`. |
 | `SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER` | Codex service tier: `fast` (default) or `flex`. |
+| `SHINKA_HEADLESS_DOCKER_SESSION_ROOT` | Optional absolute root for durable Headless Docker sessions; must be private and outside proposal worktrees. |
 | `SHINKA_HEADLESS_DOCKER_BASE_COMMAND` | Headless CLI command. Defaults to `npx -y @roberttlange/headless`. |
 
 ### DatabaseConfig (`shinka.database.DatabaseConfig`)

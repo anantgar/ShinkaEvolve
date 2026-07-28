@@ -2,51 +2,51 @@
 
 ## Status At A Glance
 
-The repo-only core is implemented and testable on `main`. As verified on 2026-07-21, `python3 -m pytest -q` completed with `777 passed` (plus 15 non-failing warnings). The earlier report that imports, prompts, and repo-agent tests were broken is obsolete.
+The repo-only core on `main` is implemented and tested (`777 passed` on 2026-07-21). The `codex/secure-runtime-integration` branch adds the smallest secure evaluation slice and durable Headless proposal sessions without importing the stale branch's benchmark catalogs, NNUE work, or unrelated refactors.
 
-The project is not yet production-ready for sensitive or long-running evaluation. The current mainline evaluator is trusted-local, and real model-backed evolution has not yet been run end to end.
+The new path has automated fake-agent and contract coverage. The universal
+Headless image is published and its container boundary is qualified, but no
+real agent, benchmark, or production deployment has run yet.
 
-## Verified Mainline Capabilities
+## Evaluation Modes
 
-1. The package imports and the async runner, database package, prompt package, and Headless provider load successfully.
-2. Repo-only configuration requires a seed git repository and evaluates candidates with `repo_path`.
-3. A `Program` database row retains repo commit, parent commit, summary, changed-file, metric, and session metadata.
-4. The active proposal path creates a child worktree, invokes Headless in that worktree, validates `.shinka/individual.md`, enforces mutability policy, commits the result, and embeds the summary.
-5. The worktree layer covers policy tampering, path traversal, changed symlinks, untracked files, binary/oversized files, deletions, protected paths, and no-change/summary-only proposals.
-6. Fake-agent repository evolution and delayed/recovered evaluation paths are covered by the test suite.
-7. The repository includes a documented fair-comparison methodology in [Repo-Agent Evaluation](repo_evolution_evaluation.md).
+| Mode | Intended use | Boundary |
+|---|---|---|
+| `secure` | Required for sealed, private, or adversarial evaluation. | Sanitized immutable artifacts, isolated mutation/candidate runtimes, trusted evaluator and result validation, bounded public feedback, and durable job recovery. |
+| `trusted_local` | Compatibility behavior for public evaluators and cooperative candidates only. | Evaluator receives a local `repo_path`; candidate and evaluator are not separated as a security boundary. |
 
-## Boundaries And Known Gaps
+`agent_hidden_paths`, immutable paths, and Git worktrees remain policy and prompt-scope controls. They are not secrecy boundaries and do not protect evaluator assets, credentials, private inputs, or result stores from hostile code.
 
-### Trusted-local evaluation is not sealed evaluation
+## Implemented Secure Slice
 
-`agent_hidden_paths`, immutable paths, Git worktrees, and evaluator path hiding are useful policy controls. They do not protect evaluator repositories, private data, credentials, SQLite state, or result stores from an untrusted agent or candidate with host access. Do not use the current path for hidden tests or reward-hacking-sensitive benchmarks.
+1. Candidate repositories are normalized, sanitized, and stored as content-addressed immutable artifacts.
+2. Headless mutation and candidate execution use restricted container interfaces; evaluator code and private inputs remain trusted-side.
+3. Result files are checked against the exact job/candidate identity, schema, metric allow-list, and bounded public-feedback contract before publication. The evolution-facing metrics and `public_result.json` omit private metrics, evaluator diagnostics/state, timing/resource details, and private artifact contents; separate non-secret lineage digests are retained only for audit and cleanup.
+4. Local SQLite job state records launch intent and supports restart reconciliation, acknowledgement, cancellation, and cleanup.
+5. Configuration and CLI wiring require an explicit evaluation mode and validate pinned images, evaluator setup, auth profiles, credential environment names, network policy, and resource limits.
+6. Each proposal chain has a durable private Headless session home. Persisted session metadata contains only opaque proposal/session identifiers, a home key, schema version, and creation time; credentials are copied only into the runtime container, redacted from returned logs, removed from known durable paths, and cause the session home to be purged if an exact credential copy is detected.
+7. Trusted-local `repo_path` evaluation remains available and is explicitly labeled public/cooperative compatibility behavior.
 
-### Real agent operation remains unverified
+## Automated Evidence
 
-The completed core tests use a fake Headless agent. A real model/provider run needs an explicit small-budget canary, with the provider/model, authentication, image, and expected accounting selected beforehand.
+Focused secure-runtime, Headless, CLI, recovery, and existing compatibility tests use fake agents and fake container runners. On 2026-07-25, the rebased branch passed the focused suite (`152 passed, 2 deselected`) and the full non-integration Python suite (`827 passed, 1 skipped, 2 deselected`).
 
-### Session metadata is not durable conversation continuity
+The Docker qualification passed locally on 2026-07-25 against a freshly built
+arm64 image using Docker Desktop. The publish workflow now pulls the exact
+multi-architecture manifest digest it produced and reruns the same qualification
+on a dedicated Linux runner; the published reference is
+`ghcr.io/anantgar/shinka-headless-agents@sha256:7624da6fd6e8138d15b9553732e683d30832d3f090dfb00ad426e528c3dcfc7f`.
+No test triggered provider credentials or a real agent call.
 
-Program rows record Headless session names and IDs. Real repair-turn continuity across disposable containers also needs a private, per-proposal agent home that is mounted only for that proposal chain. This depends on the Headless/container integration work.
+## Benchmark Branches
 
-### Secure runtime work must be extracted before merge
+The paper/open-problem catalog and Stockfish NNUE work are not present on this branch and were not run. Their clean split/rebase sequence is documented in [Benchmark Branch Cleanup Plan](benchmark_branch_cleanup_plan.md).
 
-`codex/sandbox-eval` contains a secure mutation/evaluation implementation, agent-image work, tests, documentation rewrites, and unrelated benchmark additions. It was built from an older base and is not safe to merge wholesale. Rebase it onto current `main`, split it into reviewable feature branches, and preserve the current repo-agent evaluation guide during that process.
+## Required Manual Follow-Up
 
-### Benchmarks are not yet integrated
+1. Configure the published image by immutable digest in the secure runtime.
+2. Configure operator credentials/auth profiles without placing secrets in proposal metadata or candidate artifacts.
+3. Run a deliberately bounded real-agent canary against a public evaluator.
+4. Review, rebase, and run the paper/open-problem and NNUE benchmark experiments separately.
 
-The paper-task/open-problem catalog is entangled in `codex/sandbox-eval`. The Stockfish NNUE evaluator and harness are in `codex/assess-shinkaevolve-for-nnue`. Both need independent rebase, review, and test runs before they become mainline examples.
-
-## Next Objectives
-
-1. Split and rebase the secure-runtime branch.
-2. Land a minimal secure vertical slice: candidate artifact, mutation container, evaluator/candidate process boundary, durable local job record, and cleanup/recovery tests.
-3. Publish and pin a universal Headless-agent image by digest; add persistent per-proposal agent homes.
-4. Run a low-budget real-agent canary against a public evaluator.
-5. Integrate NNUE and the benchmark catalog as independent changes.
-6. Run the paired, pre-registered repo-agent evaluation pilot after sealed evaluation is available.
-
-## Non-Blocking Cleanup
-
-The remaining source TODOs are mostly legacy or broad infrastructure debt. The notable repo-mode items are simplifying the summary schema, removing/quarantining legacy `PaperEdit` support, and deciding whether multi-harness sampling belongs in scope. Structured-output gaps in non-Headless providers and visualization `pass` handlers are not blockers for the repo-agent milestone.
+Until those gates are complete, describe the feature as implemented and automatically tested, not operationally qualified.

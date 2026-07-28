@@ -21,13 +21,13 @@ The upstream baseline is SakanaAI/ShinkaEvolve: https://github.com/SakanaAI/Shin
    Coding agents such as Codex or Cursor run in a child worktree and modify files there. ShinkaEvolve should not ask agents to emit diffs and should not apply patches to code strings. A worktree isolates lineage and mutation scope; it does not isolate secrets or untrusted code at an operating-system boundary.
 
 4. Summaries represent individuals.
-   Each individual must include a compact `summary.md`-style document that captures the mutation idea, changed files, validation, risks, and lineage. The system should embed and compare this summary, not the full repository. The current `.shinka/` summary is an ignored sidecar persisted in the database, not part of the executable Git commit; retain both when reproducing a run.
+   Each individual must include the compact `.shinka/individual.md` document that captures the mutation idea, changed files, validation, risks, and lineage. The system should embed and compare this summary, not the full repository. The `.shinka/` summary is an ignored sidecar persisted in the database, not part of the executable Git commit; retain both when reproducing a run.
 
 5. Git is the source of truth for artifacts.
    Each individual should correspond to a commit. The database stores commit identity, summary text, changed files, metrics, and lineage metadata.
 
 6. Evaluation must be isolated from mutation.
-   Path policy protects the candidate artifact, but it is not sufficient to protect evaluator secrets. Reward-hacking-sensitive tasks require a separate mutation sandbox and evaluator/candidate process boundary. Until that runtime is integrated, use only public, trusted-local evaluators.
+   Path policy protects the candidate artifact, but it is not sufficient to protect evaluator secrets. Sealed, private, and adversarial tasks require the secure mutation sandbox and evaluator/candidate process boundary. Trusted-local evaluation is limited to public evaluators and cooperative candidates.
 
 7. Long evaluations are first-class.
    Evaluation may take minutes, hours, or longer. Job state, worktree paths, commits, result locations, and summaries must be persisted enough to recover after process restarts.
@@ -111,7 +111,7 @@ The database continues to call the row model `Program` and table `programs`; it 
 
 ## Summary File
 
-The summary file is the compact representation of an individual. The project should standardize one path. The current code mostly points toward `.shinka/individual.md`, while some active paths expect `summary.md`. One path should be chosen and used everywhere.
+The summary file is the compact representation of an individual. The canonical path is `.shinka/individual.md` and must be used consistently by code, prompts, tests, and documentation.
 
 Recommended default:
 
@@ -200,7 +200,7 @@ The agent should be instructed to edit files directly in the current worktree an
 
 Repo-level evolution increases the attack surface. The system should treat path policy as part of the core architecture, not a prompt-only instruction.
 
-Path policy is not a secrecy mechanism. Hiding a path from an agent prompt or making it immutable in a worktree does not protect evaluator repositories, private data, credentials, or result stores from a malicious agent or candidate with host access. Keep sensitive tasks out of the current trusted-local path until the secure runtime is integrated.
+Path policy is not a secrecy mechanism. Hiding a path from an agent prompt or making it immutable in a worktree does not protect evaluator repositories, private data, credentials, or result stores from a malicious agent or candidate with host access.
 
 Minimum enforcement:
 
@@ -253,7 +253,18 @@ artifacts/
 
 The scheduler may keep backward-compatible `program_path` support for upstream-style tasks, but repo mode should submit `repo_path` and run with the worktree as the relevant execution directory.
 
-This contract describes the current trusted-local evaluator. It is appropriate for public evaluators and cooperative candidates, not sealed benchmarks. The planned secure contract must evaluate an immutable candidate artifact in a separate runtime and keep evaluator code, private inputs, scoring, and result publication outside the candidate's reach.
+`evaluation_mode: trusted_local` is this compatibility contract. It is appropriate only for public evaluators and cooperative candidates.
+
+`evaluation_mode: secure` changes the boundary:
+
+1. Normalize and sanitize the candidate into a content-addressed immutable artifact.
+2. Run the Headless mutation process in a restricted container, with a proposal-scoped session home mounted only for that proposal chain.
+3. Snapshot the mutated candidate as a new immutable artifact.
+4. Run candidate code in an isolated runtime while the evaluator, private inputs, scoring logic, job database, and result validation remain trusted-side.
+5. Persist launch intent and state before execution, reconcile interrupted jobs on restart, and clean up runtime resources after durable acknowledgement.
+6. Publish only allow-listed metrics and bounded public feedback from a schema- and identity-validated result.
+
+The session store persists only an opaque proposal/session identifier, home key, and creation timestamp. Credentials are injected at runtime and are not copied into proposal or result metadata.
 
 For ML inference pipeline tasks, the evaluator should separate correctness, latency, throughput, memory, compile time, and stability. It should warm up models, control seeds, report hardware details, and use repeated measurements to reduce noise.
 
@@ -383,12 +394,13 @@ Decided:
 
 1. The summary path is `.shinka/individual.md`.
 2. The active system is repo-only; `Program` remains the database term.
-3. A committed worktree plus persisted summary/session metadata is the current reproducibility unit.
-4. `mutable_paths` is an allow-list when non-empty; immutable-path policy is enforced before evaluation.
+3. Secure mode is mandatory for sealed, private, or adversarial evaluation; trusted-local mode is public/cooperative compatibility behavior.
+4. Secure proposal continuity uses a durable, proposal-scoped Headless session home and minimal metadata.
+5. `mutable_paths` is an allow-list when non-empty; immutable and hidden paths remain policy/prompt-scope controls, not secrecy boundaries.
 
 Still to complete:
 
-1. Integrate a secure mutation/evaluation runtime for sealed or adversarial tasks.
-2. Provide durable container-home/session continuity for repair turns across supported Headless providers.
-3. Define retention and external storage for large diffs, logs, artifacts, and long-running job state.
-4. Rebase and split the unmerged secure-runtime, benchmark-catalog, and NNUE work before merging it into main.
+1. Publish the universal Headless image and pin its digest.
+2. Configure operator credentials and run a small real-agent canary.
+3. Run the separately reviewed benchmark experiments; none are part of automated qualification.
+4. Define retention and external storage for large diffs, logs, artifacts, and long-running job state.

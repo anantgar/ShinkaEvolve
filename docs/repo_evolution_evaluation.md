@@ -76,12 +76,14 @@ Pre-register a single task manifest and use it for every arm.
 
 ### Security prerequisite for sealed evaluation
 
-The current mainline `repo_path` evaluator is a trusted-local path. Immutable paths and `agent_hidden_paths` constrain normal mutation but do not isolate evaluator code, private inputs, credentials, or results from an untrusted agent or candidate. Until the secure mutation/evaluation runtime is integrated, use only public evaluators and inputs for this experiment. Sealed holdouts require an evaluator/candidate process boundary, separate container or host isolation, and trusted result publication.
+Select `evaluation_mode: secure` for sealed, private, or adversarial evaluation. It normalizes the candidate into an immutable artifact, runs mutation and candidate execution in isolated containers, keeps evaluator code and inputs on the trusted side of a process boundary, validates the result contract, and exposes only bounded public feedback. This path has automated fake-agent coverage but still requires the manual qualification gates listed in the status report before real use.
+
+`evaluation_mode: trusted_local` preserves the existing `repo_path` evaluator as compatibility behavior for public evaluators and cooperative candidates only. Immutable paths, `agent_hidden_paths`, and Git worktrees constrain policy and prompt scope; they do not protect evaluator code, private inputs, credentials, or results from an untrusted process.
 
 | Hold constant | Practical rule |
 |---|---|
 | Starting point | Same seed implementation/commit, task description, dependencies, and allowed libraries. For a single-file baseline, place that exact implementation in one mutable repo file. |
-| Authoritative evaluation | Same evaluator commit, input distribution, scoring transform, time/memory limits, and correctness gate. For sealed runs, keep scoring code and private tests outside the candidate through the secure evaluator boundary; before that runtime lands, use public inputs only. |
+| Authoritative evaluation | Same evaluator commit, input distribution, scoring transform, time/memory limits, and correctness gate. For sealed runs, keep scoring code and private tests outside the candidate through the secure evaluator boundary. |
 | Search budget | Same cap on raw mutation requests, valid proposals, evaluated candidates, and retries; report all four rather than silently choosing the favorable denominator. |
 | Evolution algorithm | Same islands, archive size, parent/inspiration sampler, mutation-type mix, novelty threshold, meta-memory settings, and random seeds. Disable adaptive model selection for a clean mutator ablation, or use the same fixed model pool and update rule. |
 | Mutation capability | For an isolation study, match base model/version, temperature/reasoning setting, max output/turn budget, tool policy, editable files, and cheap-test budget. For native comparison, allow native tools but disclose them. |

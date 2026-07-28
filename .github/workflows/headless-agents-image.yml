@@ -1,0 +1,119 @@
+name: Publish Headless agents image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Mutable convenience tag; experiments must use the reported digest
+        required: true
+        default: manual
+        type: string
+  push:
+    tags:
+      - headless-agents-v*
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/shinka-headless-agents
+          tags: |
+            type=ref,event=tag
+            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha,prefix=sha-
+
+      - name: Build and publish
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: containers/headless-agents
+          file: containers/headless-agents/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Report immutable reference
+        id: reference
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/shinka-headless-agents
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          image_ref="${IMAGE_NAME}@${IMAGE_DIGEST}"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          echo "Use ${image_ref}" >> "$GITHUB_STEP_SUMMARY"
+
+    outputs:
+      image_ref: ${{ steps.reference.outputs.image_ref }}
+
+  qualify:
+    name: Qualify published image
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SHINKA_SECURE_QUALIFICATION_IMAGE: ${{ needs.publish.outputs.image_ref }}
+      SHINKA_SECURE_ALLOW_ROOTFUL_DEDICATED_VM: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install project
+        run: uv sync --dev
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull exact published digest
+        run: docker pull "$SHINKA_SECURE_QUALIFICATION_IMAGE"
+
+      - name: Run Docker qualification
+        run: uv run pytest -q -rs tests/test_secure_container_integration.py

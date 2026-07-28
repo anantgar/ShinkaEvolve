@@ -360,6 +360,8 @@ Class defaults below come from `shinka/database/dbase.py` (`DatabaseConfig`). Hy
 
 Repo evolution uses an external **`evaluate.py`** plus a git-backed **`seed_repo/`**. Each individual is a repository commit edited by a Headless coding agent in a worktree. Unless `mutable_paths` is explicitly non-empty, the agent may add, modify, rename, and delete normal repository files. Hidden paths only reduce prompt-visible scope; use the current evaluator only with public, trusted-local tasks.
 
+For private, sealed, or adversarial evaluation, select `evaluation_mode="secure"` with `SecureJobConfig`. The `LocalJobConfig`/`repo_path` route shown in this example is `trusted_local` compatibility behavior for public evaluators and cooperative candidates only.
+
 <table>
 <tr>
 <td width="50%">
@@ -527,7 +529,7 @@ Headless image supports the standard Codex and Cursor paths, but does not ship
 Antigravity's proprietary `agy` executable; use a provider image that includes
 it when running Antigravity models.
 
-Headless seeds an agent's credentials by mounting its auth seed paths read-only under `/tmp/headless-host-home` and copying that tree into the container's tmpfs `$HOME`. Some agents keep credentials next to bulk state — `~/.gemini/antigravity-cli` also holds conversation and brain logs and routinely exceeds 500 MB — so seeding straight from your real home copies that entire tree into container RAM on every proposal. The wrapper stages a throwaway home containing only the credential files, sanitizes the Codex config so host-only desktop, marketplace, and MCP entries stay behind, and drops `--session`, which Headless rejects together with `--docker`.
+Headless seeds an agent's credentials by mounting its auth seed paths read-only under `/tmp/headless-host-home` and copying that tree into the container's tmpfs `$HOME`. Some agents keep credentials next to bulk state — `~/.gemini/antigravity-cli` also holds conversation and brain logs and routinely exceeds 500 MB — so seeding straight from your real home copies that entire tree into container RAM on every proposal. The wrapper stages a throwaway home containing only the credential files and sanitizes the Codex config so host-only desktop, marketplace, and MCP entries stay behind. It drops `--session` by default because that staged home is temporary; set `SHINKA_HEADLESS_DOCKER_SESSION_ROOT` to an absolute private directory outside proposal worktrees to preserve named sessions across disposable containers. Repo mutations still come from files edited directly in the proposal worktree; Headless stdout is retained only for diagnostics and usage accounting.
 
 | Variable | Purpose |
 | --- | --- |
@@ -536,6 +538,7 @@ Headless seeds an agent's credentials by mounting its auth seed paths read-only 
 | `SHINKA_HEADLESS_DOCKER_ARGS` | Extra `docker run` arguments, parsed as a shell word list. |
 | `SHINKA_HEADLESS_DOCKER_SEED_EXTRA` | Additional home-relative paths to stage, separated by `os.pathsep`. |
 | `SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER` | Codex service tier: `fast` (default) or `flex`. |
+| `SHINKA_HEADLESS_DOCKER_SESSION_ROOT` | Optional absolute root for durable Headless Docker sessions; must be private and outside proposal worktrees. |
 | `SHINKA_HEADLESS_DOCKER_BASE_COMMAND` | Headless CLI command. Defaults to `npx -y @roberttlange/headless`. |
 
 ## Interactive WebUI 🎨

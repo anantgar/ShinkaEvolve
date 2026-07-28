@@ -20,7 +20,20 @@ from urllib.parse import parse_qs
 from pydantic import BaseModel
 
 from shinka.llm.constants import TIMEOUT
+from shinka.secure.archive import DEFAULT_EXCLUDES, create_normalized_archive
+from shinka.secure.artifacts import ContentAddressedStore
+from shinka.secure.containers import DockerEngine
+from shinka.secure.contracts import NetworkMode, ResourceLimits
+from shinka.secure.errors import FailureClass, SecureExecutionError, SecurityPolicyError
+from shinka.secure.jobs import EvaluationJobStore
+from shinka.secure.mutation import (
+    AgentSpec,
+    _auth_secret_values,
+    _redact,
+    run_agent_in_workspace,
+)
 
+from .headless_docker import AUTH_HOME_ENV, SESSION_ROOT_ENV
 from .result import QueryResult
 from .errors import (
     LLMAuthenticationError,
@@ -71,9 +84,7 @@ def _parse_timeout_env(*, env_name: str, raw_timeout: str) -> float:
 def _agent_timeout_env_name(model: HeadlessModel | None) -> str | None:
     if model is None:
         return None
-    agent_key = "".join(
-        char.upper() if char.isalnum() else "_" for char in model.agent
-    )
+    agent_key = "".join(char.upper() if char.isalnum() else "_" for char in model.agent)
     return f"{HEADLESS_AGENT_TIMEOUT_ENV_PREFIX}{agent_key}"
 
 
@@ -117,6 +128,17 @@ def headless_output_mode(configured_mode: str | None = None) -> str:
     if mode not in {"json", "usage"}:
         raise ValueError("headless output mode must be 'json' or 'usage'.")
     return mode
+
+
+def _validated_session_home(value: str | Path | None) -> Path | None:
+    if value is None:
+        return None
+    unresolved = Path(value).expanduser()
+    if unresolved.is_symlink() or not unresolved.is_dir():
+        raise ValueError(
+            "headless_session_home must be an existing, non-symlink directory"
+        )
+    return unresolved.resolve()
 
 
 def _thread_cli_lock() -> threading.Lock:
@@ -333,12 +355,22 @@ def _uses_shell_invocation(model: HeadlessModel) -> bool:
     return model.agent == "claude"
 
 
-def _subprocess_env(model: HeadlessModel) -> dict[str, str] | None:
-    if model.agent != "claude":
+def _subprocess_env(
+    model: HeadlessModel,
+    session_home: Path | None = None,
+) -> dict[str, str] | None:
+    if model.agent != "claude" and session_home is None:
         return None
     env = os.environ.copy()
-    env.pop("ANTHROPIC_API_KEY", None)
-    env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+    if model.agent == "claude":
+        env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+    if session_home is not None:
+        auth_home = env.get("HOME")
+        if auth_home:
+            env[AUTH_HOME_ENV] = auth_home
+        env[SESSION_ROOT_ENV] = str(session_home)
+        env["HOME"] = str(session_home)
     return env
 
 
@@ -350,7 +382,10 @@ def _is_transient_claude_credit_error(
     if model.agent != "claude" or completed.returncode == 0:
         return False
     output = f"{completed.stderr}\n{completed.stdout}"
-    return "Credit balance is too low" in output and '"pricingSource":"models.dev"' in output
+    return (
+        "Credit balance is too low" in output
+        and '"pricingSource":"models.dev"' in output
+    )
 
 
 def _headless_failure(*, completed: subprocess.CompletedProcess) -> RuntimeError:
@@ -447,6 +482,7 @@ def _run_subprocess_with_timeout(
     stderr_file,
     proposal_timeout: float,
     cleanup_grace: float,
+    session_home: Path | None = None,
 ) -> subprocess.CompletedProcess:
     if _uses_shell_invocation(model):
         popen_args = {
@@ -461,7 +497,7 @@ def _run_subprocess_with_timeout(
         stdout=stdout_file,
         stderr=stderr_file,
         text=True,
-        env=_subprocess_env(model),
+        env=_subprocess_env(model, session_home),
         start_new_session=True,
         **popen_args,
     )
@@ -486,12 +522,14 @@ def _run_headless_command_sync(
     stderr_path: Path,
     proposal_timeout: float,
     cleanup_grace: float,
+    session_home: Path | None = None,
 ) -> subprocess.CompletedProcess:
     attempts = _CLAUDE_TRANSIENT_RETRIES + 1
     for attempt in range(attempts):
-        with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open(
-            "w", encoding="utf-8"
-        ) as stderr_file:
+        with (
+            stdout_path.open("w", encoding="utf-8") as stdout_file,
+            stderr_path.open("w", encoding="utf-8") as stderr_file,
+        ):
             completed = _run_subprocess_with_timeout(
                 model=model,
                 command=command,
@@ -499,6 +537,7 @@ def _run_headless_command_sync(
                 stderr_file=stderr_file,
                 proposal_timeout=proposal_timeout,
                 cleanup_grace=cleanup_grace,
+                session_home=session_home,
             )
         completed.stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
         completed.stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
@@ -518,6 +557,7 @@ async def _run_headless_command_async(
     stderr_path: Path,
     proposal_timeout: float,
     cleanup_grace: float,
+    session_home: Path | None = None,
 ):
     attempts = _CLAUDE_TRANSIENT_RETRIES + 1
     for attempt in range(attempts):
@@ -530,7 +570,7 @@ async def _run_headless_command_async(
                     stdout=stdout_file,
                     stderr=stderr_file,
                     executable="/bin/sh",
-                    env=_subprocess_env(model),
+                    env=_subprocess_env(model, session_home),
                     start_new_session=True,
                 )
             else:
@@ -538,7 +578,7 @@ async def _run_headless_command_async(
                     *command,
                     stdout=stdout_file,
                     stderr=stderr_file,
-                    env=_subprocess_env(model),
+                    env=_subprocess_env(model, session_home),
                     start_new_session=True,
                 )
             try:
@@ -841,6 +881,29 @@ def _resolve_text_output_mode(configured_mode: str | None) -> str:
     return mode
 
 
+def _redacted_text(value: str, secrets: list[str]) -> str:
+    return _redact(value.encode("utf-8"), secrets).decode("utf-8", errors="replace")
+
+
+def _redacted_history(
+    history: list[dict], secrets: list[str]
+) -> list[dict]:
+    redacted: list[dict] = []
+    for item in history:
+        if not isinstance(item, dict):
+            redacted.append(item)
+            continue
+        redacted.append(
+            {
+                key: _redacted_text(value, secrets)
+                if isinstance(value, str)
+                else value
+                for key, value in item.items()
+            }
+        )
+    return redacted
+
+
 def _query_result(
     *,
     content: str,
@@ -892,6 +955,241 @@ def _query_result(
     )
 
 
+def _secure_query(
+    *,
+    model: str,
+    msg: str,
+    system_msg: str,
+    msg_history: list[dict],
+    model_posteriors: dict[str, float] | None,
+    kwargs: dict[str, Any],
+) -> QueryResult:
+    """Run Headless only inside the configured mutation container."""
+
+    kwargs.pop("headless_secure", None)
+    work_dir_raw = kwargs.pop("headless_work_dir", None)
+    image = kwargs.pop("headless_mutation_image", None)
+    auth_profiles = kwargs.pop("headless_auth_profiles", {})
+    credentials_by_agent = kwargs.pop("headless_credentials", {})
+    network_raw = kwargs.pop("headless_network", "disabled")
+    provider_network = kwargs.pop("headless_provider_network", None)
+    provider_proxy = kwargs.pop("headless_provider_proxy", None)
+    sandbox_user = kwargs.pop("headless_sandbox_user", None)
+    limits_raw = kwargs.pop("headless_resource_limits", {})
+    executable = kwargs.pop("headless_container_executable", "docker")
+    dedicated_container_vm = bool(kwargs.pop("headless_dedicated_container_vm", False))
+    jobs_db_raw = kwargs.pop("headless_jobs_db", None)
+    parent_digest = kwargs.pop("headless_parent_digest", None)
+    job_id = kwargs.pop("headless_job_id", f"mutation-{uuid.uuid4()}")
+    attempt_id = kwargs.pop("headless_attempt_id", str(uuid.uuid4()))
+    configured_timeout = kwargs.pop("headless_timeout_seconds", None)
+    kwargs.pop("headless_cleanup_grace_seconds", None)
+    configured_output_mode = kwargs.pop("headless_output_mode", None)
+    session_name = kwargs.pop("headless_session", None) or kwargs.pop(
+        "headless_session_name", None
+    )
+    session_home = _validated_session_home(kwargs.pop("headless_session_home", None))
+    # The durable home key is an internal handle, not agent/evolution result
+    # data. It must not survive in QueryResult.kwargs or persisted metadata.
+    kwargs.pop("headless_session_key", None)
+    parsed = parse_headless_model(model)
+
+    if not work_dir_raw or not image or not jobs_db_raw or not parent_digest:
+        raise LLMProcessError(
+            "Secure Headless mutation requires a sanitized candidate workspace, "
+            "parent digest, durable job store, and pinned mutation image"
+        )
+    if session_home is None or not session_name:
+        raise LLMProcessError(
+            "Secure Headless mutation requires a durable proposal session home and name"
+        )
+    if not isinstance(auth_profiles, dict) or parsed.agent not in auth_profiles:
+        raise LLMAuthenticationError(
+            f"No minimal auth profile is configured for secure agent {parsed.agent}"
+        )
+    credentials = (
+        credentials_by_agent.get(parsed.agent, {})
+        if isinstance(credentials_by_agent, dict)
+        else {}
+    )
+    if not isinstance(credentials, dict):
+        raise LLMAuthenticationError(
+            "Secure agent credentials must be an explicit mapping"
+        )
+    auth_profile = Path(auth_profiles[parsed.agent]).expanduser()
+    redaction_values = list(
+        dict.fromkeys(
+            [
+                *(str(value) for value in credentials.values()),
+                *_auth_secret_values(auth_profile),
+            ]
+        )
+    )
+
+    work_dir = Path(work_dir_raw).resolve()
+    state_root = Path(jobs_db_raw).expanduser().resolve().parent
+
+    def _overlaps(left: Path, right: Path) -> bool:
+        try:
+            left.relative_to(right)
+            return True
+        except ValueError:
+            pass
+        try:
+            right.relative_to(left)
+            return True
+        except ValueError:
+            return False
+
+    if _overlaps(work_dir, state_root):
+        raise LLMProcessError(
+            "Secure Headless state must be outside the agent workspace"
+        )
+    if session_home is not None:
+        resolved_session_home = session_home.resolve()
+        if _overlaps(work_dir, resolved_session_home):
+            raise LLMProcessError(
+                "Secure Headless session data must be outside the agent workspace"
+            )
+        if _overlaps(state_root, resolved_session_home):
+            raise LLMProcessError(
+                "Secure Headless state and session data must be separate"
+            )
+    try:
+        artifact_store = ContentAddressedStore(
+            Path(jobs_db_raw).resolve().parent / "artifacts"
+        )
+        artifact_store.verify(str(parent_digest))
+        with tempfile.TemporaryDirectory(prefix="shinka-headless-parent-") as temporary:
+            metadata = create_normalized_archive(
+                work_dir,
+                Path(temporary) / "candidate.tar",
+                excludes=DEFAULT_EXCLUDES,
+            )
+        if metadata.digest != str(parent_digest):
+            raise SecurityPolicyError(
+                "Secure Headless workspace does not match its immutable parent artifact"
+            )
+    except SecureExecutionError as exc:
+        raise LLMProcessError(str(exc)) from exc
+    attempt_root = (
+        state_root
+        / "headless-attempts"
+        / uuid.uuid5(uuid.NAMESPACE_URL, str(attempt_id)).hex
+    )
+    attempt_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(attempt_root, 0o700)
+    prompt = _redact(
+        _render_prompt(
+            work_dir=work_dir,
+            msg=msg,
+            system_msg=system_msg,
+            msg_history=msg_history,
+        ).encode("utf-8"),
+        redaction_values,
+    ).decode("utf-8", errors="replace")
+    safe_msg = _redacted_text(msg, redaction_values)
+    safe_system_msg = _redacted_text(system_msg, redaction_values)
+    safe_msg_history = _redacted_history(msg_history, redaction_values)
+    prompt_path = attempt_root / "prompt.md"
+    prompt_path.write_text(prompt, encoding="utf-8")
+    os.chmod(prompt_path, 0o600)
+    try:
+        network = NetworkMode(network_raw)
+        limits = ResourceLimits(**limits_raw)
+        engine = DockerEngine(
+            str(executable),
+            allow_rootful_dedicated_vm=dedicated_container_vm,
+        )
+        engine.preflight(
+            images=[str(image)],
+            provider_network=(
+                provider_network if network is NetworkMode.PROVIDER_ONLY else None
+            ),
+            required_agents=[parsed.agent],
+        )
+        result = run_agent_in_workspace(
+            engine=engine,
+            workspace=work_dir,
+            image=str(image),
+            limits=limits,
+            network=network,
+            provider_network=provider_network,
+            provider_proxy=provider_proxy,
+            sandbox_user=sandbox_user or "65532:65532",
+            prompt=prompt,
+            agent=AgentSpec(
+                agent=parsed.agent,
+                model=parsed.agent_model,
+                effort=parsed.effort,
+            ),
+            auth_profile=auth_profile,
+            credential_environment={
+                str(key): str(value) for key, value in credentials.items()
+            },
+            job_id=str(job_id),
+            attempt_id=str(attempt_id),
+            parent_digest=str(parent_digest),
+            mutation_store=EvaluationJobStore(Path(jobs_db_raw)),
+            timeout_seconds=headless_timeout(parsed, configured_timeout),
+            session_home=session_home,
+            session_name=str(session_name),
+        )
+    except SecureExecutionError as exc:
+        if exc.failure_class in {
+            FailureClass.WALL_TIMEOUT,
+            FailureClass.STARTUP_TIMEOUT,
+        }:
+            raise LLMTimeoutError(str(exc)) from exc
+        raise LLMProcessError(str(exc)) from exc
+    except (ValueError, OSError) as exc:
+        raise LLMProcessError(str(exc)) from exc
+
+    redacted_stdout = _redact(result.stdout, redaction_values)
+    redacted_stderr = _redact(result.stderr, redaction_values)
+    stdout_path = attempt_root / "stdout.log"
+    stderr_path = attempt_root / "stderr.log"
+    stdout_path.write_bytes(redacted_stdout)
+    stderr_path.write_bytes(redacted_stderr)
+    os.chmod(stdout_path, 0o600)
+    os.chmod(stderr_path, 0o600)
+    headless_usage = _extract_headless_usage(
+        redacted_stdout.decode("utf-8", errors="replace")
+    )
+    query_usage = _query_usage_from_headless(headless_usage)
+    content = _worktree_completion_content(work_dir)
+    safe_content = _redacted_text(content, redaction_values)
+    result_kwargs = {
+        **kwargs,
+        "model_name": model,
+        "headless_work_dir": str(work_dir),
+        "headless_prompt_path": str(prompt_path),
+        "headless_stdout_path": str(stdout_path),
+        "headless_stderr_path": str(stderr_path),
+        "headless_container_name": result.container_name,
+        "headless_session_name": str(session_name),
+        "headless_session_id": str(session_name),
+        "headless_job_id": str(job_id),
+        "headless_attempt_id": str(attempt_id),
+        "headless_parent_digest": str(parent_digest),
+        "headless_usage": headless_usage or None,
+        "headless_usage_unknown": not bool(headless_usage),
+        "headless_timeout_seconds": headless_timeout(parsed, configured_timeout),
+        "headless_output_mode": headless_output_mode(configured_output_mode),
+        "headless_secure": True,
+    }
+    return _query_result(
+        content=safe_content,
+        usage=query_usage,
+        model=model,
+        msg=safe_msg,
+        system_msg=safe_system_msg,
+        msg_history=safe_msg_history,
+        kwargs=result_kwargs,
+        model_posteriors=model_posteriors,
+    )
+
+
 def query_headless(
     client,
     model,
@@ -905,9 +1203,22 @@ def query_headless(
     if output_model is not None:
         raise ValueError("Headless does not support structured output.")
 
+    if kwargs.get("headless_secure") or kwargs.get("headless_mutation_image"):
+        return _secure_query(
+            model=model,
+            msg=msg,
+            system_msg=system_msg,
+            msg_history=msg_history,
+            model_posteriors=model_posteriors,
+            kwargs=dict(kwargs),
+        )
+
     headless_work_dir = kwargs.pop("headless_work_dir", None)
     headless_session_name = kwargs.pop("headless_session", None) or kwargs.pop(
         "headless_session_name", None
+    )
+    headless_session_home = _validated_session_home(
+        kwargs.pop("headless_session_home", None)
     )
     configured_timeout = kwargs.pop("headless_timeout_seconds", None)
     configured_grace = kwargs.pop("headless_cleanup_grace_seconds", None)
@@ -956,6 +1267,7 @@ def query_headless(
                 stderr_path=stderr_path,
                 proposal_timeout=proposal_timeout,
                 cleanup_grace=cleanup_grace,
+                session_home=headless_session_home,
             )
         finally:
             if lock_acquired:
@@ -1036,9 +1348,23 @@ async def query_headless_async(
     if output_model is not None:
         raise ValueError("Headless does not support structured output.")
 
+    if kwargs.get("headless_secure") or kwargs.get("headless_mutation_image"):
+        return await asyncio.to_thread(
+            _secure_query,
+            model=model,
+            msg=msg,
+            system_msg=system_msg,
+            msg_history=msg_history,
+            model_posteriors=model_posteriors,
+            kwargs=dict(kwargs),
+        )
+
     headless_work_dir = kwargs.pop("headless_work_dir", None)
     headless_session_name = kwargs.pop("headless_session", None) or kwargs.pop(
         "headless_session_name", None
+    )
+    headless_session_home = _validated_session_home(
+        kwargs.pop("headless_session_home", None)
     )
     configured_timeout = kwargs.pop("headless_timeout_seconds", None)
     configured_grace = kwargs.pop("headless_cleanup_grace_seconds", None)
@@ -1086,6 +1412,7 @@ async def query_headless_async(
                 stderr_path=stderr_path,
                 proposal_timeout=proposal_timeout,
                 cleanup_grace=cleanup_grace,
+                session_home=headless_session_home,
             )
         except asyncio.TimeoutError as exc:
             raise LLMTimeoutError(

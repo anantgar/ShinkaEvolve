@@ -11,6 +11,8 @@ from shinka.core.pipeline_timing import (
     with_side_effect_timing,
 )
 from shinka.core.runtime_slots import LogicalSlotPool
+from shinka.database import Program
+from shinka.launch import LocalJobConfig
 
 
 def _bare_runner_with_disabled_wandb():
@@ -23,8 +25,6 @@ def _bare_runner_with_disabled_wandb():
     runner.db = None
     runner.prompt_db = None
     return runner
-from shinka.database import Program
-from shinka.launch import LocalJobConfig
 
 
 def test_with_pipeline_timing_adds_boundaries_and_durations():
