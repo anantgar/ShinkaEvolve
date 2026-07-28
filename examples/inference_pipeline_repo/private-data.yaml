@@ -1,0 +1,3 @@
+schema_version: shinka-private-data-v1
+inputs:
+  cases: private/cases.json

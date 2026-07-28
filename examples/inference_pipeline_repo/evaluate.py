@@ -1,95 +1,60 @@
+"""Trusted evaluator using only the framed candidate-runner capability."""
+
 from __future__ import annotations
 
-import argparse
-import importlib.util
 import json
 import statistics
-import time
-from pathlib import Path
 
 
-INPUTS = [-3.0, -1.5, 0.0, 2.0, 5.0]
-EXPECTED = [2.0 * x + 1.0 for x in INPUTS]
-
-
-def _load_pipeline(repo_path: Path):
-    pipeline_path = repo_path / "src" / "pipeline.py"
-    spec = importlib.util.spec_from_file_location("candidate_pipeline", pipeline_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load {pipeline_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def _percentile(values: list[float], percentile: float) -> float:
-    if not values:
-        return 0.0
+def _percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
-    index = min(len(ordered) - 1, int(round((len(ordered) - 1) * percentile)))
+    index = min(len(ordered) - 1, int((len(ordered) - 1) * fraction))
     return ordered[index]
 
 
-def evaluate(repo_path: Path) -> tuple[dict, bool, str]:
-    module = _load_pipeline(repo_path)
-    latencies = []
-    prediction = []
-    error = ""
+def evaluate(job, candidate_runner, private_inputs, result_writer) -> None:
+    cases = json.loads(private_inputs.path("cases").read_text(encoding="utf-8"))
+    latencies: list[float] = []
+    passed = 0
 
-    try:
-        for _ in range(50):
-            start = time.perf_counter()
-            prediction = list(module.predict(INPUTS))
-            latencies.append(time.perf_counter() - start)
-    except Exception as exc:
-        return {
-            "combined_score": 0.0,
-            "public": {},
-            "private": {},
-            "text_feedback": str(exc),
-        }, False, str(exc)
+    with result_writer.phase("warmup"):
+        for case in cases[:2]:
+            candidate_runner.request(case["input"])
 
-    max_abs_error = max(abs(a - b) for a, b in zip(prediction, EXPECTED))
-    correct = max_abs_error <= 1e-9
+    with result_writer.phase("correctness"):
+        for case in cases:
+            response = candidate_runner.request(case["input"])
+            actual = response.output
+            expected = case["expected"]
+            if (
+                isinstance(actual, list)
+                and len(actual) == len(expected)
+                and all(abs(float(a) - float(b)) <= 1e-9 for a, b in zip(actual, expected))
+            ):
+                passed += 1
+
+    with result_writer.phase("benchmark"):
+        for _ in range(30):
+            for case in cases:
+                response = candidate_runner.request(case["input"])
+                latencies.append(response.elapsed_seconds)
+        job.heartbeat("benchmark_complete")
+
+    pass_rate = passed / len(cases)
+    correct = passed == len(cases)
     p50 = statistics.median(latencies)
     p90 = _percentile(latencies, 0.90)
-    p99 = _percentile(latencies, 0.99)
-    throughput = len(INPUTS) / max(p50, 1e-12)
-    latency_score = 1.0 / (1.0 + p50 * 100000.0)
-    combined_score = (1.0 if correct else 0.0) + latency_score
-
-    metrics = {
-        "combined_score": combined_score,
-        "public": {
-            "max_abs_error": max_abs_error,
+    combined_score = (1.0 if correct else 0.0) + 1.0 / (1.0 + p50 * 1_000.0)
+    result_writer.succeed(
+        correct=correct,
+        combined_score=combined_score,
+        public_metrics={
+            "correctness_pass_rate": pass_rate,
             "latency_p50_seconds": p50,
             "latency_p90_seconds": p90,
-            "latency_p99_seconds": p99,
         },
-        "private": {
-            "throughput_items_per_second": throughput,
-            "peak_memory_bytes": 0,
-            "compile_seconds": 0.0,
+        private_metrics={
+            "private_case_count": len(cases),
+            "trusted_request_samples": len(latencies),
         },
-        "text_feedback": "" if correct else f"max_abs_error={max_abs_error}",
-    }
-    return metrics, correct, error
-
-
-def main(repo_path: str, results_dir: str) -> None:
-    output_dir = Path(results_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    metrics, correct, error = evaluate(Path(repo_path).resolve())
-    (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    (output_dir / "correct.json").write_text(
-        json.dumps({"correct": correct, "error": error}, indent=2),
-        encoding="utf-8",
     )
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--repo_path", required=True)
-    parser.add_argument("--results_dir", required=True)
-    args = parser.parse_args()
-    main(args.repo_path, args.results_dir)

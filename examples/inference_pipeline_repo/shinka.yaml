@@ -3,9 +3,19 @@ evo:
   mutable_paths:
     - src
   immutable_paths: []
-  agent_hidden_paths: []
+  agent_omitted_paths: []
+  # Replace this sentinel with the manifest digest produced from
+  # containers/headless-agents/Dockerfile before running.
+  mutation_image: ghcr.io/sakanaai/shinka-headless-agents@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  agent_auth_profiles:
+    antigravity: ~/.local/share/shinka/antigravity-container-auth
+  agent_credential_env_names:
+    antigravity: []
+  agent_network: provider_only
+  agent_provider_network: shinka-provider-egress
+  agent_provider_proxy: http://shinka-egress-proxy:8080
   llm_models:
-    - headless/codex@test-model?effort=low
+    - headless/antigravity@Gemini 3.5 Flash (Low)
   llm_dynamic_selection: null
   embedding_model: null
   patch_types:
@@ -21,7 +31,18 @@ db:
   archive_size: 4
 
 job:
-  eval_program_path: evaluate.py
+  evaluator_repo_path: .
+  evaluator_entrypoint: evaluate.py
+  private_data_manifest: private-data.yaml
+  build_image: node@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c
+  runtime_image: node@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c
+  candidate_command: [node, /candidate/service.js]
+  required_paths: [service.js, package.json, src/pipeline.js]
+  public_metric_allowlist:
+    - correctness_pass_rate
+    - latency_p50_seconds
+    - latency_p90_seconds
+  public_feedback_enabled: false
 
 max_evaluation_jobs: 1
 max_proposal_jobs: 1
