@@ -1,44 +1,46 @@
 #!/usr/bin/env python3
+"""Small task-local wrapper around the canonical repo-mode Shinka CLI."""
+
+from __future__ import annotations
+
 import argparse
-import asyncio
-import yaml
+from pathlib import Path
 
-from shinka.core import EvolutionConfig, ShinkaEvolveRunner
-from shinka.database import DatabaseConfig
-from shinka.launch import LocalJobConfig
-
-TASK_SYS_MSG = """You are optimizing code converted from an existing codebase.
-Preserve the task contract and keep changes focused on the intended EVOLVE-BLOCK regions.
-Do not break evaluation outputs, result file schemas, or imports required by the task snapshot."""
+from shinka.cli.run import main as shinka_run_main
 
 
-async def main(config_path: str):
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run this converted Shinka task.")
+    parser.add_argument("--config_path", default="shinka.yaml")
+    parser.add_argument("--results_dir", default="results/run")
+    parser.add_argument("--num_generations", type=int, default=10)
+    parser.add_argument("--set", dest="overrides", action="append", default=[])
+    args = parser.parse_args()
+    if args.num_generations <= 0:
+        parser.error("--num_generations must be positive")
 
-    config["evo_config"]["task_sys_msg"] = TASK_SYS_MSG
-    evo_config = EvolutionConfig(**config["evo_config"])
-    job_config = LocalJobConfig(
-        eval_program_path="evaluate.py",
-        time="05:00:00",
-    )
-    db_config = DatabaseConfig(**config["db_config"])
+    task_dir = Path(__file__).resolve().parent
+    config_path = Path(args.config_path).expanduser()
+    if not config_path.is_absolute():
+        config_path = task_dir / config_path
+    results_path = Path(args.results_dir).expanduser()
+    if not results_path.is_absolute():
+        results_path = task_dir / results_path
 
-    runner = ShinkaEvolveRunner(
-        evo_config=evo_config,
-        job_config=job_config,
-        db_config=db_config,
-        max_evaluation_jobs=config["max_evaluation_jobs"],
-        max_proposal_jobs=config["max_proposal_jobs"],
-        max_db_workers=config["max_db_workers"],
-        debug=False,
-        verbose=True,
-    )
-    await runner.run()
+    cli_args = [
+        "--task-dir",
+        str(task_dir),
+        "--config-fname",
+        str(config_path.resolve()),
+        "--results_dir",
+        str(results_path.resolve()),
+        "--num_generations",
+        str(args.num_generations),
+    ]
+    for override in args.overrides:
+        cli_args.extend(["--set", override])
+    return shinka_run_main(cli_args)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config_path", type=str, default="shinka.yaml")
-    args = parser.parse_args()
-    asyncio.run(main(args.config_path))
+    raise SystemExit(main())
