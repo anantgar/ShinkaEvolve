@@ -4039,6 +4039,21 @@ Required constraints:
                         "headless_usage_unknown": response_kwargs.get(
                             "headless_usage_unknown", True
                         ),
+                        "headless_usage_status": response_kwargs.get(
+                            "headless_usage_status", "missing"
+                        ),
+                        "headless_pricing_unknown": response_kwargs.get(
+                            "headless_pricing_unknown", True
+                        ),
+                        "headless_pricing_status": response_kwargs.get(
+                            "headless_pricing_status", "missing"
+                        ),
+                        "headless_cost_basis": response_kwargs.get(
+                            "headless_cost_basis"
+                        ),
+                        "headless_pricing_source": response_kwargs.get(
+                            "headless_pricing_source"
+                        ),
                         "repo_policy_path": str(policy_path) if policy_path else None,
                         "headless_prompt_path": response_kwargs.get(
                             "headless_prompt_path"
@@ -4146,6 +4161,19 @@ Required constraints:
                 ),
                 "headless_usage_unknown": response_kwargs.get(
                     "headless_usage_unknown", True
+                ),
+                "headless_usage_status": response_kwargs.get(
+                    "headless_usage_status", "missing"
+                ),
+                "headless_pricing_unknown": response_kwargs.get(
+                    "headless_pricing_unknown", True
+                ),
+                "headless_pricing_status": response_kwargs.get(
+                    "headless_pricing_status", "missing"
+                ),
+                "headless_cost_basis": response_kwargs.get("headless_cost_basis"),
+                "headless_pricing_source": response_kwargs.get(
+                    "headless_pricing_source"
                 ),
                 "repo_policy_path": str(policy_path) if policy_path else None,
                 "headless_prompt_path": response_kwargs.get("headless_prompt_path"),
@@ -6239,7 +6267,12 @@ Required constraints:
                 if value is None:
                     formatted_value = "[dim]None[/dim]"
                 elif field_name == "api_costs":
-                    formatted_value = f"${value:.4f}"
+                    if meta_data.get("headless_pricing_unknown") is True:
+                        formatted_value = (
+                            f"[yellow]unknown (known subtotal: ${value:.4f})[/yellow]"
+                        )
+                    else:
+                        formatted_value = f"${value:.4f}"
                 elif field_name == "error_attempt" and value is None:
                     formatted_value = "[green]Success[/green]"
                 elif field_name == "error_attempt":

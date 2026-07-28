@@ -69,6 +69,11 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
     """Build one compact W&B history event for an evaluated individual."""
     metadata = program.metadata or {}
     costs = program_costs(program)
+    logged_costs = {
+        name: value
+        for name, value in costs.items()
+        if not (name == "api" and metadata.get("headless_pricing_unknown") is True)
+    }
     individual_score = _finite_float(program.combined_score)
     payload: Dict[str, Any] = {
         GENERATION_METRIC: program.generation,
@@ -80,7 +85,13 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
         "individual/in_archive": bool(program.in_archive),
         "individual/patch_type": metadata.get("patch_type"),
         "individual/model_name": _program_model_name(program),
-        **{f"cost/{name}": value for name, value in costs.items()},
+        "headless/usage_status": metadata.get("headless_usage_status"),
+        "headless/usage_unknown": metadata.get("headless_usage_unknown"),
+        "headless/pricing_status": metadata.get("headless_pricing_status"),
+        "headless/pricing_unknown": metadata.get("headless_pricing_unknown"),
+        "headless/cost_basis": metadata.get("headless_cost_basis"),
+        "headless/pricing_source": metadata.get("headless_pricing_source"),
+        **{f"cost/{name}": value for name, value in logged_costs.items()},
     }
 
     for key in _TIMING_KEYS:
@@ -148,7 +159,11 @@ def program_table_row(program: Program) -> List[Any]:
         bool(program.in_archive),
         metadata.get("patch_type"),
         _program_model_name(program),
-        sum(program_costs(program).values()),
+        (
+            None
+            if metadata.get("headless_pricing_unknown") is True
+            else sum(program_costs(program).values())
+        ),
     ]
 
 

@@ -39,6 +39,12 @@ def _make_db(tmp_path):
             "pipeline_seconds": 2.0,
             "evaluation_seconds": 1.5,
             "model_name": "test-model",
+            "headless_usage_status": "reported",
+            "headless_usage_unknown": False,
+            "headless_pricing_status": "missing",
+            "headless_pricing_unknown": True,
+            "headless_cost_basis": None,
+            "headless_pricing_source": None,
         },
     )
     second = Program(
@@ -107,6 +113,12 @@ def test_program_payload_skips_bulky_values_and_duplicate_timing(tmp_path):
     assert payload["private_metrics/hidden"] == 2.0
     assert "public_metrics/bulky_text" not in payload
     assert payload["timing/pipeline_seconds"] == 2.0
+    assert payload["headless/usage_status"] == "reported"
+    assert payload["headless/usage_unknown"] is False
+    assert payload["headless/pricing_status"] == "missing"
+    assert payload["headless/pricing_unknown"] is True
+    assert "headless/cost_basis" not in payload
+    assert "cost/api" not in payload
     assert "metadata/pipeline_seconds" not in payload
 
 
