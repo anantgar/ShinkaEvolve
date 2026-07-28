@@ -552,11 +552,12 @@ class ShinkaEvolveRunner:
                 f"got {evo_config.llm_models!r}"
             )
         mutation_llm_kwargs = dict(evo_config.llm_kwargs)
+        secure_headless_query_defaults: Dict[str, Any] = {}
         if self.secure_runtime_settings is not None:
             secure_settings = self.secure_runtime_settings
             assert evo_config.mutation_image is not None
             assert isinstance(job_config, SecureJobConfig)
-            mutation_llm_kwargs.update(
+            secure_headless_query_defaults.update(
                 {
                     "headless_secure": True,
                     "headless_mutation_image": evo_config.mutation_image,
@@ -592,6 +593,7 @@ class ShinkaEvolveRunner:
             headless_cleanup_grace_seconds=evo_config.headless_cleanup_grace_seconds,
             headless_output_mode=evo_config.headless_output_mode,
             headless_model_timeouts=evo_config.headless_model_timeouts,
+            headless_query_defaults=secure_headless_query_defaults,
             propagate_route_errors=True,
             rate_limiter=self.llm_rate_limiter,
             request_class="mutation",

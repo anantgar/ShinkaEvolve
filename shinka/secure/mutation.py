@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import math
 import os
 import re
 import shutil
@@ -290,12 +291,18 @@ def _agent_command(
     prompt: str,
     *,
     session_name: str | None = None,
+    timeout_seconds: float | None = None,
 ) -> tuple[tuple[str, ...], bytes | None]:
     args = ["headless", spec.agent]
     if spec.model:
         args.extend(["--model", spec.model])
     if spec.effort:
         args.extend(["--reasoning-effort", spec.effort])
+    args.extend(["--work-dir", "/workspace"])
+    if timeout_seconds is not None:
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise SecurityPolicyError("Invalid Headless timeout")
+        args.extend(["--timeout", str(math.ceil(timeout_seconds))])
     if session_name:
         if not _SESSION_NAME.fullmatch(session_name):
             raise SecurityPolicyError("Invalid Headless session name")
@@ -443,7 +450,7 @@ def _reject_exact_secret_copies(
         credential_values = (
             value for value in credential_environment.values() if len(value) >= 8
         )
-        auth_values = _auth_secret_values(auth_root)
+        auth_values = _auth_sensitive_values(auth_root)
     else:
         credential_values = (
             value
@@ -632,10 +639,13 @@ def run_agent_in_workspace(
                 agent,
                 prompt,
                 session_name=session_name,
+                timeout_seconds=timeout_seconds,
             )
             bootstrap = (
                 'set -eu; mkdir -p "$HOME"; '
-                'if [ -d /auth-seed ]; then cp -R /auth-seed/. "$HOME"/; '
+                "if [ -d /auth-seed ]; then "
+                "tar -C /auth-seed -cf - . | "
+                'tar -C "$HOME" --no-same-owner --no-same-permissions -xf -; '
                 'find "$HOME" -mindepth 1 -exec chmod u+rwX {} +; fi; '
                 'exec "$@"'
             )

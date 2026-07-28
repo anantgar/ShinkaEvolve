@@ -50,12 +50,30 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
 
     def fake_agent(**kwargs):
         calls.append(kwargs)
+        attempt_id = kwargs["attempt_id"]
+        store = kwargs["mutation_store"]
+        store.prepare_mutation(
+            attempt_id=attempt_id,
+            job_id=kwargs["job_id"],
+            parent_digest=kwargs["parent_digest"],
+            prompt_digest="sha256:" + "1" * 64,
+            image=kwargs["image"],
+            agent=kwargs["agent"].agent,
+            model=kwargs["agent"].model,
+            container_name=f"fake-{attempt_id}",
+        )
+        store.record_mutation_launch(
+            attempt_id,
+            container_id=f"container-{attempt_id}",
+        )
         counter_path = kwargs["session_home"] / "turns"
         turns = int(counter_path.read_text()) + 1 if counter_path.exists() else 1
         counter_path.write_text(str(turns), encoding="utf-8")
         (kwargs["workspace"] / "generated.txt").write_text(
             f"turn {turns}\n", encoding="utf-8"
         )
+        store.mark_mutation_output_pending(attempt_id)
+        store.mark_mutation_cleaned(attempt_id)
         return SimpleNamespace(
             stdout=b'{"usage":{"inputTokens":2,"outputTokens":1},"log":"fake-secret auth-secret-value"}\n',
             stderr=b"stderr fake-secret auth-secret-value",
@@ -137,10 +155,15 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
         assert "auth-secret-value" not in prompt_path.read_text()
         assert result.kwargs["headless_secure"] is True
         assert result.kwargs["headless_session_name"] == "proposal-session"
+        assert result.kwargs["headless_candidate_digest"].startswith("sha256:")
 
     assert (session_home / "turns").read_text() == "2"
     assert [call["session_name"] for call in calls] == [
         "proposal-session",
         "proposal-session",
     ]
+    assert all(str(worktree) not in call["prompt"] for call in calls)
+    assert all(
+        "The proposal repository is `/workspace`" in call["prompt"] for call in calls
+    )
     assert (worktree / "generated.txt").read_text() == "turn 2\n"

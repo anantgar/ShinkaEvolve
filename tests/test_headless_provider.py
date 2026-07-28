@@ -14,6 +14,7 @@ import pytest
 from shinka.cli import run as cli_run
 from shinka.llm.client import get_async_client_llm, get_client_llm
 from shinka.llm.kwargs import sample_model_kwargs
+from shinka.llm.llm import AsyncLLMClient
 from shinka.llm.providers.headless import (
     _subprocess_env,
     parse_headless_model,
@@ -24,6 +25,30 @@ from shinka.llm.providers import headless_docker
 from shinka.llm.providers import LLMAuthenticationError, LLMTimeoutError
 from shinka.llm.providers.model_resolver import resolve_model_backend
 from shinka.model_availability import validate_model_env_access
+
+
+def test_async_client_merges_secure_headless_query_defaults() -> None:
+    client = AsyncLLMClient(
+        model_names=["headless/antigravity@test"],
+        headless_work_dir="/default-worktree",
+        headless_query_defaults={
+            "headless_secure": True,
+            "headless_mutation_image": "image@sha256:" + "a" * 64,
+            "headless_auth_profiles": {"antigravity": "/auth"},
+        },
+    )
+
+    attached = client._attach_headless_work_dir(
+        {
+            "model_name": "headless/antigravity@test",
+            "headless_work_dir": "/proposal-worktree",
+        }
+    )
+
+    assert attached["headless_secure"] is True
+    assert attached["headless_mutation_image"].startswith("image@sha256:")
+    assert attached["headless_auth_profiles"] == {"antigravity": "/auth"}
+    assert attached["headless_work_dir"] == "/proposal-worktree"
 
 
 def _make_fake_headless(tmp_path: Path) -> Path:

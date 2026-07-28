@@ -1028,6 +1028,7 @@ def _secure_query(
 
     work_dir = Path(work_dir_raw).resolve()
     state_root = Path(jobs_db_raw).expanduser().resolve().parent
+    mutation_store = EvaluationJobStore(Path(jobs_db_raw))
 
     def _overlaps(left: Path, right: Path) -> bool:
         try:
@@ -1079,13 +1080,15 @@ def _secure_query(
     )
     attempt_root.mkdir(parents=True, mode=0o700, exist_ok=True)
     os.chmod(attempt_root, 0o700)
+    rendered_prompt = _render_prompt(
+        work_dir=work_dir,
+        msg=msg,
+        system_msg=system_msg,
+        msg_history=msg_history,
+    )
+    rendered_prompt = rendered_prompt.replace(str(work_dir), "/workspace")
     prompt = _redact(
-        _render_prompt(
-            work_dir=work_dir,
-            msg=msg,
-            system_msg=system_msg,
-            msg_history=msg_history,
-        ).encode("utf-8"),
+        rendered_prompt.encode("utf-8"),
         redaction_values,
     ).decode("utf-8", errors="replace")
     safe_msg = _redacted_text(msg, redaction_values)
@@ -1130,10 +1133,19 @@ def _secure_query(
             job_id=str(job_id),
             attempt_id=str(attempt_id),
             parent_digest=str(parent_digest),
-            mutation_store=EvaluationJobStore(Path(jobs_db_raw)),
+            mutation_store=mutation_store,
             timeout_seconds=headless_timeout(parsed, configured_timeout),
             session_home=session_home,
             session_name=str(session_name),
+        )
+        candidate, _metadata = artifact_store.put_tree(
+            work_dir,
+            kind="candidate",
+            excludes=DEFAULT_EXCLUDES,
+        )
+        mutation_store.complete_mutation(
+            str(attempt_id),
+            candidate_digest=candidate.digest,
         )
     except SecureExecutionError as exc:
         if exc.failure_class in {
@@ -1172,6 +1184,7 @@ def _secure_query(
         "headless_job_id": str(job_id),
         "headless_attempt_id": str(attempt_id),
         "headless_parent_digest": str(parent_digest),
+        "headless_candidate_digest": candidate.digest,
         "headless_usage": headless_usage or None,
         "headless_usage_unknown": not bool(headless_usage),
         "headless_timeout_seconds": headless_timeout(parsed, configured_timeout),
