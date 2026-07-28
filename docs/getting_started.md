@@ -180,7 +180,7 @@ shinka_run \
 
 | Constraint | Rule |
 |------------|------|
-| `--task-dir` | Must contain `evaluate.py` and a git `seed_repo/`, unless `--seed-repo-path` or `evo.seed_repo_path` points elsewhere. |
+| `--task-dir` | Must contain `evaluate.py` and a candidate `seed_repo/` directory, unless `--seed-repo-path` or `evo.seed_repo_path` points elsewhere. Git initialization is automatic. |
 | `--set` | Strict namespaces: `evo.<field>`, `db.<field>`, `job.<field>` |
 | `--results_dir` / `--num_generations` | Always authoritative |
 
@@ -423,7 +423,8 @@ runner.run()
 ### Creating custom tasks
 
 1. **Define the problem** — task config in `shinka/configs/task/my_task.yaml`
-2. **Initial solution** — a committed `seed_repo/`
+2. **Initial solution** — a `seed_repo/` candidate directory; Shinka creates
+   the Git baseline automatically when needed
 3. **Evaluation script** — `evaluate.py` with validation logic
 4. **Variant config** — combine settings in `shinka/configs/variant/my_variant.yaml`
 

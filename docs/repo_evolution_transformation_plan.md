@@ -31,7 +31,10 @@ The phase descriptions below retain the original design rationale and acceptance
 
 ## Phase 0: Make Repo Mode The Only Mode
 
-This repository should not support the legacy single-file mode. `Program` remains the database naming convention for an individual, but every active run requires a seed git repository, worktree mutation, and evaluator support for `--repo_path`.
+This repository should not support the legacy single-file mode. `Program`
+remains the database naming convention for an individual, but every active run
+requires a seed candidate directory, automatic Git baseline initialization,
+worktree mutation, and evaluator support for `--repo_path`.
 
 Tasks:
 

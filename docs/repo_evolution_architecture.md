@@ -77,7 +77,9 @@ The database continues to call the row model `Program` and table `programs`; it 
 
 ### Seed setup
 
-1. Validate `seed_repo_path` is a git repository.
+1. Validate `seed_repo_path` is a directory. If it is not an independent Git
+   repository, initialize it and create the baseline commit. Reuse an existing
+   repository with `HEAD` only when its working tree is clean.
 2. Resolve `base_ref` to a seed commit.
 3. Create a generation 0 worktree from the seed commit.
 4. Generate or read the initial summary file.

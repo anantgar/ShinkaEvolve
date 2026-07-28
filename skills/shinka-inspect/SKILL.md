@@ -1,63 +1,78 @@
 ---
 name: shinka-inspect
-description: Load top-performing Shinka programs into agent context using `shinka.utils.load_programs_to_df`, and emit a compact Markdown bundle for iteration planning.
+description: Inspect top repo-backed ShinkaEvolve individuals and build a compact agent context bundle from repository summaries, lineage, commits, changed files, public metrics, and feedback.
 ---
 
-# Shinka Inspect Skill
-Extract the strongest programs from a Shinka run and package them into a context file that coding agents can load directly.
+# Inspect repo evolution
 
-## When to Use
-Use this skill when:
-- A run already produced a results directory and SQLite database
-- You want to inspect top-performing programs before launching the next batch
-- You want a compact context artifact instead of manually browsing the DB
+Extract the strongest repository individuals from a Shinka run and turn their
+persisted summaries into compact, actionable context for the next batch.
 
-Do not use this skill when:
-- You still need to scaffold a task (`shinka-setup`)
-- You need to run evolution batches (`shinka-run`)
+## When to use
 
-## What it does
-- Uses `shinka.utils.load_programs_to_df` to read program records
-- Ranks programs by `combined_score`
-- Selects top-`k` correct programs (fallback to top-`k` overall if no correct rows)
-- Writes one Markdown bundle with metadata, ranking table, feedback, and code snippets
+Use this skill after a run has produced `programs.sqlite`. Use `shinka-run` to
+start or continue evolution.
+
+## What it extracts
+
+- top correct individuals by `combined_score`, with an explicit fallback when no
+  correct rows exist;
+- repository summary, commit, parent, generation, and changed files;
+- public metrics and optional evaluator feedback;
+- agent route/session metadata;
+- compact diff statistics without dumping full repository diffs;
+- cross-candidate ideas, performance hypotheses, risks, and frequently changed
+  paths parsed from `.shinka/individual.md` summaries.
+
+The executable artifact is the repository commit. The bundle does not pretend
+that the compatibility `code` column contains a complete source program.
 
 ## Workflow
-1. Confirm run artifacts exist
+
+1. Confirm the run database exists:
+
 ```bash
-ls -la <results_dir>
+ls -la <results_dir>/programs.sqlite
 ```
 
-2. Generate context bundle
+2. Generate the default top-five bundle:
+
 ```bash
-python skills/shinka-inspect/scripts/inspect_best_programs.py \
+python3 skills/shinka-inspect/scripts/inspect_best_programs.py \
   --results-dir <results_dir> \
   --k 5
 ```
 
-3. Optional tuning knobs
+3. Optionally tune selection and context size:
+
 ```bash
-python skills/shinka-inspect/scripts/inspect_best_programs.py \
+python3 skills/shinka-inspect/scripts/inspect_best_programs.py \
   --results-dir <results_dir> \
   --k 8 \
-  --max-code-chars 5000 \
   --min-generation 10 \
-  --out <results_dir>/inspect/top_programs.md
+  --max-summary-chars 6000 \
+  --out <results_dir>/inspect/top_repositories.md
 ```
 
-4. Load output into agent context
-- Default output path: `<results_dir>/shinka_inspect_context.md`
-- Use it as the context artifact for next-step mutation planning
+4. Read `<results_dir>/shinka_inspect_context.md` and use its extracted ideas,
+   hypotheses, risks, and lineage to plan the next `evo.task_sys_msg`.
+5. If exact implementation is needed, inspect the recorded commit or persisted
+   diff rather than asking the database summary to stand in for source. Resolve
+   a commit in the seed Git history created or reused for that run. If that
+   runtime history is unavailable, use the persisted diff and artifacts.
 
-## CLI Arguments
-- `--results-dir`: Path to run directory (or direct DB file path)
-- `--k`: Number of programs to include (default `5`)
-- `--out`: Output markdown path (default under results dir)
-- `--max-code-chars`: Per-program code truncation cap (default `4000`)
-- `--min-generation`: Optional lower bound on generation
-- `--include-feedback` / `--no-include-feedback`: Include `text_feedback` blocks
+## Arguments
 
-## Notes
-- Ranking metric is `combined_score`.
-- If no correct rows exist, script falls back to top-score rows and labels fallback in output.
-- Script is read-only for run artifacts (writes only the markdown bundle).
+- `--results-dir`: results directory or direct SQLite path;
+- `--k`: number of individuals to include, default `5`;
+- `--out`: output Markdown path;
+- `--max-summary-chars`: summary cap per individual, default `6000`;
+- `--min-generation`: optional lower generation bound;
+- `--include-feedback` / `--no-include-feedback`: include or omit evaluator
+  feedback.
+
+## Privacy and integrity
+
+The bundle includes public metrics and intentionally persisted feedback, but not
+private metrics. Summaries are agent-authored claims; treat commits, diffs, and
+authoritative evaluator results as the evidence.

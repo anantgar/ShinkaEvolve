@@ -235,8 +235,59 @@ class WorktreeManager:
     def initialize_seed_repo(self) -> str:
         if not self.seed_repo_path.exists():
             raise FileNotFoundError(f"Seed repo does not exist: {self.seed_repo_path}")
-        _run_git(self.seed_repo_path, ["rev-parse", "--is-inside-work-tree"]) # TODO: output goes nowhere
-        self.worktree_root.mkdir(parents=True, exist_ok=True) 
+        if not self.seed_repo_path.is_dir():
+            raise NotADirectoryError(
+                f"Seed repo path is not a directory: {self.seed_repo_path}"
+            )
+
+        top_level_result = _run_git(
+            self.seed_repo_path,
+            ["rev-parse", "--show-toplevel"],
+            check=False,
+        )
+        has_own_git_root = (
+            top_level_result.returncode == 0
+            and Path(top_level_result.stdout.strip()).resolve() == self.seed_repo_path
+        )
+        if not has_own_git_root:
+            logger.info("Initializing seed Git repository at %s", self.seed_repo_path)
+            _run_git(self.seed_repo_path, ["init"])
+
+        head_result = _run_git(
+            self.seed_repo_path,
+            ["rev-parse", "--verify", "HEAD"],
+            check=False,
+        )
+        if head_result.returncode != 0:
+            logger.info("Creating baseline seed commit at %s", self.seed_repo_path)
+            _run_git(self.seed_repo_path, ["add", "-A"])
+            _run_git(
+                self.seed_repo_path,
+                [
+                    "-c",
+                    "user.name=Shinka",
+                    "-c",
+                    "user.email=shinka@example.invalid",
+                    "commit",
+                    "--allow-empty",
+                    "--no-gpg-sign",
+                    "--no-verify",
+                    "-m",
+                    "Initialize Shinka seed",
+                ],
+            )
+        else:
+            status = _run_git(
+                self.seed_repo_path,
+                ["status", "--porcelain", "--untracked-files=all"],
+            ).stdout
+            if status.strip():
+                raise RuntimeError(
+                    "Seed repository has uncommitted changes. Commit or remove them "
+                    f"before starting evolution: {self.seed_repo_path}"
+                )
+
+        self.worktree_root.mkdir(parents=True, exist_ok=True)
         return self.resolve_ref(self.base_ref)
 
     def resolve_ref(self, ref: str) -> str:

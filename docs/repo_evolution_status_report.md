@@ -12,6 +12,9 @@ image, container boundary, direct-workspace mutation path, and durable Docker
 session reuse are locally qualified. No secure benchmark campaign or production
 deployment has run yet.
 
+Repo-only runs accept a seed candidate directory, initialize and commit its Git
+baseline automatically when needed, and preserve existing clean Git history.
+
 ## Evaluation Modes
 
 | Mode | Intended use | Boundary |

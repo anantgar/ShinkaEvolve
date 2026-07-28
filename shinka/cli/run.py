@@ -78,8 +78,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "Run async Shinka evolution from a task directory.\n\n"
         "Task directory contract:\n"
         "  - evaluator code (evaluate.py for trusted-local compatibility)\n"
-        "  - seed_repo/ candidate, unless evo.seed_repo_path or "
-        "--seed-repo-path is provided"
+        "  - seed_repo/ candidate directory, unless evo.seed_repo_path or "
+        "--seed-repo-path is provided; Shinka initializes Git when needed"
     )
     epilog = (
         "Override grammar:\n"
@@ -146,7 +146,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--seed-repo-path",
         type=Path,
         default=None,
-        help="Seed git repository. Defaults to TASK_DIR/seed_repo.",
+        help=(
+            "Seed candidate directory. Shinka initializes a Git baseline when "
+            "needed. Defaults to TASK_DIR/seed_repo."
+        ),
     )
     required_group.add_argument(
         "--results_dir",
@@ -465,8 +468,6 @@ def _resolve_seed_repo_path(
         raise FileNotFoundError(
             f"Seed candidate is missing or unsafe: {seed_repo_path}"
         )
-    if evaluation_mode == "trusted_local" and not (seed_repo_path / ".git").exists():
-        raise FileNotFoundError(f"Seed repo is not a git repository: {seed_repo_path}")
     return seed_repo_path
 
 

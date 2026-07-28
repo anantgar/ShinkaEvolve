@@ -5,7 +5,7 @@ This guide shows how to run Shinka with coding agents using the project skills:
 - `shinka-setup`: scaffold repo-mode task files (`evaluate.py`, `seed_repo/`, optional run config)
 - `shinka-convert`: snapshot an existing repo into a Shinka task directory
 - `shinka-run`: launch and iterate evolution batches via `shinka_run`
-- `shinka-inspect`: load top-performing programs into a compact context bundle
+- `shinka-inspect`: extract insights from top repository summaries into a compact context bundle
 
 It covers:
 - installing Shinka
@@ -115,9 +115,22 @@ Illustration (setup flow):
 ![Claude setup step 2](media/claude_setup_2.png)
 
 Expected output:
-- `seed_repo/` initialized as a git repository
+- runnable candidate files under `seed_repo/`
 - `evaluate.py` accepting `--repo_path` and producing `metrics.json` + `correct.json`
 - optional `run_evo.py` / `shinka.yaml` scaffolds when requested
+
+### Seed Git initialization note
+
+Users do not need to initialize `seed_repo/` manually. When evolution starts,
+Shinka detects a plain directory—even when its files belong to an enclosing
+repository—then initializes a nested Git repository and creates the baseline
+commit. It also commits an independent Git repository that has no `HEAD`.
+
+If the seed is already an independent repository with history, Shinka preserves
+that history and requires a clean working tree. It rejects pending changes
+rather than silently adding them to the evolution baseline. The generated
+`.git/` directory is runtime state and does not need to be preserved by a parent
+repository.
 
 ## 5) Run Skill Walkthrough (`shinka-run`)
 
@@ -140,7 +153,8 @@ shinka_run \
   --results_dir results/my_task_agent \
   --num_generations 20 \
   --set evo.max_api_costs=0.5 \
-  --set evo.llm_models='["gpt-5-mini","gemini-3-flash-preview"]' \
+  --set evo.llm_models='["headless/codex"]' \
+  --set evo.embedding_model=null \
   --set db.num_islands=2 \
   --set db.parent_selection_strategy=weighted
 ```
@@ -158,7 +172,7 @@ Use `shinka-inspect` after one or more batches to generate an agent-ready contex
 Minimal:
 
 ```bash
-python skills/shinka-inspect/scripts/inspect_best_programs.py \
+python3 skills/shinka-inspect/scripts/inspect_best_programs.py \
   --results-dir results/my_task_agent \
   --k 5
 ```
@@ -166,25 +180,28 @@ python skills/shinka-inspect/scripts/inspect_best_programs.py \
 With filters and explicit output:
 
 ```bash
-python skills/shinka-inspect/scripts/inspect_best_programs.py \
+python3 skills/shinka-inspect/scripts/inspect_best_programs.py \
   --results-dir results/my_task_agent \
   --k 8 \
   --min-generation 10 \
-  --max-code-chars 5000 \
+  --max-summary-chars 5000 \
   --out results/my_task_agent/inspect/top_programs.md
 ```
 
 Output:
 - default file: `results/my_task_agent/shinka_inspect_context.md`
-- contains ranking + code snippets for top programs
+- contains ranking, repository summaries, lineage, changed files, public metrics,
+  and cross-candidate ideas/hypotheses
 - designed to be loaded directly into coding-agent context
 
 ## 7) Batch Iteration Rules (Important)
 
 When using `shinka-run` skill:
 
-- unless user explicitly requests fully autonomous execution, ask for config confirmation between batches
+- continue automatically only within the user's stated budget and autonomy
+- confirm before an unrequested batch that creates additional model spend
 - keep `--results_dir` the same across continuation batches so prior state can reload
+- treat `--num_generations` as the total target, not the number added by one invocation
 - change `--results_dir` only when intentionally forking a new run
 
 ## 8) Quick Validation Checklist
@@ -192,8 +209,9 @@ When using `shinka-run` skill:
 Before first run:
 
 - `shinka_run --help` works
-- task dir has `evaluate.py` + a git `seed_repo/`
-- API keys are available in environment
+- task dir has `evaluate.py` + a candidate `seed_repo/` directory
+- an existing Git seed with history has no uncommitted changes
+- each selected Headless agent is authenticated; auxiliary API credentials are available if used
 - `npx skills list` shows the installed Shinka skills
 - for global installs, skills appear under `~/.claude/skills/` and/or `~/.codex/skills/`
 - for project installs, skills appear under `.claude/skills/` and/or `.agents/skills/`
