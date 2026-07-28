@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve construct_graph() in solution.py for the fixed undirected
+    degree/diameter instance (Delta,D)=(4,5). Return num_vertices and an edge
+    list. Maximize vertices subject to maximum degree 4 and diameter at most 5.
+job:
+  eval_program_path: evaluate.py

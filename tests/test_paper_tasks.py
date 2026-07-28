@@ -11,6 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PAPER = ROOT / "examples" / "paper_tasks"
+OPEN = ROOT / "examples" / "open_problem_tasks"
 
 CONSTRUCTION_TASKS = (
     "circle_rectangle_21",
@@ -67,8 +68,8 @@ def _task_modules(task: Path):
 
 
 def test_every_runnable_task_is_an_independent_repo_artifact() -> None:
-    configs = sorted(PAPER.rglob("shinka.yaml"))
-    assert len(configs) == 31
+    configs = sorted(PAPER.rglob("shinka.yaml")) + sorted(OPEN.rglob("shinka.yaml"))
+    assert len(configs) == 35
     for config_path in configs:
         task = config_path.parent
         assert (task / "evaluate.py").is_file(), task
@@ -82,11 +83,12 @@ def test_every_runnable_task_is_an_independent_repo_artifact() -> None:
         assert config["job"]["eval_program_path"] == "evaluate.py"
 
     assert not list(PAPER.rglob("initial.py"))
-    for path in PAPER.rglob("*"):
-        if path.is_file():
-            assert "EVOLVE-BLOCK" not in path.read_text(
-                encoding="utf-8", errors="ignore"
-            )
+    for root in (PAPER, OPEN):
+        for path in root.rglob("*"):
+            if path.is_file():
+                assert "EVOLVE-BLOCK" not in path.read_text(
+                    encoding="utf-8", errors="ignore"
+                )
 
 
 def test_alphaevolve_construction_seeds_are_valid() -> None:
@@ -207,6 +209,58 @@ def test_ale_bench_tasks_are_split_and_fixed() -> None:
         assert evaluator.PROBLEM_ID == problem_id
         source = (task / "seed_repo" / "main.cpp").read_text(encoding="utf-8")
         assert len(source) > 1_000
+
+
+def test_approved_open_problem_seeds_are_valid_and_fast() -> None:
+    determinant_task = OPEN / "maximal_determinant_29"
+    determinant, determinant_seed = _task_modules(determinant_task)
+    score, details = determinant.assess(determinant_seed.construct_matrix())
+    assert np.isfinite(score)
+    assert details["absolute_determinant"] == 27 * 2**28
+
+    covering_task = OPEN / "covering_array_5_20_2"
+    covering, covering_seed = _task_modules(covering_task)
+    score, details, complete = covering.assess(covering_seed.construct_array())
+    assert score == -400.0
+    assert complete
+    assert details["uncovered_interactions"] == 0
+
+    graph_task = OPEN / "degree_diameter_4_5"
+    graph, graph_seed = _task_modules(graph_task)
+    score, details, feasible = graph.assess(graph_seed.construct_graph())
+    assert score == 35.0
+    assert feasible
+    assert details["maximum_degree"] == 4
+    assert details["observed_finite_diameter"] == 5
+
+    ruler_task = OPEN / "golomb_ruler_29"
+    ruler, ruler_seed = _task_modules(ruler_task)
+    score, details, feasible = ruler.assess(ruler_seed.construct_marks())
+    assert score == -1158.0
+    assert feasible
+    assert details["distinct_differences"] == 406
+
+
+def test_open_problem_evaluators_reject_or_penalize_invalid_candidates() -> None:
+    determinant = _load(
+        "invalid_determinant", OPEN / "maximal_determinant_29" / "evaluate.py"
+    )
+    with pytest.raises(ValueError, match=r"exactly \+1 or -1"):
+        determinant.assess(np.zeros((29, 29)))
+
+    covering = _load("invalid_covering", OPEN / "covering_array_5_20_2" / "evaluate.py")
+    _, details, complete = covering.assess(np.zeros((32, 20), dtype=int))
+    assert not complete
+    assert details["uncovered_interactions"] > 0
+
+    graph = _load("invalid_graph", OPEN / "degree_diameter_4_5" / "evaluate.py")
+    with pytest.raises(ValueError, match="self-loops"):
+        graph.assess({"num_vertices": 2, "edges": [(0, 0)]})
+
+    ruler = _load("invalid_ruler", OPEN / "golomb_ruler_29" / "evaluate.py")
+    _, details, feasible = ruler.assess(list(range(29)))
+    assert not feasible
+    assert details["repeated_difference_count"] > 0
 
 
 def test_invalid_minimization_candidates_cannot_outscore_valid_seeds() -> None:
