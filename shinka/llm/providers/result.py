@@ -11,9 +11,9 @@ class QueryResult:
         input_tokens: int,
         output_tokens: int,
         thinking_tokens: int = 0,
-        cost: float = 0.0,
-        input_cost: float = 0.0,
-        output_cost: float = 0.0,
+        cost: float | None = 0.0,
+        input_cost: float | None = 0.0,
+        output_cost: float | None = 0.0,
         content: str = "",
         new_msg_history: Optional[List[Dict]] = None,
         thought: str = "",
@@ -63,11 +63,19 @@ class QueryResult:
         lines = []
         lines.append("=" * 80)
         lines.append(f"Model: {self.model_name}")
-        lines.append(f"Total Cost: ${self.cost:.4f}")
-        lines.append(f"  Input: ${self.input_cost:.4f} ({self.input_tokens} tokens)")
-        lines.append(f"  Output: ${self.output_cost:.4f} ({self.output_tokens} tokens)")
+        total_cost = "unknown" if self.cost is None else f"${self.cost:.4f}"
+        input_cost = "unknown" if self.input_cost is None else f"${self.input_cost:.4f}"
+        output_cost = (
+            "unknown" if self.output_cost is None else f"${self.output_cost:.4f}"
+        )
+        lines.append(f"Total Cost: {total_cost}")
+        lines.append(f"  Input: {input_cost} ({self.input_tokens} tokens)")
+        lines.append(f"  Output: {output_cost} ({self.output_tokens} tokens)")
+        thinking_ratio = (
+            self.thinking_tokens / self.output_tokens if self.output_tokens else 0.0
+        )
         lines.append(
-            f"  --> Thinking tokens: {self.thinking_tokens} ({self.thinking_tokens / self.output_tokens:.2f})"
+            f"  --> Thinking tokens: {self.thinking_tokens} ({thinking_ratio:.2f})"
         )
         if self.thinking_tokens > 0:
             lines.append(f"  Thinking: {self.thinking_tokens} tokens")

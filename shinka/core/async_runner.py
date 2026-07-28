@@ -552,11 +552,12 @@ class ShinkaEvolveRunner:
                 f"got {evo_config.llm_models!r}"
             )
         mutation_llm_kwargs = dict(evo_config.llm_kwargs)
+        secure_headless_query_defaults: Dict[str, Any] = {}
         if self.secure_runtime_settings is not None:
             secure_settings = self.secure_runtime_settings
             assert evo_config.mutation_image is not None
             assert isinstance(job_config, SecureJobConfig)
-            mutation_llm_kwargs.update(
+            secure_headless_query_defaults.update(
                 {
                     "headless_secure": True,
                     "headless_mutation_image": evo_config.mutation_image,
@@ -592,6 +593,7 @@ class ShinkaEvolveRunner:
             headless_cleanup_grace_seconds=evo_config.headless_cleanup_grace_seconds,
             headless_output_mode=evo_config.headless_output_mode,
             headless_model_timeouts=evo_config.headless_model_timeouts,
+            headless_query_defaults=secure_headless_query_defaults,
             propagate_route_errors=True,
             rate_limiter=self.llm_rate_limiter,
             request_class="mutation",
@@ -4037,6 +4039,21 @@ Required constraints:
                         "headless_usage_unknown": response_kwargs.get(
                             "headless_usage_unknown", True
                         ),
+                        "headless_usage_status": response_kwargs.get(
+                            "headless_usage_status", "missing"
+                        ),
+                        "headless_pricing_unknown": response_kwargs.get(
+                            "headless_pricing_unknown", True
+                        ),
+                        "headless_pricing_status": response_kwargs.get(
+                            "headless_pricing_status", "missing"
+                        ),
+                        "headless_cost_basis": response_kwargs.get(
+                            "headless_cost_basis"
+                        ),
+                        "headless_pricing_source": response_kwargs.get(
+                            "headless_pricing_source"
+                        ),
                         "repo_policy_path": str(policy_path) if policy_path else None,
                         "headless_prompt_path": response_kwargs.get(
                             "headless_prompt_path"
@@ -4144,6 +4161,19 @@ Required constraints:
                 ),
                 "headless_usage_unknown": response_kwargs.get(
                     "headless_usage_unknown", True
+                ),
+                "headless_usage_status": response_kwargs.get(
+                    "headless_usage_status", "missing"
+                ),
+                "headless_pricing_unknown": response_kwargs.get(
+                    "headless_pricing_unknown", True
+                ),
+                "headless_pricing_status": response_kwargs.get(
+                    "headless_pricing_status", "missing"
+                ),
+                "headless_cost_basis": response_kwargs.get("headless_cost_basis"),
+                "headless_pricing_source": response_kwargs.get(
+                    "headless_pricing_source"
                 ),
                 "repo_policy_path": str(policy_path) if policy_path else None,
                 "headless_prompt_path": response_kwargs.get("headless_prompt_path"),
@@ -6237,7 +6267,12 @@ Required constraints:
                 if value is None:
                     formatted_value = "[dim]None[/dim]"
                 elif field_name == "api_costs":
-                    formatted_value = f"${value:.4f}"
+                    if meta_data.get("headless_pricing_unknown") is True:
+                        formatted_value = (
+                            f"[yellow]unknown (known subtotal: ${value:.4f})[/yellow]"
+                        )
+                    else:
+                        formatted_value = f"${value:.4f}"
                 elif field_name == "error_attempt" and value is None:
                     formatted_value = "[green]Success[/green]"
                 elif field_name == "error_attempt":

@@ -356,8 +356,12 @@ class WorktreeManager:
             prompt_path.write_text(prompt_text, encoding="utf-8")
         worktree.policy_fingerprints = {
             path.relative_to(worktree.path).as_posix(): _sha256(path)
-            for path in control.iterdir()
-            if path.is_file()
+            for path in (
+                control / "mutable_paths.txt",
+                control / "immutable_paths.txt",
+                prompt_path,
+            )
+            if path.exists()
         }
         return prompt_path
 

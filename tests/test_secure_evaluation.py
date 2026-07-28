@@ -278,6 +278,25 @@ def test_invalid_session_home_cannot_trigger_symlink_target_cleanup(
     assert target_auth.read_text(encoding="utf-8") == "must-survive"
 
 
+def test_session_scan_ignores_non_secret_auth_settings(tmp_path: Path) -> None:
+    auth = tmp_path / "auth" / ".gemini" / "antigravity-cli"
+    auth.mkdir(parents=True)
+    settings = '{"selectedModel":"Gemini 3.6 Flash (Medium)"}'
+    (auth / "settings.json").write_text(settings, encoding="utf-8")
+    session_home = tmp_path / "session-home"
+    copied = session_home / ".gemini" / "antigravity-cli"
+    copied.mkdir(parents=True)
+    (copied / "settings.json").write_text(settings, encoding="utf-8")
+
+    _reject_exact_secret_copies(
+        session_home,
+        credential_environment={},
+        auth_root=auth.parents[1],
+        label="Headless session home",
+        include_all_credential_values=True,
+    )
+
+
 def test_agent_purges_durable_session_after_credential_copy(
     tmp_path: Path,
 ) -> None:
@@ -343,6 +362,8 @@ def test_agent_purges_durable_session_after_credential_copy(
         )
 
     assert engine.removed is True
+    assert engine.plan is not None
+    assert "--no-same-permissions" in " ".join(engine.plan.command)
     assert not any(session_home.iterdir())
 
 
@@ -388,6 +409,7 @@ def test_secure_mutation_invokes_headless_adapter() -> None:
             model="Gemini 3.5 Flash (Low)",
         ),
         "reply exactly ok",
+        timeout_seconds=123.5,
     )
 
     assert command == (
@@ -395,9 +417,14 @@ def test_secure_mutation_invokes_headless_adapter() -> None:
         "antigravity",
         "--model",
         "Gemini 3.5 Flash (Low)",
+        "--work-dir",
+        "/workspace",
+        "--timeout",
+        "124",
         "--allow",
         "yolo",
         "--json",
+        "--usage",
     )
     assert stdin_data == b"reply exactly ok"
 
@@ -421,9 +448,12 @@ def test_secure_mutation_supports_every_pinned_native_headless_agent(
         "model-name",
         "--reasoning-effort",
         "low",
+        "--work-dir",
+        "/workspace",
         "--allow",
         "yolo",
         "--json",
+        "--usage",
     )
     assert stdin_data == b"prompt"
 
@@ -571,6 +601,40 @@ def test_worktree_rejects_changes_outside_mutable_paths(tmp_path: Path) -> None:
     snapshot = manager.diff_parent(child.path, child.parent_digest)
     with pytest.raises(MutabilityViolation):
         manager.validate_snapshot(child, snapshot)
+
+
+def test_secure_worktree_allows_summary_but_protects_policy_files(
+    tmp_path: Path,
+) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git is required")
+    seed = tmp_path / "seed"
+    (seed / "src").mkdir(parents=True)
+    (seed / "src" / "value.txt").write_text("old", encoding="utf-8")
+    manager = WorktreeManager(
+        seed_repo_path=str(seed),
+        worktree_root=str(tmp_path / "worktrees"),
+        mutable_paths=["src"],
+    )
+    parent = manager.initialize_seed_repo()
+    child = manager.create_child_worktree(
+        parent_commit=parent, generation=1, individual_id="individual"
+    )
+    agent = manager.create_agent_worktree_view(child)
+    control = agent.path / ".shinka"
+    control.mkdir()
+    summary = control / "individual.md"
+    summary.write_text("template", encoding="utf-8")
+    policy = manager.write_policy_files(agent, prompt_text="goal")
+
+    summary.write_text("completed summary", encoding="utf-8")
+    (agent.path / "src" / "value.txt").write_text("new", encoding="utf-8")
+    snapshot = manager.diff_parent(agent.path, agent.parent_digest)
+    manager.validate_snapshot(agent, snapshot)
+
+    policy.write_text("changed goal", encoding="utf-8")
+    with pytest.raises(MutabilityViolation, match="goal.md: policy file changed"):
+        manager.validate_snapshot(agent, snapshot)
 
 
 @pytest.mark.parametrize(

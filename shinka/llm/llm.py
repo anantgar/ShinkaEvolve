@@ -380,6 +380,7 @@ class AsyncLLMClient:
         headless_output_mode: Optional[str] = None,
         headless_model_timeouts: Optional[Dict[str, float]] = None,
         headless_response_mode: Optional[str] = None,
+        headless_query_defaults: Optional[Dict[str, object]] = None,
         propagate_route_errors: bool = False,
         rate_limiter: Optional[AsyncProviderRateLimiter] = None,
         request_class: str = "general",
@@ -400,6 +401,7 @@ class AsyncLLMClient:
         self.headless_output_mode = headless_output_mode
         self.headless_model_timeouts = dict(headless_model_timeouts or {})
         self.headless_response_mode = headless_response_mode
+        self.headless_query_defaults = dict(headless_query_defaults or {})
         self.propagate_route_errors = propagate_route_errors
         self.rate_limiter = rate_limiter or AsyncProviderRateLimiter()
         self.request_class = request_class
@@ -421,6 +423,7 @@ class AsyncLLMClient:
         if resolve_model_backend(model_name).provider != "headless":
             return llm_kwargs
         defaults = {
+            **self.headless_query_defaults,
             "headless_timeout_seconds": self._headless_timeout_for_model(model_name),
             "headless_cleanup_grace_seconds": self.headless_cleanup_grace_seconds,
             "headless_output_mode": self.headless_output_mode,
