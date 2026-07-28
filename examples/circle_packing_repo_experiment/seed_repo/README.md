@@ -1,6 +1,9 @@
 # Circle Packing Seed Repo
 
-The evolutionary run mutates only `src/packing.py`.
+The evolutionary run starts from the simple implementation in
+`src/packing.py`. The agent may edit the repository, add helpers or tests, and
+remove obsolete files. The external evaluator depends only on the public
+contract below.
 
 The required public function is:
 
