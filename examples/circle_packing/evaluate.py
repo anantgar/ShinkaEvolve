@@ -22,7 +22,7 @@ def format_centers_string(centers: np.ndarray) -> str:
 
 def adapted_validate_packing(
     run_output: Tuple[np.ndarray, np.ndarray, float],
-    atol=0.0,
+    atol=1e-6,
 ) -> Tuple[bool, Optional[str]]:
     """
     Validates circle packing results based on the output of 'run_packing'.
@@ -33,12 +33,17 @@ def adapted_validate_packing(
     Returns:
         (is_valid: bool, error_message: Optional[str])
     """
-    centers, radii, reported_sum = run_output
+    try:
+        centers, radii, reported_sum = run_output
+    except (TypeError, ValueError):
+        return False, "run_packing must return (centers, radii, reported_sum)"
     msg = "The circles are placed correctly. There are no overlaps or any circles outside the unit square."
-    if not isinstance(centers, np.ndarray):
-        centers = np.array(centers)
-    if not isinstance(radii, np.ndarray):
-        radii = np.array(radii)
+    try:
+        centers = np.asarray(centers, dtype=float)
+        radii = np.asarray(radii, dtype=float)
+        reported_sum = float(reported_sum)
+    except (TypeError, ValueError, OverflowError) as exc:
+        return False, f"Could not coerce packing output to numeric arrays: {exc}"
 
     n_expected = 26
     if centers.shape != (n_expected, 2):
@@ -63,9 +68,10 @@ def adapted_validate_packing(
         msg = f"Negative radii found for circles at indices: {negative_indices}"
         return False, msg
 
-    if not np.isclose(np.sum(radii), reported_sum, atol=atol):
+    actual_sum = float(np.sum(radii))
+    if not np.isclose(actual_sum, reported_sum, atol=atol, rtol=1e-12):
         msg = (
-            f"Sum of radii ({np.sum(radii):.6f}) does not match "
+            f"Sum of radii ({actual_sum:.12f}) does not match "
             f"reported ({reported_sum:.6f})"
         )
         return False, msg
@@ -110,6 +116,10 @@ def aggregate_circle_packing_metrics(
         return {"combined_score": 0.0, "error": "No results to aggregate"}
 
     centers, radii, reported_sum = results[0]
+    centers = np.asarray(centers, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    reported_sum = float(reported_sum)
+    actual_sum = float(np.sum(radii))
 
     public_metrics = {
         "centers_str": format_centers_string(centers),
@@ -117,9 +127,12 @@ def aggregate_circle_packing_metrics(
     }
     private_metrics = {
         "reported_sum_of_radii": float(reported_sum),
+        "verified_sum_of_radii": actual_sum,
     }
     metrics = {
-        "combined_score": float(reported_sum),
+        # Never score the candidate's self-reported value. The verifier computes
+        # the objective directly from the radii.
+        "combined_score": actual_sum,
         "public": public_metrics,
         "private": private_metrics,
     }
@@ -140,8 +153,10 @@ def aggregate_circle_packing_metrics(
     return metrics
 
 
-def main(program_path: str, results_dir: str):
+def main(program_path: str, results_dir: str, validation_atol: float = 1e-6):
     """Runs the circle packing evaluation using shinka.eval."""
+    if validation_atol < 0 or not np.isfinite(validation_atol):
+        raise ValueError("validation_atol must be finite and non-negative")
     print(f"Evaluating program: {program_path}")
     print(f"Saving results to: {results_dir}")
     os.makedirs(results_dir, exist_ok=True)
@@ -160,7 +175,9 @@ def main(program_path: str, results_dir: str):
         experiment_fn_name="run_packing",
         num_runs=num_experiment_runs,
         get_experiment_kwargs=get_circle_packing_kwargs,
-        validate_fn=adapted_validate_packing,
+        validate_fn=lambda output: adapted_validate_packing(
+            output, atol=validation_atol
+        ),
         aggregate_metrics_fn=_aggregator_with_context,
     )
 
@@ -193,5 +210,11 @@ if __name__ == "__main__":
         default="results",
         help="Dir to save results (metrics.json, correct.json, extra.npz)",
     )
+    parser.add_argument(
+        "--atol",
+        type=float,
+        default=1e-6,
+        help="Validation tolerance; use 0 for the paper's exact condition",
+    )
     parsed_args = parser.parse_args()
-    main(parsed_args.program_path, parsed_args.results_dir)
+    main(parsed_args.program_path, parsed_args.results_dir, parsed_args.atol)

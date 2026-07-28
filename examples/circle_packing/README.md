@@ -49,6 +49,11 @@ Single-program evaluation (no evolution loop):
 python evaluate.py --program_path initial.py --results_dir results/manual_eval
 ```
 
+This defaults to the paper repository's relaxed `1e-6` condition. For the
+separately reported exact condition, add `--atol 0`. In both modes the evaluator
+recomputes the radius sum and never trusts the candidate's self-reported
+objective.
+
 Result inspection:
 
 - Open `load_results.ipynb` for summary plots.
