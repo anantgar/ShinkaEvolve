@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve solution.py for AlphaEvolve's Hermite uncertainty construction.
+    construct() returns the H_0, H_4, H_8 coefficients; the evaluator derives
+    H_12 by P(0)=0 and minimizes the published eventual-positivity bound.
+job:
+  eval_program_path: evaluate.py

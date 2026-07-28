@@ -1,0 +1,13 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve solution.py for the fixed AlphaEvolve (n,d)=(14,3) construction.
+    construct() must return 14 finite points in R^3. Minimize the ratio between
+    the largest and smallest pairwise distances; the evaluator maximizes its
+    negated square and is external to this repository.
+job:
+  eval_program_path: evaluate.py

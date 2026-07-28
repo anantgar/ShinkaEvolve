@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve the fixed length-50 sequence in solution.py for AlphaEvolve's C2
+    autocorrelation lower bound. construct() returns a nonnegative sequence;
+    maximize the published piecewise-linear norm ratio.
+job:
+  eval_program_path: evaluate.py

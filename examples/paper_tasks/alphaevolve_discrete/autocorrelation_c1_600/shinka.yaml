@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve the fixed length-600 sequence in solution.py for AlphaEvolve's C1
+    autocorrelation bound. construct() returns a nonnegative sequence. Minimize
+    2*n*max(x*x)/sum(x)^2; the evaluator maximizes its negative.
+job:
+  eval_program_path: evaluate.py

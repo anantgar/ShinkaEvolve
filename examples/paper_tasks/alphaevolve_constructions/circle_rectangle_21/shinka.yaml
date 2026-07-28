@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve solution.py for AlphaEvolve's fixed packing of 21 variable-radius
+    circles in an axis-aligned rectangle of perimeter at most 4. construct()
+    returns (x,y,r) rows. Maximize the sum of radii without overlap.
+job:
+  eval_program_path: evaluate.py

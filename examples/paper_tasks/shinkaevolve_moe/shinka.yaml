@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve load_balancing_loss in loss.py. The invisible external trainer uses
+    the fixed 556M-parameter, 64-expert, top-8 configuration from the paper and
+    maximizes negative final cross-entropy minus L1 load imbalance.
+job:
+  eval_program_path: evaluate.py

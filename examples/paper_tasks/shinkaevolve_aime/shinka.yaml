@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve the AIME-solving Agent in agent.py. The external evaluator uses all
+    30 AIME 2024 problems, gpt-4.1-nano, at most 10 model calls per problem, and
+    three complete runs, matching the ShinkaEvolve evolution protocol.
+job:
+  eval_program_path: evaluate.py

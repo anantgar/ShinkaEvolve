@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: cpp
+  task_sys_msg: |
+    Improve main.cpp for the fixed ALE-Bench LITE ahc011 task. The external
+    evaluator compiles as C++20 and scores 50 generated public cases, matching
+    the ShinkaEvolve paper. Do not optimize any other AHC problem in this repo.
+job:
+  eval_program_path: evaluate.py

@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve the fixed convex-body Heilbronn n=13 construction in solution.py.
+    construct() returns 13 planar points. Maximize the smallest triangle area
+    divided by the area of their convex hull.
+job:
+  eval_program_path: evaluate.py

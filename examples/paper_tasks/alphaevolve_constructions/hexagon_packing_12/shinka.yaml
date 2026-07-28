@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve the fixed packing of 12 regular unit hexagons in solution.py.
+    Minimize the side length of a containing regular hexagon. The external
+    evaluator checks all polygon intersections and containment.
+job:
+  eval_program_path: evaluate.py

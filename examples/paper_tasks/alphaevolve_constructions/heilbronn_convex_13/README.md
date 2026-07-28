@@ -1,0 +1,5 @@
+# AlphaEvolve convex-body Heilbronn, 13 points
+
+This isolated task maximizes the least triple area divided by the convex-hull
+area for 13 planar points.
+

@@ -1,0 +1,12 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve solution.py for AlphaEvolve's fixed n=95 Erdos minimum-overlap
+    relaxation. construct() returns 95 entries in [0,1] summing exactly to 47.5.
+    Minimize the published maximum correlation bound.
+job:
+  eval_program_path: evaluate.py

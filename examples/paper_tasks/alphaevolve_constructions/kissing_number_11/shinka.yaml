@@ -1,0 +1,13 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths: []
+  immutable_paths: []
+  agent_hidden_paths: []
+  language: python
+  task_sys_msg: |
+    Improve the fixed 11-dimensional kissing construction in solution.py.
+    construct() returns real vectors that the released verifier rounds to
+    int64 coordinates. Maximize their count while keeping minimum squared pair
+    distance at least the maximum squared vector norm after rounding.
+job:
+  eval_program_path: evaluate.py
