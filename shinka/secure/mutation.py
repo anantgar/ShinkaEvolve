@@ -307,7 +307,7 @@ def _agent_command(
         if not _SESSION_NAME.fullmatch(session_name):
             raise SecurityPolicyError("Invalid Headless session name")
         args.extend(["--session", session_name])
-    args.extend(["--allow", "yolo", "--json"])
+    args.extend(["--allow", "yolo", "--json", "--usage"])
     return tuple(args), prompt.encode("utf-8")
 
 

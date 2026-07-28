@@ -16,6 +16,9 @@ from shinka.llm.client import get_async_client_llm, get_client_llm
 from shinka.llm.kwargs import sample_model_kwargs
 from shinka.llm.llm import AsyncLLMClient
 from shinka.llm.providers.headless import (
+    _headless_usage_metadata,
+    _query_result,
+    _query_usage_from_headless,
     _subprocess_env,
     parse_headless_model,
     query_headless,
@@ -74,7 +77,7 @@ def _make_fake_headless(tmp_path: Path) -> Path:
                 "assert allow_mode == 'yolo', allow_mode",
                 "assert timeout_value == '10', timeout_value",
                 "assert '--json' in sys.argv",
-                "assert '--usage' not in sys.argv",
+                "assert '--usage' in sys.argv",
                 "if not (work_dir / '.git').exists():",
                 "    (work_dir / 'generated.txt').write_text('mutated by headless\\n')",
                 "src_file = work_dir / 'src' / 'app.py'",
@@ -300,6 +303,7 @@ def test_query_headless_parses_appended_usage(tmp_path, monkeypatch):
                 "    'outputTokens': 4,",
                 "    'reasoningOutputTokens': 5,",
                 "    'totalTokens': 15,",
+                "    'usageStatus': 'reported',",
                 "    'cost': {",
                 "        'input': 0.01,",
                 "        'cacheRead': 0.02,",
@@ -308,6 +312,7 @@ def test_query_headless_parses_appended_usage(tmp_path, monkeypatch):
                 "        'total': 0.10,",
                 "    },",
                 "    'pricingSource': 'models.dev',",
+                "    'costBasis': 'api-list-price-estimate',",
                 "    'pricingStatus': 'priced',",
                 "}",
                 "print('final assistant message')",
@@ -335,11 +340,84 @@ def test_query_headless_parses_appended_usage(tmp_path, monkeypatch):
     assert result.output_tokens == 4
     assert result.thinking_tokens == 5
     assert result.kwargs["headless_usage_unknown"] is False
+    assert result.kwargs["headless_usage_status"] == "reported"
+    assert result.kwargs["headless_pricing_unknown"] is False
+    assert result.kwargs["headless_pricing_status"] == "priced"
+    assert result.kwargs["headless_cost_basis"] == "api-list-price-estimate"
+    assert result.kwargs["headless_pricing_source"] == "models.dev"
     assert result.kwargs["headless_usage"]["totalTokens"] == 15
     assert "final assistant message" not in result.content
     assert "Headless agent completed" in result.content
     stdout_path = Path(result.kwargs["headless_stdout_path"])
     assert '"usage"' in stdout_path.read_text(encoding="utf-8")
+
+
+def _result_from_headless_usage(usage: dict):
+    return _query_result(
+        content="done",
+        usage=_query_usage_from_headless(usage),
+        model="headless/codex",
+        msg="request",
+        system_msg="system",
+        msg_history=[],
+        kwargs=_headless_usage_metadata(usage),
+        model_posteriors=None,
+    )
+
+
+def test_headless_missing_usage_and_pricing_are_not_reported_as_zero_cost():
+    usage = {
+        "inputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "outputTokens": 0,
+        "reasoningOutputTokens": 0,
+        "totalTokens": 0,
+        "usageStatus": "missing",
+        "cost": None,
+        "costBasis": None,
+        "pricingSource": None,
+        "pricingStatus": "missing",
+    }
+
+    result = _result_from_headless_usage(usage)
+
+    assert result.cost is None
+    assert result.input_cost is None
+    assert result.output_cost is None
+    assert result.kwargs["headless_usage_status"] == "missing"
+    assert result.kwargs["headless_usage_unknown"] is True
+    assert result.kwargs["headless_pricing_status"] == "missing"
+    assert result.kwargs["headless_pricing_unknown"] is True
+    assert "Total Cost: unknown" in str(result)
+
+
+def test_headless_reported_zero_cost_remains_a_real_zero():
+    usage = {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0,
+        "usageStatus": "reported",
+        "cost": {
+            "input": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "output": 0,
+            "total": 0,
+        },
+        "costBasis": "native-reported",
+        "pricingSource": "native",
+        "pricingStatus": "native",
+    }
+
+    result = _result_from_headless_usage(usage)
+
+    assert result.cost == 0.0
+    assert result.input_cost == 0.0
+    assert result.output_cost == 0.0
+    assert result.kwargs["headless_usage_unknown"] is False
+    assert result.kwargs["headless_pricing_unknown"] is False
+    assert "Total Cost: $0.0000" in str(result)
 
 
 def test_durable_session_env_keeps_wrapper_auth_home(monkeypatch, tmp_path):
@@ -367,7 +445,7 @@ def test_query_headless_reuses_named_session_in_json_mode(tmp_path, monkeypatch)
                 "from pathlib import Path",
                 "work_dir = Path(sys.argv[sys.argv.index('--work-dir') + 1])",
                 "session = sys.argv[sys.argv.index('--session') + 1]",
-                "assert '--json' in sys.argv and '--usage' not in sys.argv",
+                "assert '--json' in sys.argv and '--usage' in sys.argv",
                 "with (work_dir / 'sessions.txt').open('a') as handle:",
                 "    handle.write(session + '\\n')",
                 "print('{}')",
@@ -637,7 +715,7 @@ def test_query_headless_text_mode_uses_scratch_dir_and_returns_message(
                 "prompt_path = Path(sys.argv[sys.argv.index('--prompt-file') + 1])",
                 "work_dir = Path(sys.argv[sys.argv.index('--work-dir') + 1])",
                 "assert '--usage' in sys.argv",
-                "assert '--json' not in sys.argv",
+                "assert '--json' in sys.argv",
                 "assert work_dir.exists()",
                 "assert (work_dir / '.shinka').is_dir()",
                 "prompt = prompt_path.read_text(encoding='utf-8')",

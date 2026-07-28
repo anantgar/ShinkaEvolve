@@ -423,6 +423,7 @@ def test_secure_mutation_invokes_headless_adapter() -> None:
         "--allow",
         "yolo",
         "--json",
+        "--usage",
     )
     assert stdin_data == b"reply exactly ok"
 
@@ -451,6 +452,7 @@ def test_secure_mutation_supports_every_pinned_native_headless_agent(
         "--allow",
         "yolo",
         "--json",
+        "--usage",
     )
     assert stdin_data == b"prompt"
 

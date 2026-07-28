@@ -338,10 +338,7 @@ def _build_headless_command(
         "--timeout",
         str(max(1, math.ceil(headless_timeout(model, proposal_timeout)))),
     ]
-    if headless_output_mode(output_mode) == "json":
-        cmd.append("--json")
-    else:
-        cmd.append("--usage")
+    cmd.extend(["--json", "--usage"])
     if model.agent_model:
         cmd.extend(["--model", model.agent_model])
     if model.effort:
@@ -647,6 +644,24 @@ def _usage_float(usage: dict[str, Any], *names: str) -> float:
     return 0.0
 
 
+def _usage_optional_float(
+    usage: dict[str, Any], *names: str
+) -> float | None:
+    for name in names:
+        value = usage.get(name)
+        if value is None or isinstance(value, bool):
+            continue
+        if isinstance(value, dict):
+            total = value.get("total")
+            if isinstance(total, (int, float)) and not isinstance(total, bool):
+                return float(total)
+            numbers = _numeric_values(value)
+            return sum(numbers) if numbers else None
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
 def _numeric_values(value: Any) -> list[float]:
     if isinstance(value, bool):
         return []
@@ -771,6 +786,33 @@ def _query_usage_from_headless(usage: dict[str, Any]) -> dict[str, Any]:
         query_usage["output_cost"] = output_cost
 
     return query_usage
+
+
+def _headless_usage_metadata(usage: dict[str, Any]) -> dict[str, Any]:
+    usage_status_raw = usage.get("usageStatus")
+    usage_status = (
+        usage_status_raw
+        if isinstance(usage_status_raw, str)
+        else ("reported" if usage else "missing")
+    )
+    pricing_status_raw = usage.get("pricingStatus")
+    has_cost = _usage_optional_float(
+        usage, "cost", "total_cost", "input_cost", "output_cost"
+    ) is not None
+    pricing_status = (
+        pricing_status_raw
+        if isinstance(pricing_status_raw, str)
+        else ("native" if has_cost else "missing")
+    )
+    return {
+        "headless_usage": usage or None,
+        "headless_usage_status": usage_status,
+        "headless_usage_unknown": usage_status != "reported",
+        "headless_pricing_status": pricing_status,
+        "headless_pricing_unknown": pricing_status not in {"native", "priced"},
+        "headless_cost_basis": usage.get("costBasis"),
+        "headless_pricing_source": usage.get("pricingSource"),
+    }
 
 
 def _worktree_completion_content(work_dir: Path) -> str:
@@ -916,15 +958,41 @@ def _query_result(
     model_posteriors: dict[str, float] | None,
 ) -> QueryResult:
     nested_cost = usage.get("cost") if isinstance(usage.get("cost"), dict) else {}
-    input_cost = _usage_float(usage, "input_cost", "prompt_cost")
-    if input_cost == 0.0:
-        input_cost = _usage_float(nested_cost, "input", "prompt")
-    output_cost = _usage_float(usage, "output_cost", "completion_cost")
-    if output_cost == 0.0:
-        output_cost = _usage_float(nested_cost, "output", "completion")
-    cost = _usage_float(usage, "cost", "total_cost")
-    if cost == 0.0:
-        cost = input_cost + output_cost
+    usage_status = usage.get("usageStatus")
+    pricing_status = usage.get("pricingStatus")
+    pricing_known = pricing_status in {"native", "priced"} or (
+        pricing_status is None
+        and _usage_optional_float(
+            usage, "cost", "total_cost", "input_cost", "output_cost"
+        )
+        is not None
+    )
+    if usage_status == "missing" or not pricing_known:
+        input_cost = None
+        output_cost = None
+        cost = None
+    else:
+        input_cost = _usage_optional_float(usage, "input_cost", "prompt_cost")
+        if input_cost is None:
+            nested_inputs = [
+                _usage_optional_float(nested_cost, "input", "prompt"),
+                _usage_optional_float(nested_cost, "cacheRead", "cache_read"),
+                _usage_optional_float(nested_cost, "cacheWrite", "cache_write"),
+            ]
+            reported_inputs = [value for value in nested_inputs if value is not None]
+            input_cost = sum(reported_inputs) if reported_inputs else None
+        output_cost = _usage_optional_float(
+            usage, "output_cost", "completion_cost"
+        )
+        if output_cost is None:
+            output_cost = _usage_optional_float(
+                nested_cost, "output", "completion"
+            )
+        cost = _usage_optional_float(usage, "total_cost")
+        if cost is None:
+            cost = _usage_optional_float(nested_cost, "total")
+        if cost is None and input_cost is not None and output_cost is not None:
+            cost = input_cost + output_cost
 
     return QueryResult(
         msg=msg,
@@ -1185,8 +1253,7 @@ def _secure_query(
         "headless_attempt_id": str(attempt_id),
         "headless_parent_digest": str(parent_digest),
         "headless_candidate_digest": candidate.digest,
-        "headless_usage": headless_usage or None,
-        "headless_usage_unknown": not bool(headless_usage),
+        **_headless_usage_metadata(headless_usage),
         "headless_timeout_seconds": headless_timeout(parsed, configured_timeout),
         "headless_output_mode": headless_output_mode(configured_output_mode),
         "headless_secure": True,
@@ -1316,8 +1383,7 @@ def query_headless(
             "headless_stderr_path": str(stderr_path),
             "headless_session_name": headless_session_name,
             "headless_session_id": headless_session_name,
-            "headless_usage": headless_usage or None,
-            "headless_usage_unknown": not bool(headless_usage),
+            **_headless_usage_metadata(headless_usage),
             "headless_timeout_seconds": proposal_timeout,
             "headless_cleanup_grace_seconds": cleanup_grace,
             "headless_output_mode": headless_output_mode(configured_output_mode),
@@ -1472,8 +1538,7 @@ async def query_headless_async(
             "headless_stderr_path": str(stderr_path),
             "headless_session_name": headless_session_name,
             "headless_session_id": headless_session_name,
-            "headless_usage": headless_usage or None,
-            "headless_usage_unknown": not bool(headless_usage),
+            **_headless_usage_metadata(headless_usage),
             "headless_timeout_seconds": proposal_timeout,
             "headless_cleanup_grace_seconds": cleanup_grace,
             "headless_output_mode": headless_output_mode(configured_output_mode),
