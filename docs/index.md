@@ -31,7 +31,7 @@ hide:
 ShinkaEvolve combines LLM mutation operators with an evolutionary archive,
 parallel evaluation, and a reproducible task contract. The repository gives you
 both the framework primitives and runnable examples — start from a simple
-`evaluate.py` + committed `seed_repo/` task and scale up to async runs or cluster
+`evaluate.py` + `seed_repo/` task and scale up to async runs or cluster
 workflows.
 
 <div class="feature-grid">

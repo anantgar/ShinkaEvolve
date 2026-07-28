@@ -4,14 +4,10 @@ This is a repo-mode task. The candidate is a git worktree, not a single source f
 
 ## Setup
 
-Initialize the seed repository once:
-
-```bash
-cd examples/inference_pipeline_repo/seed_repo
-git init
-git add src/pipeline.py
-git -c user.name=Test -c user.email=test@example.invalid commit -m "seed"
-```
+The checked-out `seed_repo/` may be a plain directory. Shinka initializes its
+Git repository and creates the baseline commit automatically when the run
+starts. If it is already an independent Git repository with history, keep its
+working tree clean.
 
 Run a fake-agent smoke test without model credentials:
 

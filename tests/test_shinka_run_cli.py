@@ -8,7 +8,12 @@ import pytest
 import shinka.cli.run as cli_run
 
 
-def _make_task_dir(tmp_path: Path, *, include_evaluate: bool = True) -> Path:
+def _make_task_dir(
+    tmp_path: Path,
+    *,
+    include_evaluate: bool = True,
+    initialize_seed: bool = True,
+) -> Path:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
     if include_evaluate:
@@ -18,9 +23,12 @@ def _make_task_dir(tmp_path: Path, *, include_evaluate: bool = True) -> Path:
         )
     seed_repo = task_dir / "seed_repo"
     seed_repo.mkdir()
-    subprocess.run(["git", "init"], cwd=seed_repo, check=True, capture_output=True)
     (seed_repo / "src").mkdir()
     (seed_repo / "src" / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    if not initialize_seed:
+        return task_dir
+
+    subprocess.run(["git", "init"], cwd=seed_repo, check=True, capture_output=True)
     subprocess.run(["git", "add", "-A"], cwd=seed_repo, check=True, capture_output=True)
     subprocess.run(
         [
@@ -136,6 +144,29 @@ def test_shinka_run_happy_path_with_authoritative_overrides(tmp_path, monkeypatc
     assert not hasattr(evo_config, "max_proposal_jobs")
     assert not hasattr(evo_config, "max_db_workers")
     assert "def main" in evaluate_str
+
+
+def test_shinka_run_accepts_plain_seed_directory(tmp_path, monkeypatch):
+    _reset_dummy_runner()
+    task_dir = _make_task_dir(tmp_path, initialize_seed=False)
+    results_dir = tmp_path / "results"
+    monkeypatch.setattr(cli_run, "ShinkaEvolveRunner", _DummyRunner)
+
+    exit_code = cli_run.main(
+        [
+            "--task-dir",
+            str(task_dir),
+            "--results_dir",
+            str(results_dir),
+            "--num_generations",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    evo_config = _DummyRunner.last_kwargs["evo_config"]
+    assert evo_config.seed_repo_path == str((task_dir / "seed_repo").resolve())
+    assert not (task_dir / "seed_repo" / ".git").exists()
 
 
 def test_shinka_run_uses_explicit_seed_repo_path(tmp_path, monkeypatch):

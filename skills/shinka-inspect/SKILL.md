@@ -57,7 +57,9 @@ python3 skills/shinka-inspect/scripts/inspect_best_programs.py \
 4. Read `<results_dir>/shinka_inspect_context.md` and use its extracted ideas,
    hypotheses, risks, and lineage to plan the next `evo.task_sys_msg`.
 5. If exact implementation is needed, inspect the recorded commit or persisted
-   diff rather than asking the database summary to stand in for source.
+   diff rather than asking the database summary to stand in for source. Resolve
+   a commit in the seed Git history created or reused for that run. If that
+   runtime history is unavailable, use the persisted diff and artifacts.
 
 ## Arguments
 

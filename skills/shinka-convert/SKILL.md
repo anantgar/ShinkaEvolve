@@ -22,7 +22,6 @@ Create `./shinka_task/` unless the user chooses another location:
 shinka_task/
   evaluate.py
   seed_repo/
-    .git/
     ...minimal runnable candidate repository...
   shinka.yaml
   run_evo.py
@@ -52,20 +51,27 @@ in-place task.
    - default `mutable_paths: []` for whole-repository agent freedom;
    - use a non-empty allow-list only for an explicit user boundary;
    - keep evaluator code outside `seed_repo/` rather than relying on prompts.
-7. Initialize `seed_repo/` as a git repository and commit the complete baseline.
+7. Leave a newly created `seed_repo/` as a normal directory; Shinka initializes
+   and commits it automatically at evolution startup. If conversion deliberately
+   preserves an existing independent Git repository, require a clean working
+   tree rather than committing the user's pending changes.
 8. Copy and tailor the bundled `scripts/shinka.yaml` and
    `scripts/run_evo.py`.
-9. Smoke-test the committed seed:
+9. Smoke-test the candidate seed:
 
 ```bash
 smoke_dir=$(mktemp -d)
 python3 evaluate.py --repo_path seed_repo --results_dir "$smoke_dir"
-git -C seed_repo status --short
 ```
 
 10. Verify `metrics.json`, `correct.json`, score direction, repeatability, and
     dependency documentation.
 11. Hand off to `shinka-run` when the user wants evolution launched.
+
+Git metadata is a startup concern, not a conversion prerequisite. A plain seed,
+an unborn Git seed, or a seed directory tracked by an enclosing repository is
+initialized and committed automatically. An existing independent repository
+with `HEAD` is reused only when clean.
 
 ## Conversion principles
 

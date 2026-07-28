@@ -1,6 +1,6 @@
 ---
 name: shinka-run
-description: Preflight, launch, resume, and review repo-backed ShinkaEvolve runs from a task containing `evaluate.py` and a committed `seed_repo/`.
+description: Preflight, launch, resume, and review repo-backed ShinkaEvolve runs from a task containing `evaluate.py` and a candidate `seed_repo/` directory.
 ---
 
 # Run repo-agent evolution
@@ -19,15 +19,15 @@ the task contract is missing.
 1. Inspect the task and effective config:
 
 ```bash
+task_dir=/path/to/task
 shinka_run --help
-git -C <task_dir>/seed_repo status --short --branch
-git -C <task_dir>/seed_repo log -1 --oneline
+test -d "$task_dir/seed_repo"
 ```
 
 Require:
 
 - external `<task_dir>/evaluate.py`;
-- a clean, committed seed git repository;
+- a candidate `<task_dir>/seed_repo` directory;
 - evaluator support for `--repo_path`;
 - only `headless/<agent>[@model][?options]` entries in
   `evo.llm_models`;
@@ -35,6 +35,12 @@ Require:
 
 Empty `mutable_paths` means whole-repository mutation. Do not invent a narrow
 allow-list.
+
+Shinka initializes a plain seed directory and creates its baseline commit when
+the run starts. It does the same for an independent Git repository without a
+`HEAD`. If an existing seed is already an independent repository with history,
+startup preserves that history and rejects uncommitted changes instead of
+silently capturing them.
 
 2. Run the baseline evaluator before spending model budget:
 

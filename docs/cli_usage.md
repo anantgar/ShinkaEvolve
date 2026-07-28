@@ -45,8 +45,9 @@ cluster/database/evolution/task settings.
 ## `shinka_run`
 
 Direct task launcher for async repo evolution. Expects a task directory
-containing `evaluate.py` and a git `seed_repo/`, unless `--seed-repo-path` or
-`evo.seed_repo_path` points elsewhere.
+containing `evaluate.py` and a candidate `seed_repo/` directory, unless
+`--seed-repo-path` or `evo.seed_repo_path` points elsewhere. Shinka initializes
+and commits the Git baseline automatically when needed.
 
 ### Minimal run
 

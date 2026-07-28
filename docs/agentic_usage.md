@@ -115,9 +115,22 @@ Illustration (setup flow):
 ![Claude setup step 2](media/claude_setup_2.png)
 
 Expected output:
-- `seed_repo/` initialized as a git repository
+- runnable candidate files under `seed_repo/`
 - `evaluate.py` accepting `--repo_path` and producing `metrics.json` + `correct.json`
 - optional `run_evo.py` / `shinka.yaml` scaffolds when requested
+
+### Seed Git initialization note
+
+Users do not need to initialize `seed_repo/` manually. When evolution starts,
+Shinka detects a plain directory—even when its files belong to an enclosing
+repository—then initializes a nested Git repository and creates the baseline
+commit. It also commits an independent Git repository that has no `HEAD`.
+
+If the seed is already an independent repository with history, Shinka preserves
+that history and requires a clean working tree. It rejects pending changes
+rather than silently adding them to the evolution baseline. The generated
+`.git/` directory is runtime state and does not need to be preserved by a parent
+repository.
 
 ## 5) Run Skill Walkthrough (`shinka-run`)
 
@@ -196,7 +209,8 @@ When using `shinka-run` skill:
 Before first run:
 
 - `shinka_run --help` works
-- task dir has `evaluate.py` + a git `seed_repo/`
+- task dir has `evaluate.py` + a candidate `seed_repo/` directory
+- an existing Git seed with history has no uncommitted changes
 - each selected Headless agent is authenticated; auxiliary API credentials are available if used
 - `npx skills list` shows the installed Shinka skills
 - for global installs, skills appear under `~/.claude/skills/` and/or `~/.codex/skills/`

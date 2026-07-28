@@ -152,6 +152,69 @@ def test_worktree_manager_preserves_seed_and_excludes_summary_from_children(tmp_
     )
 
 
+def test_worktree_manager_initializes_plain_seed_directory(tmp_path):
+    outer_repo = tmp_path / "outer"
+    outer_repo.mkdir()
+    _git(outer_repo, "init")
+    _git(
+        outer_repo,
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "outer",
+    )
+    outer_commit = _git(outer_repo, "rev-parse", "HEAD")
+
+    seed_dir = outer_repo / "seed_repo"
+    seed_dir.mkdir()
+    (seed_dir / "src").mkdir()
+    (seed_dir / "src" / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    manager = WorktreeManager(
+        seed_repo_path=str(seed_dir),
+        worktree_root=str(tmp_path / "worktrees"),
+    )
+
+    seed_commit = manager.initialize_seed_repo()
+
+    assert (seed_dir / ".git").is_dir()
+    assert Path(_git(seed_dir, "rev-parse", "--show-toplevel")) == seed_dir
+    assert _git(seed_dir, "show", f"{seed_commit}:src/app.py") == "VALUE = 1"
+    assert _git(seed_dir, "status", "--porcelain") == ""
+    assert _git(outer_repo, "rev-parse", "HEAD") == outer_commit
+
+
+def test_worktree_manager_commits_unborn_seed_repository(tmp_path):
+    seed_repo = tmp_path / "seed"
+    seed_repo.mkdir()
+    _git(seed_repo, "init")
+    (seed_repo / "solution.py").write_text("VALUE = 1\n", encoding="utf-8")
+    manager = WorktreeManager(
+        seed_repo_path=str(seed_repo),
+        worktree_root=str(tmp_path / "worktrees"),
+    )
+
+    seed_commit = manager.initialize_seed_repo()
+
+    assert _git(seed_repo, "show", f"{seed_commit}:solution.py") == "VALUE = 1"
+    assert _git(seed_repo, "status", "--porcelain") == ""
+
+
+def test_worktree_manager_rejects_dirty_existing_seed_repository(tmp_path):
+    seed_repo = _make_seed_repo(tmp_path)
+    (seed_repo / "src" / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+    manager = WorktreeManager(
+        seed_repo_path=str(seed_repo),
+        worktree_root=str(tmp_path / "worktrees"),
+    )
+
+    with pytest.raises(RuntimeError, match="uncommitted changes"):
+        manager.initialize_seed_repo()
+
+
 def test_worktree_manager_enforces_immutable_paths(tmp_path):
     seed_repo = _make_seed_repo(tmp_path)
     manager = WorktreeManager(

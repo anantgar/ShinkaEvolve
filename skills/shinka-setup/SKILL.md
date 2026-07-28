@@ -1,12 +1,13 @@
 ---
 name: shinka-setup
-description: Create a new repo-backed ShinkaEvolve task from a task description, including a committed `seed_repo/`, an external `evaluate.py` that accepts `--repo_path`, and optional run configuration.
+description: Create a new repo-backed ShinkaEvolve task from a task description, including a candidate `seed_repo/`, an external `evaluate.py` that accepts `--repo_path`, and optional run configuration.
 ---
 
 # Shinka repo task setup
 
-Create a new ShinkaEvolve task from a natural-language objective. The evolved
-individual is a git repository, not a source string or one `initial.<ext>` file.
+Create a new ShinkaEvolve task from a natural-language objective. Each evolved
+individual is a repository snapshot, not a source string or one
+`initial.<ext>` file.
 
 ## When to use
 
@@ -33,7 +34,6 @@ Create this shape in the requested task directory:
 task/
   evaluate.py
   seed_repo/
-    .git/
     ...candidate files...
   shinka.yaml       # optional
   run_evo.py        # optional
@@ -41,7 +41,10 @@ task/
 
 Requirements:
 
-- `seed_repo/` is a clean git repository with at least one commit.
+- `seed_repo/` is a runnable candidate directory. It may be a plain directory;
+  Shinka initializes and commits its Git baseline when evolution starts.
+- If `seed_repo/` is already an independent Git repository with a `HEAD`, its
+  working tree must be clean.
 - `evaluate.py` stays outside `seed_repo/`.
 - The evaluator accepts `--repo_path` and `--results_dir`.
 - It writes `metrics.json` and `correct.json` into `results_dir`.
@@ -67,7 +70,9 @@ requires every coding-agent proposal to complete `.shinka/individual.md`.
    `seed_repo/`.
 4. Implement `evaluate.py` so it evaluates the repository passed by
    `--repo_path`, not a hardcoded source path.
-5. Initialize and commit `seed_repo/`.
+5. Leave a new `seed_repo/` as a normal directory. Do not require users to
+   initialize it manually; startup creates the Git baseline. Preserve an
+   existing Git seed and ensure it is clean.
 6. If configuration is requested, copy and tailor the bundled
    `scripts/shinka.yaml` and `scripts/run_evo.py`.
 7. Validate the baseline:
@@ -77,12 +82,23 @@ smoke_dir=$(mktemp -d)
 python3 evaluate.py --repo_path seed_repo --results_dir "$smoke_dir"
 python3 -m json.tool "$smoke_dir/metrics.json"
 python3 -m json.tool "$smoke_dir/correct.json"
-git -C seed_repo status --short
 ```
 
 8. Confirm the baseline is correct, deterministic enough for selection, and
    produces a finite score.
 9. Hand off to `shinka-run` if the user wants to launch evolution.
+
+## Automatic Git initialization
+
+At evolution startup, Shinka treats a plain `seed_repo/`—including one whose
+files belong to an enclosing repository—as candidate input. It initializes a
+nested Git repository and creates the baseline commit using an invocation-local
+identity. An independent unborn Git repository is committed the same way.
+Existing repositories with a `HEAD` are preserved and must be clean.
+
+The generated `seed_repo/.git/` metadata is runtime state and need not be stored
+by a parent repository. A fresh checkout can start from the candidate files and
+will be initialized again on its first run.
 
 ## Evaluator outline
 

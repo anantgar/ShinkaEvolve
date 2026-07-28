@@ -65,6 +65,19 @@ def test_skill_docs_use_repo_individual_contract(skill_name: str) -> None:
     assert "EVOLVE-BLOCK-START" not in content
 
 
+@pytest.mark.parametrize(
+    "skill_name", ["shinka-setup", "shinka-convert", "shinka-run"]
+)
+def test_task_lifecycle_skills_describe_automatic_seed_git_initialization(
+    skill_name: str,
+) -> None:
+    content = (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+    assert "Shinka initializes" in content
+    assert "existing" in content.lower()
+    assert "clean" in content.lower()
+    assert "git -C seed_repo init" not in content
+
+
 def _create_inspection_db(path: Path) -> None:
     with sqlite3.connect(path) as connection:
         connection.execute(

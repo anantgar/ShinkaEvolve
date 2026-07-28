@@ -114,7 +114,9 @@ For detailed installation instructions and usage examples, see the [Getting Star
 
 ## `shinka` Run with Python API 🐍
 
-Repo-mode evolution requires a seed git repository, mutable paths, and an evaluator that accepts `--repo_path`:
+Repo-mode evolution requires a seed candidate directory, mutation policy, and
+an evaluator that accepts `--repo_path`. Shinka initializes and commits a Git
+baseline automatically when needed:
 
 ```python
 from shinka.core import ShinkaEvolveRunner, EvolutionConfig
@@ -233,7 +235,7 @@ Class defaults below come from `shinka/core/config.py` (`EvolutionConfig`). Hydr
 | `meta_max_recommendations` | `5` | `int` | Max number of meta-recommendations |
 | `sample_single_meta_rec` | `True` | `bool` | Sample a single recommendation from meta output when enabled |
 | `embedding_model` | `"text-embedding-3-small"` | `Optional[str]` | Model for code embeddings. Also accepts `local/<model>@http(s)://host[:port]/v1` for local OpenAI-compatible embedding servers, with optional `?api_key_env=ENV_VAR` for per-model credentials. |
-| `seed_repo_path` | `None` | `Optional[str]` | Required path to the seed git repository. |
+| `seed_repo_path` | `None` | `Optional[str]` | Required path to the seed candidate directory. Shinka initializes Git and creates a baseline commit when needed. |
 | `worktree_root` | `None` | `Optional[str]` | Directory where child worktrees are created. |
 | `mutable_paths` | `[]` | `List[str]` | Empty means whole-repository mutation; non-empty is a user allow-list. |
 | `immutable_paths` | `[]` | `List[str]` | Read-only paths in the agent view; changes are rejected during policy validation. |
@@ -358,7 +360,13 @@ Class defaults below come from `shinka/database/dbase.py` (`DatabaseConfig`). Hy
 
 ### Evaluation Setup & Initial Solution 🏃
 
-Repo evolution uses an external **`evaluate.py`** plus a git-backed **`seed_repo/`**. Each individual is a repository commit edited by a Headless coding agent in a worktree. Unless `mutable_paths` is explicitly non-empty, the agent may add, modify, rename, and delete normal repository files. Hidden paths only reduce prompt-visible scope; use the current evaluator only with public, trusted-local tasks.
+Repo evolution uses an external **`evaluate.py`** plus a **`seed_repo/`**
+candidate directory. Shinka initializes and commits the seed automatically when
+needed, then represents each individual as a repository commit edited by a
+Headless coding agent in a worktree. Unless `mutable_paths` is explicitly
+non-empty, the agent may add, modify, rename, and delete normal repository
+files. Hidden paths only reduce prompt-visible scope; use the current evaluator
+only with public, trusted-local tasks.
 
 For private, sealed, or adversarial evaluation, select `evaluation_mode="secure"` with `SecureJobConfig`. The `LocalJobConfig`/`repo_path` route shown in this example is `trusted_local` compatibility behavior for public evaluators and cooperative candidates only.
 
@@ -414,7 +422,9 @@ def run_experiment(**kwargs):
     return solve_problem(kwargs)
 ```
 
-Initialize and commit `seed_repo/` before launching. Coding agents may add
+Manual Git initialization is optional. On first launch, Shinka initializes a
+plain seed directory and creates its baseline commit. Existing Git seeds with
+history are preserved and must have a clean working tree. Coding agents may add
 normal repository files and use terminal tools unless the user supplies a
 narrow `mutable_paths` policy.
 
@@ -486,7 +496,7 @@ shinka_run \
     --set db.num_islands=2
 ```
 
-`--task-dir` must contain `evaluate.py` and a git `seed_repo/`, unless `evo.seed_repo_path` or `--seed-repo-path` points elsewhere.  
+`--task-dir` must contain `evaluate.py` and a candidate `seed_repo/` directory, unless `evo.seed_repo_path` or `--seed-repo-path` points elsewhere. Shinka initializes its Git baseline automatically when needed.
 `--config-fname` can define `evo/db/job` (or `evo_config/db_config/job_config`) plus `max_evaluation_jobs/max_proposal_jobs/max_db_workers` and `verbose/debug`.  
 Precedence: config YAML < `--set` < authoritative flags.  
 `--results_dir` and `--num_generations` are authoritative and always override config/`--set` values for `evo.results_dir` and `evo.num_generations`.
