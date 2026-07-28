@@ -30,7 +30,6 @@ from shinka.database.prompt_dbase import (
 )
 from shinka.llm import (
     AsyncLLMClient,
-    extract_between,
     BanditBase,
     FixedSampler,
     AsymmetricUCB,
@@ -51,11 +50,9 @@ from shinka.launch import (
 )
 from shinka.run_manifest import ensure_wandb_run_id, write_run_manifest
 from shinka.edit.async_apply import (
-    apply_patch_async,
     get_text_embedding_async,
     write_file_async,
 )
-from shinka.edit import summarize_diff
 from shinka.core.sampler import PromptSampler
 from shinka.core.summarizer import MetaSummarizer
 from shinka.core.async_summarizer import AsyncMetaSummarizer
@@ -86,7 +83,6 @@ from shinka.utils import (
     parse_time_to_seconds,
     truncate_log_tail,
 )
-from shinka.utils.languages import get_evolve_comment_prefix
 from shinka.repo import (
     RepoWorktree,
     WorktreeManager,
@@ -3762,6 +3758,7 @@ Required constraints:
                 llm_kwargs = {
                     **llm_kwargs,
                     "headless_work_dir": str(agent_target_worktree.path),
+                    "headless_response_mode": "worktree",
                     "headless_session_name": headless_session_name,
                 }
                 if self.proposal_sessions is not None:

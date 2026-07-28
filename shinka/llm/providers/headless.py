@@ -33,6 +33,7 @@ from shinka.secure.mutation import (
     run_agent_in_workspace,
 )
 
+from .headless_docker import AUTH_HOME_ENV, SESSION_ROOT_ENV
 from .result import QueryResult
 from .errors import (
     LLMAuthenticationError,
@@ -365,6 +366,10 @@ def _subprocess_env(
         env.pop("ANTHROPIC_API_KEY", None)
         env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
     if session_home is not None:
+        auth_home = env.get("HOME")
+        if auth_home:
+            env[AUTH_HOME_ENV] = auth_home
+        env[SESSION_ROOT_ENV] = str(session_home)
         env["HOME"] = str(session_home)
     return env
 

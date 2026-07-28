@@ -197,6 +197,17 @@ def test_session_args_are_stripped():
     ) == ["--model", "composer-2.5", "--json"]
 
 
+def test_session_args_are_preserved_for_a_durable_root(tmp_path, monkeypatch):
+    monkeypatch.setenv(hd.SESSION_ROOT_ENV, str(tmp_path / "sessions"))
+
+    command = hd.build_command(
+        agent="codex",
+        args=["--session", "gen1", "--model", "gpt-5.5", "--json"],
+    )
+
+    assert command[-5:] == ["--session", "gen1", "--model", "gpt-5.5", "--json"]
+
+
 def test_build_command_requests_docker_and_honours_env(monkeypatch):
     monkeypatch.setenv(hd.IMAGE_ENV, "example/image:tag")
     monkeypatch.setenv(hd.PLATFORM_ENV, "linux/arm64")
@@ -231,6 +242,48 @@ def test_child_env_stages_home_but_keeps_the_host_npm_cache(tmp_path, monkeypatc
 
     assert env["HOME"] == str(stage_home)
     assert env["npm_config_cache"] == str(host_home / ".npm")
+
+
+def test_child_env_maps_shinka_session_root_to_headless(tmp_path, monkeypatch):
+    session_root = tmp_path / "sessions"
+    monkeypatch.setenv(hd.SESSION_ROOT_ENV, str(session_root))
+
+    env = hd.child_env(host_home=tmp_path / "home", stage_home=tmp_path / "stage")
+
+    assert env[hd.HEADLESS_SESSION_ROOT_ENV] == str(session_root)
+
+
+def test_main_keeps_auth_home_separate_from_durable_session_root(
+    tmp_path, monkeypatch
+):
+    auth_home = tmp_path / "auth-home"
+    (auth_home / ".codex").mkdir(parents=True)
+    (auth_home / ".codex" / "auth.json").write_text('{"token":"secret"}')
+    session_root = tmp_path / "session-root"
+    session_root.mkdir()
+    monkeypatch.setenv("HOME", str(session_root))
+    monkeypatch.setenv(hd.AUTH_HOME_ENV, str(auth_home))
+    monkeypatch.setenv(hd.SESSION_ROOT_ENV, str(session_root))
+    observed: dict[str, object] = {}
+
+    def fake_call(cmd, **kwargs):
+        stage_home = Path(kwargs["env"]["HOME"])
+        observed["command"] = cmd
+        observed["auth"] = (stage_home / ".codex" / "auth.json").read_text()
+        observed["session_root"] = kwargs["env"][hd.HEADLESS_SESSION_ROOT_ENV]
+        observed["internal_env"] = {
+            name for name in (hd.AUTH_HOME_ENV, hd.SESSION_ROOT_ENV)
+            if name in kwargs["env"]
+        }
+        return 0
+
+    monkeypatch.setattr(hd.subprocess, "call", fake_call)
+
+    assert hd.main(["codex", "--session", "proposal-1", "--json"]) == 0
+    assert "--session" in observed["command"]
+    assert observed["auth"] == '{"token":"secret"}'
+    assert observed["session_root"] == str(session_root)
+    assert observed["internal_env"] == set()
 
 
 @pytest.mark.parametrize(

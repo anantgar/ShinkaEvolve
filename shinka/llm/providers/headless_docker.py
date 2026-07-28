@@ -30,6 +30,9 @@ PLATFORM_ENV = "SHINKA_HEADLESS_DOCKER_PLATFORM"
 EXTRA_ARGS_ENV = "SHINKA_HEADLESS_DOCKER_ARGS"
 EXTRA_SEED_ENV = "SHINKA_HEADLESS_DOCKER_SEED_EXTRA"
 CODEX_SERVICE_TIER_ENV = "SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER"
+SESSION_ROOT_ENV = "SHINKA_HEADLESS_DOCKER_SESSION_ROOT"
+HEADLESS_SESSION_ROOT_ENV = "HEADLESS_DOCKER_SESSION_ROOT"
+AUTH_HOME_ENV = "SHINKA_HEADLESS_DOCKER_AUTH_HOME"
 
 # Mirrors the ``seedPaths`` table of @roberttlange/headless. Kept local so the
 # wrapper does not pay an extra CLI round trip per proposal;
@@ -221,12 +224,21 @@ def stage_auth_home(*, agent: str, host_home: Path, stage_home: Path) -> SeedBud
     return budget
 
 
-def strip_session_args(args: list[str]) -> list[str]:
-    """Drop ``--session``; Headless rejects it together with ``--docker``.
+def _durable_sessions_enabled() -> bool:
+    """Return whether session state can outlive the wrapper's staged HOME."""
+    return bool(
+        os.getenv(SESSION_ROOT_ENV, "").strip()
+        or os.getenv(HEADLESS_SESSION_ROOT_ENV, "").strip()
+    )
 
-    Every Shinka proposal already runs in its own worktree, so there is no
-    session state to resume.
-    """
+
+def strip_session_args(args: list[str], *, preserve: bool | None = None) -> list[str]:
+    """Drop session flags unless a durable Docker session root is configured."""
+    if preserve is None:
+        preserve = _durable_sessions_enabled()
+    if preserve:
+        return list(args)
+
     stripped: list[str] = []
     index = 0
     while index < len(args):
@@ -262,6 +274,11 @@ def build_command(*, agent: str, args: list[str]) -> list[str]:
 def child_env(*, host_home: Path, stage_home: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["HOME"] = str(stage_home)
+    configured_session_root = os.getenv(SESSION_ROOT_ENV, "").strip()
+    if configured_session_root:
+        env[HEADLESS_SESSION_ROOT_ENV] = configured_session_root
+    env.pop(AUTH_HOME_ENV, None)
+    env.pop(SESSION_ROOT_ENV, None)
     # Keep npm/npx pointed at the real cache. Otherwise every proposal
     # re-downloads the Headless package (~50 MB) into the staged home.
     env.setdefault("npm_config_cache", str(host_home / ".npm"))
@@ -294,7 +311,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    host_home = Path(os.path.expanduser("~"))
+    host_home = Path(os.getenv(AUTH_HOME_ENV) or os.path.expanduser("~")).expanduser()
     stage_home = Path(tempfile.mkdtemp(prefix="shinka-headless-home."))
     try:
         budget = stage_auth_home(
