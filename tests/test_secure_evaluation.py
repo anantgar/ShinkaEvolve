@@ -362,6 +362,7 @@ def test_agent_purges_durable_session_after_credential_copy(
         )
 
     assert engine.removed is True
+    assert engine.plan is not None
     assert "--no-same-permissions" in " ".join(engine.plan.command)
     assert not any(session_home.iterdir())
 
