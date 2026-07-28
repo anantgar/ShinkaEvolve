@@ -2,11 +2,15 @@
 
 ## Status At A Glance
 
-The repo-only core on `main` is implemented and tested (`777 passed` on 2026-07-21). The `codex/secure-runtime-integration` branch adds the smallest secure evaluation slice and durable Headless proposal sessions without importing the stale branch's benchmark catalogs, NNUE work, or unrelated refactors.
+`main` now contains the repo-only core, the secure evaluation slice, and durable
+Headless proposal sessions. The secure work was merged through
+`codex/secure-runtime-integration` without importing the stale branch's benchmark
+catalogs, NNUE work, or unrelated refactors.
 
-The new path has automated fake-agent and contract coverage. The universal
-Headless image is published and its container boundary is qualified, but no
-real agent, benchmark, or production deployment has run yet.
+The path has automated fake-agent and contract coverage. The universal Headless
+image, container boundary, direct-workspace mutation path, and durable Docker
+session reuse are locally qualified. No secure benchmark campaign or production
+deployment has run yet.
 
 ## Evaluation Modes
 
@@ -29,24 +33,37 @@ real agent, benchmark, or production deployment has run yet.
 
 ## Automated Evidence
 
-Focused secure-runtime, Headless, CLI, recovery, and existing compatibility tests use fake agents and fake container runners. On 2026-07-25, the rebased branch passed the focused suite (`152 passed, 2 deselected`) and the full non-integration Python suite (`827 passed, 1 skipped, 2 deselected`).
+Focused secure-runtime, Headless, CLI, recovery, and existing compatibility
+tests use fake agents and fake container runners. On 2026-07-28, the exact CI
+commands passed Ruff and Mypy, and Pytest passed (`860 passed, 1 skipped,
+2 deselected`). Both hosted CI runs for the integration pull request passed.
 
-The Docker qualification passed locally on 2026-07-25 against a freshly built
-arm64 image using Docker Desktop. The publish workflow now pulls the exact
-multi-architecture manifest digest it produced and reruns the same qualification
+The Docker qualification passed again locally on 2026-07-28 using Docker
+Desktop's dedicated Linux VM and the published multi-architecture image. It
+verified the read-only candidate boundary, secret/environment isolation, network
+and Docker-socket denial, resource limits, and cleanup. The publish workflow
+pulls the exact manifest digest it produced and reruns the same qualification
 on a dedicated Linux runner; the published reference is
 `ghcr.io/anantgar/shinka-headless-agents@sha256:7624da6fd6e8138d15b9553732e683d30832d3f090dfb00ad426e528c3dcfc7f`.
-No test triggered provider credentials or a real agent call.
+
+A bounded two-turn Docker canary used Antigravity with Gemini 3.5 Flash Low.
+Both turns edited the proposal repository directly, and the second turn resumed
+the same named durable session. Captured assistant text was not used as proposal
+output.
 
 ## Benchmark Branches
 
-The paper/open-problem catalog and Stockfish NNUE work are not present on this branch and were not run. Their clean split/rebase sequence is documented in [Benchmark Branch Cleanup Plan](benchmark_branch_cleanup_plan.md).
+The paper/open-problem catalog and Stockfish NNUE work are not present on
+`main` and were not run. Their clean split/rebase sequence is documented in
+[Benchmark Branch Cleanup Plan](benchmark_branch_cleanup_plan.md).
 
 ## Required Manual Follow-Up
 
-1. Configure the published image by immutable digest in the secure runtime.
-2. Configure operator credentials/auth profiles without placing secrets in proposal metadata or candidate artifacts.
-3. Run a deliberately bounded real-agent canary against a public evaluator.
-4. Review, rebase, and run the paper/open-problem and NNUE benchmark experiments separately.
+1. Configure an operator-specific secure job with the published image digest,
+   minimal auth profiles, and reviewed provider egress.
+2. Run a bounded end-to-end secure evaluation campaign against a public task.
+3. Review, rebase, and run the paper/open-problem and NNUE benchmark experiments
+   separately.
 
-Until those gates are complete, describe the feature as implemented and automatically tested, not operationally qualified.
+Until those gates are complete, describe the feature as implemented,
+automatically tested, and locally container-qualified, not production-qualified.
