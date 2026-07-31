@@ -91,8 +91,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "  budget: --set evo.max_api_costs=0.5\n"
         "  models: --set "
         'evo.llm_models=\'["gpt-5-mini","gemini-3-flash-preview"]\'\n'
-        '  patching: --set evo.patch_types=\'["diff","full"]\' '
-        "--set evo.patch_type_probs='[0.7,0.3]'\n"
+        '  patching: --set evo.patch_types=\'["full","cross"]\' '
+        "--set evo.patch_type_probs='[0.9,0.1]'\n"
         '  llm kwargs: --set evo.llm_kwargs=\'{"temperatures":[0.0,0.5,1.0],'
         '"max_tokens":16384}\'\n'
         "  quality controls: --set evo.max_patch_resamples=3 "

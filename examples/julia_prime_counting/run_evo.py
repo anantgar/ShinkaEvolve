@@ -38,8 +38,8 @@ Hints:
 
 evo_config = EvolutionConfig(
     task_sys_msg=task_sys_msg,
-    patch_types=["diff", "full"],
-    patch_type_probs=[0.7, 0.3],
+    patch_types=["full"],
+    patch_type_probs=[1.0],
     num_generations=24,
     max_patch_resamples=2,
     max_patch_attempts=3,

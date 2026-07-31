@@ -28,8 +28,8 @@ Concurrency is configured on `ShinkaEvolveRunner`, not on `EvolutionConfig`.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `task_sys_msg` | `Optional[str]` | `"You are an expert optimization and algorithm design assistant. Improve the program while preserving correctness and immutable regions."` | Task-specific system prompt. |
-| `patch_types` | `List[str]` | `['diff', 'full', 'cross']` | Patch formats; supports `diff`, `full`, `cross`. |
-| `patch_type_probs` | `List[float]` | `[0.6, 0.3, 0.1]` | Sampling probabilities for `patch_types` (must sum to 1). |
+| `patch_types` | `List[str]` | `['full', 'cross']` | Mutation strategies; supports `full` and `cross`. |
+| `patch_type_probs` | `List[float]` | `[0.9, 0.1]` | Sampling probabilities for `patch_types` (must sum to 1). |
 | `num_generations` | `int` | `50` | Target number of generations. |
 | `max_patch_resamples` | `int` | `3` | Max patch resample loops per novelty attempt. |
 | `max_patch_attempts` | `int` | `1` | Max attempts to produce a syntactically valid patch. |
@@ -74,8 +74,6 @@ Concurrency is configured on `ShinkaEvolveRunner`, not on `EvolutionConfig`.
 | `proposal_target_ewma_alpha` | `float` | `0.3` | EWMA smoothing factor for proposal/evaluation timing estimates. |
 | `inspiration_sort_order` | `str` | `'ascending'` | Inspiration ordering (`ascending`, `chronological`, `none`). |
 | `evolve_prompts` | `bool` | `False` | Enable system-prompt evolution. |
-| `prompt_patch_types` | `List[str]` | `['diff', 'full']` | Patch formats for prompt evolution. |
-| `prompt_patch_type_probs` | `List[float]` | `[0.7, 0.3]` | Sampling probabilities for prompt patch formats. |
 | `prompt_evolution_interval` | `Optional[int]` | `None` | Prompt-evolution interval in generations. |
 | `prompt_archive_size` | `int` | `10` | Prompt archive size. |
 | `prompt_llm_models` | `Optional[List[str]]` | `None` | Prompt-evolution model pool (falls back to `llm_models`). |
@@ -244,8 +242,8 @@ max_proposal_jobs: 2
 max_db_workers: 2
 
 evo_config:
-  patch_types: ["diff", "full"]
-  patch_type_probs: [0.5, 0.5]
+  patch_types: ["full"]
+  patch_type_probs: [1.0]
   num_generations: 20
   max_patch_attempts: 10
   llm_models: ["gpt-4.1"]
@@ -263,8 +261,8 @@ max_proposal_jobs: 6
 max_db_workers: 2
 
 evo_config:
-  patch_types: ["diff", "full", "cross"]
-  patch_type_probs: [0.6, 0.3, 0.1]
+  patch_types: ["full", "cross"]
+  patch_type_probs: [0.9, 0.1]
   num_generations: 50
   max_patch_resamples: 3
   max_patch_attempts: 1
@@ -299,8 +297,8 @@ max_proposal_jobs: 8
 max_db_workers: 2
 
 evo_config:
-  patch_types: ["diff", "full", "cross"]
-  patch_type_probs: [0.4, 0.4, 0.2]
+  patch_types: ["full", "cross"]
+  patch_type_probs: [0.9, 0.1]
   num_generations: 300
   max_patch_resamples: 3
   max_patch_attempts: 3

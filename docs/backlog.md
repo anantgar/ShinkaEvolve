@@ -283,7 +283,9 @@ compatibility objective.
 - [ ] Inventory `shinka/edit`, `shinka/edit/async_apply.py`, and their callers.
 - [ ] Move generic async file/embedding helpers used by the repo runner out of
       the legacy patch-application module.
-- [ ] Ensure the active runner cannot enter code-string diff/full-rewrite paths.
+- [x] Ensure the active runner cannot enter code-string diff/full-rewrite paths;
+      repo mutation now uses only full/crossover coding-agent strategies, with
+      fix attempts forced to full.
 - [ ] Either retain the legacy public helpers as an explicitly isolated
       upstream-compatibility surface or remove them with a migration note; do
       not leave ambiguous half-supported behavior.

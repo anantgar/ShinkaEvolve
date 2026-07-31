@@ -12,8 +12,8 @@ shinka_run \
   --max-proposal-jobs 1 \
   --set evo.llm_models='["headless/codex@gpt-5.5?effort=high"]' \
   --set evo.embedding_model=null \
-  --set evo.patch_types='["full", "diff"]' \
-  --set evo.patch_type_probs='[0.5, 0.5]'
+  --set evo.patch_types='["full"]' \
+  --set evo.patch_type_probs='[1.0]'
 ```
 
 Before the run starts, Shinka executes the configured Headless command with

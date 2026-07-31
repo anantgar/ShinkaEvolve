@@ -36,8 +36,8 @@ evo:
     temperatures: [0.0, 0.5, 1.0]
     max_tokens: 16384
     reasoning_efforts: [high]
-  patch_types: [diff, full, cross]
-  patch_type_probs: [0.45, 0.45, 0.1]
+  patch_types: [full, cross]
+  patch_type_probs: [0.9, 0.1]
   max_patch_resamples: 3
   max_patch_attempts: 3
   max_novelty_attempts: 3

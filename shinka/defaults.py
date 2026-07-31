@@ -11,11 +11,11 @@ DEFAULT_TASK_SYS_MSG = (
 
 
 def default_patch_types() -> list[str]:
-    return ["diff", "full", "cross"]
+    return ["full", "cross"]
 
 
 def default_patch_type_probs() -> list[float]:
-    return [0.6, 0.3, 0.1]
+    return [0.9, 0.1]
 
 
 def default_llm_models() -> list[str]:
@@ -36,14 +36,6 @@ def default_llm_kwargs() -> dict[str, Any]:
         "temperatures": [0.0, 0.5, 1.0],
         "max_tokens": 16384,
     }
-
-
-def default_prompt_patch_types() -> list[str]:
-    return ["diff", "full"]
-
-
-def default_prompt_patch_type_probs() -> list[float]:
-    return [0.7, 0.3]
 
 
 def default_archive_criteria() -> dict[str, float]:

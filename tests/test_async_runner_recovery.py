@@ -533,7 +533,7 @@ def test_generate_evolved_proposal_records_failed_node_attempt_after_pre_eval_fa
                 None,
                 {
                     "api_costs": 0.1,
-                    "patch_type": "diff",
+                    "patch_type": "full",
                     "patch_name": "broken_patch",
                     "patch_description": "fails before evaluation",
                     "patch_attempt": 1,
@@ -746,7 +746,7 @@ def test_maybe_evolve_prompt_updates_total_api_cost():
         )
         runner.prompt_evolver = SimpleNamespace(
             evolve=lambda **kwargs: asyncio.sleep(
-                0, result=(SimpleNamespace(id="prompt-new", generation=3), "diff", 0.25)
+                0, result=(SimpleNamespace(id="prompt-new", generation=3), "full", 0.25)
             )
         )
         runner.async_db.get_top_programs_async = lambda n: asyncio.sleep(0, result=[])

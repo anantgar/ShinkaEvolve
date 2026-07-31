@@ -24,8 +24,8 @@ db_config = DatabaseConfig(
 )
 
 evo_config = EvolutionConfig(
-    patch_types=["full", "diff"],
-    patch_type_probs=[0.5, 0.5],
+    patch_types=["full"],
+    patch_type_probs=[1.0],
     num_generations=10,
     max_patch_resamples=1,
     max_patch_attempts=1,

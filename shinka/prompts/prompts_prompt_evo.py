@@ -1,10 +1,8 @@
 """
 Prompts for evolving system prompts (meta-meta level).
 
-These prompts are used to generate mutations of task_sys_msg prompts
-using different strategies: diff (targeted modifications) and full (complete
-rewrites). Both strategies receive the same context: the current prompt
-and top-k performing repository individuals.
+These prompts generate complete rewrites of task_sys_msg prompts using the
+current prompt and top-performing repository individuals as context.
 """
 
 from typing import List, Optional
@@ -42,45 +40,6 @@ PROMPT_EVO_SYSTEM_BASE = (
     "</PROMPT>\n\n"
     "* Use the <NAME>, <DESCRIPTION>, and <PROMPT> delimiters to "
     "structure your response."
-)
-
-
-# =============================================================================
-# DIFF-STYLE PROMPT EVOLUTION
-# =============================================================================
-
-PROMPT_EVO_DIFF_SYSTEM = (
-    PROMPT_EVO_SYSTEM_BASE + "\n\n"
-    "IMPORTANT: Make TARGETED modifications based on SPECIFIC patterns you "
-    "observe in the successful repository individuals. Do not just rephrase or reorganize - "
-    "you must add NEW guidance derived from analyzing what made the top "
-    "repository individuals successful.\n\n"
-    "For each modification, explicitly identify:\n"
-    "1. A specific technique or pattern from the top repository individuals\n"
-    "2. How to encode this insight as actionable guidance in the prompt"
-)
-
-PROMPT_EVO_DIFF_USER = (
-    "# Current System Prompt\n"
-    "```\n{current_prompt}\n```\n\n"
-    "{global_scratchpad_section}"
-    "# Top Performing Repository Individuals\n"
-    "{top_programs}\n\n"
-    "# Instructions\n"
-    "CAREFULLY analyze the top-performing repository individuals above. Identify 1-3 "
-    "SPECIFIC techniques, algorithms, or implementation patterns that "
-    "contributed to their high scores.\n\n"
-    "Then modify the system prompt to explicitly encourage these patterns. "
-    "Your changes should:\n"
-    "- Reference concrete techniques you observed (e.g., 'use vectorized "
-    "operations', 'implement early pruning', 'use restart strategies')\n"
-    "- Add specific algorithmic guidance based on what worked\n"
-    "- NOT just rephrase existing instructions - add NEW actionable "
-    "insights\n\n"
-    "In your <DESCRIPTION>, explain which specific patterns from the repository individuals "
-    "inspired each change.\n\n"
-    "Provide your response using the <NAME>, <DESCRIPTION>, and <PROMPT> "
-    "delimiters."
 )
 
 
@@ -221,39 +180,6 @@ def construct_prompt_evolution_context(
         ),
         "global_scratchpad_section": format_global_scratchpad(global_scratchpad),
     }
-
-
-def construct_diff_evolution_prompt(
-    parent_prompt: SystemPrompt,
-    top_programs: Optional[List] = None,  # Optional[List[Program]]
-    language: str = "python",
-    include_text_feedback: bool = False,
-    global_scratchpad: Optional[str] = None,
-) -> tuple:
-    """
-    Construct the system and user messages for diff-style prompt evolution.
-
-    Args:
-        parent_prompt: The prompt to evolve
-        top_programs: List of top-performing repository individuals for context
-        language: Programming language retained for API compatibility
-        include_text_feedback: Whether to include text feedback
-        global_scratchpad: Global insights from meta-reviewing
-
-    Returns:
-        Tuple of (system_message, user_message)
-    """
-    context = construct_prompt_evolution_context(
-        parent_prompt,
-        top_programs or [],
-        language,
-        include_text_feedback,
-        global_scratchpad,
-    )
-
-    user_msg = PROMPT_EVO_DIFF_USER.format(**context)
-
-    return PROMPT_EVO_DIFF_SYSTEM, user_msg
 
 
 def construct_full_evolution_prompt(

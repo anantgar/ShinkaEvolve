@@ -150,7 +150,7 @@ def test_side_effects_and_prompt_sampling_work_when_aux_features_disabled(
     sampler = PromptSampler(
         task_sys_msg="Improve the program.",
         language="python",
-        patch_types=["diff"],
+        patch_types=["full"],
         patch_type_probs=[1.0],
     )
     sys_msg, user_msg, patch_type = sampler.sample(
@@ -161,7 +161,32 @@ def test_side_effects_and_prompt_sampling_work_when_aux_features_disabled(
     )
     assert "Improve the program." in sys_msg
     assert user_msg
-    assert patch_type == "diff"
+    assert patch_type == "full"
+
+
+def test_prompt_sampler_rejects_removed_diff_patch_type():
+    with pytest.raises(ValueError, match="Unsupported patch types: diff"):
+        PromptSampler(
+            patch_types=["diff"],
+            patch_type_probs=[1.0],
+        )
+
+
+def test_prompt_sampler_can_force_full_for_fix_attempts():
+    program = Program(id="prog-1", repo_summary="# Repository\n")
+    sampler = PromptSampler(
+        patch_types=["cross"],
+        patch_type_probs=[1.0],
+    )
+
+    _, _, patch_type = sampler.sample(
+        parent=program,
+        archive_inspirations=[],
+        top_k_inspirations=[],
+        patch_type="full",
+    )
+
+    assert patch_type == "full"
 
 
 def test_estimate_demand_skips_disabled_meta():

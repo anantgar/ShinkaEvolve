@@ -5,11 +5,9 @@ max_db_workers: 2
 evo_config:
   _target_: shinka.core.EvolutionConfig
   patch_types:
-    - "diff"
     - "full"
   patch_type_probs:
-    - 0.5
-    - 0.5
+    - 1.0
   num_generations: 20
   max_patch_attempts: 10
   llm_models:

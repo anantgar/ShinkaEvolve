@@ -60,7 +60,7 @@ def _make_db(tmp_path):
             "embed_cost": 0.02,
             "novelty_cost": 0.03,
             "meta_cost": 0.04,
-            "patch_type": "diff",
+            "patch_type": "full",
             "llm_result": {"model": "fallback-model"},
         },
     )
