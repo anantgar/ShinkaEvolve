@@ -53,7 +53,8 @@ The framework supports **parallel evaluation of candidates** locally or on a Slu
 | ⚡ **[Async Evo](https://sakanaai.github.io/ShinkaEvolve/async_evolution/)** | High-perf. throughput (5-10x speedup) | Concurrent processing, proposal/eval tuning | 
 | 🧠 **[Local Models](https://sakanaai.github.io/ShinkaEvolve/support_local_models/)** | How to use local LLMs and embeddings with Shinka | Running open-source models & integration tips |
 | 🤖 **[Agentic Use](https://sakanaai.github.io/ShinkaEvolve/agentic_usage/)** | Run Shinka with Claude/Codex skills | CLI install, skill placement, setup/run workflows |
-| ⚖️ **[Repo-Agent Evaluation](docs/repo_evolution_evaluation.md)** | Compare repo-agent evolution with the original loop | Fair budgets, cost/time/quality metrics, and ablations |
+| 🏗️ **[System Architecture](docs/system_architecture.md)** | Current repo-agent and secure-evaluation design | Artifacts, agents, evaluation boundaries, recovery, and comparison rules |
+| 📋 **[Backlog](docs/backlog.md)** | Canonical unresolved project work | Qualification, benchmarks, operations, and code TODOs |
 
 ## Installation & Quick Start 🚀
 

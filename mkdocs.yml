@@ -95,7 +95,9 @@ nav:
       - CLI Usage: cli_usage.md
       - Configuration: configuration.md
       - Local Models: support_local_models.md
-      - Repo-Agent Evaluation: repo_evolution_evaluation.md
+  - Project:
+      - System Architecture: system_architecture.md
+      - Backlog: backlog.md
   - WebUI: webui.md
   - API Reference:
       - Overview: reference/index.md

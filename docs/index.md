@@ -79,7 +79,8 @@ For source installs and a full first-run walkthrough, see
 [Getting Started](getting_started.md).
 
 For a defensible comparison between the repo-agent implementation and the
-paper-era string-program loop, see [Repo-Agent Evaluation](repo_evolution_evaluation.md).
+paper-era string-program loop, see
+[System Architecture](system_architecture.md#comparison-with-original-shinka).
 
 ---
 
