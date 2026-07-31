@@ -35,7 +35,7 @@ def construct_individual_program_msg(
     include_text_feedback: bool = False,
 ) -> str:
     """Render one Program as prompt context."""
-    summary = program.repo_summary or program.code or "No summary recorded."
+    summary = program.repo_summary or "No summary recorded."
     sections = [
         f"Repository individual ID: {program.id}",
         f"Generation: {program.generation}",

@@ -12,12 +12,10 @@ from .general import (
 )
 from .utils_hydra import (
     build_cfgs_from_python,
-    add_evolve_markers,
     chdir_to_function_dir,
     wrap_object,
     load_hydra_config,
 )
-from .languages import get_language_extension
 
 
 def __getattr__(name):
@@ -32,7 +30,6 @@ def __getattr__(name):
         return getattr(load_df, name)
     if name in {
         "build_cfgs_from_python",
-        "add_evolve_markers",
         "chdir_to_function_dir",
         "wrap_object",
         "load_hydra_config",
@@ -49,12 +46,10 @@ __all__ = [
     "parse_time_to_seconds",
     "load_results",
     "build_cfgs_from_python",
-    "add_evolve_markers",
     "chdir_to_function_dir",
     "wrap_object",
     "load_hydra_config",
     "load_configs_from_yaml",
     "truncate_log_tail",
-    "get_language_extension",
     "load_prompts_to_df",
 ]

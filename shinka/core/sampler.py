@@ -161,7 +161,7 @@ class PromptSampler:
             text_feedback_section = "\n" + format_text_feedback_section(
                 parent.text_feedback
             )
-        parent_content = parent.repo_summary or parent.code
+        parent_content = parent.repo_summary or "No summary recorded."
 
         if patch_type == "diff":
             iter_msg = DIFF_ITER_MSG.format(

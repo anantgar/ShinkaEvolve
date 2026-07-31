@@ -31,7 +31,11 @@ class AsyncNoveltyJudge:
         self.async_llm_client = async_llm_client
 
     async def should_check_novelty_async(
-        self, code_embedding: List[float], current_gen: int, parent_program: Program, db
+        self,
+        summary_embedding: List[float],
+        current_gen: int,
+        parent_program: Program,
+        db,
     ) -> bool:
         """Async version of should_check_novelty.
 
@@ -40,7 +44,7 @@ class AsyncNoveltyJudge:
         """
         try:
             # Check basic conditions without database access
-            if not code_embedding or current_gen == 0 or not parent_program:
+            if not summary_embedding or current_gen == 0 or not parent_program:
                 return False
 
             # Check if parent program has island information and islands are initialized
@@ -62,7 +66,7 @@ class AsyncNoveltyJudge:
     async def assess_novelty_with_rejection_sampling_async(
         self,
         proposed_summary: str,
-        code_embedding: List[float],
+        summary_embedding: List[float],
         parent_program: Program,
         db,
     ) -> Tuple[bool, Dict[str, Any]]:
@@ -70,7 +74,7 @@ class AsyncNoveltyJudge:
 
         Args:
             proposed_summary: Proposed individual's repository summary text
-            code_embedding: Summary embedding vector
+            summary_embedding: Summary embedding vector
             parent_program: Parent program
             db: Database instance
 
@@ -95,7 +99,7 @@ class AsyncNoveltyJudge:
             similarity_scores = await loop.run_in_executor(
                 None,
                 db.compute_similarity_thread_safe,
-                code_embedding,
+                summary_embedding,
                 parent_program.island_idx,
             )
 
@@ -133,7 +137,7 @@ class AsyncNoveltyJudge:
                 most_similar_program = await loop.run_in_executor(
                     None,
                     db.get_most_similar_program_thread_safe,
-                    code_embedding,
+                    summary_embedding,
                     parent_program.island_idx,
                 )
 
@@ -271,4 +275,3 @@ class AsyncNoveltyJudge:
     def __getattr__(self, name):
         """Delegate unknown methods to sync novelty judge."""
         return getattr(self.sync_judge, name)
-

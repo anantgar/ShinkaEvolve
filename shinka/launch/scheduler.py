@@ -150,9 +150,8 @@ class JobScheduler:
 
     def _build_command(
         self,
-        exec_fname_t: str,
+        repo_path_t: str,
         results_dir_t: str,
-        repo_path_t: Optional[str] = None,
     ) -> List[str]:
         if not _has_value(repo_path_t):
             raise ValueError("repo_path is required for evaluation")
@@ -229,10 +228,10 @@ class JobScheduler:
         return self._build_eval_env()
 
     def run(
-        self, exec_fname_t: str, results_dir_t: str, repo_path_t: Optional[str] = None
+        self, repo_path_t: str, results_dir_t: str
     ) -> Tuple[Dict[str, Any], float]:
         job_id: Union[str, ProcessWithLogging]
-        cmd = self._build_command(exec_fname_t, results_dir_t, repo_path_t=repo_path_t)
+        cmd = self._build_command(repo_path_t, results_dir_t)
         start_time = time.time()
 
         if self.job_type == "local":
@@ -244,7 +243,7 @@ class JobScheduler:
                 env_overrides=self._build_local_env_overrides(),
                 cwd=(
                     repo_path_t
-                    if repo_path_t and getattr(self.config, "repo_eval_cwd", True)
+                    if getattr(self.config, "repo_eval_cwd", True)
                     else None
                 ),
             )
@@ -298,10 +297,10 @@ class JobScheduler:
         return results, rtime
 
     def submit_async(
-        self, exec_fname_t: str, results_dir_t: str, repo_path_t: Optional[str] = None
+        self, repo_path_t: str, results_dir_t: str
     ) -> Union[str, ProcessWithLogging]:
         """Submit a job asynchronously and return the job ID or process."""
-        cmd = self._build_command(exec_fname_t, results_dir_t, repo_path_t=repo_path_t)
+        cmd = self._build_command(repo_path_t, results_dir_t)
         if self.job_type == "local":
             assert isinstance(self.config, LocalJobConfig)
             return submit_local(
@@ -311,7 +310,7 @@ class JobScheduler:
                 env_overrides=self._build_local_env_overrides(),
                 cwd=(
                     repo_path_t
-                    if repo_path_t and getattr(self.config, "repo_eval_cwd", True)
+                    if getattr(self.config, "repo_eval_cwd", True)
                     else None
                 ),
             )
@@ -424,15 +423,14 @@ class JobScheduler:
 
     async def submit_async_nonblocking(
         self,
-        exec_fname_t: str,
+        repo_path_t: str,
         results_dir_t: str,
-        repo_path_t: Optional[str] = None,
     ) -> Union[str, ProcessWithLogging]:
         """Submit a job asynchronously without blocking the event loop."""
         loop = asyncio.get_event_loop()
 
         return await loop.run_in_executor(
-            self.executor, self.submit_async, exec_fname_t, results_dir_t, repo_path_t
+            self.executor, self.submit_async, repo_path_t, results_dir_t
         )
 
     async def check_job_status_async(self, job) -> bool:

@@ -170,7 +170,7 @@ def format_top_programs(
 
     parts = []
     for i, prog in enumerate(programs, 1):
-        summary = prog.repo_summary or prog.code or "No summary recorded."
+        summary = prog.repo_summary or "No summary recorded."
         program_str = f"## Repository Individual {i}\n\n"
         program_str += f"{summary}\n\n"
         program_str += f"**Score**: {prog.combined_score:.4f}\n"
