@@ -21,6 +21,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def is_repo_backed_individual(program: "Program") -> bool:
+    """Return whether a row represents a repository artifact, not legacy code."""
+    return bool(
+        getattr(program, "language", None) == "repo"
+        and (
+            getattr(program, "repo_commit", None)
+            or getattr(program, "repo_summary", None)
+        )
+    )
+
+
 def _np():
     import numpy as np
 
@@ -958,8 +969,9 @@ class ProgramDatabase:
 
         self.island_manager.assign_island(repo)
 
-        # Calculate complexity if not pre-set (or if default 0.0)
-        if repo.complexity == 0.0:
+        # Repo individuals receive source-tree metrics from the runner. Never
+        # fall back to analyzing their Markdown summaries as generic code.
+        if repo.complexity == 0.0 and not is_repo_backed_individual(repo):
             try:
                 code_metrics = analyze_code_metrics(repo.code, repo.language)
                 repo.complexity = code_metrics.get("complexity_score", 0.0)

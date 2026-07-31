@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
 from .complexity import analyze_code_metrics
-from .dbase import Program, ProgramDatabase
+from .dbase import Program, ProgramDatabase, is_repo_backed_individual
 
 logger = logging.getLogger(__name__)
 
@@ -413,8 +413,9 @@ class AsyncProgramDatabase:
             await asyncio.sleep(0)  # Yield control to event loop
             should_recompute = False
 
-            # Asynchronously calculate complexity if not provided
-            if repo.complexity == 0.0:
+            # Repo individuals receive source-tree metrics from the runner. Never
+            # fall back to analyzing their Markdown summaries as generic code.
+            if repo.complexity == 0.0 and not is_repo_backed_individual(repo):
                 try:
                     loop = asyncio.get_event_loop()
                     # Get language from program, default to python

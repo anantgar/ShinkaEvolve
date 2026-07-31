@@ -216,17 +216,17 @@ Headless route.
 
 Source: the stable repo-contract backlog.
 
-- [ ] Stop passing Markdown `repo_summary` text with language `repo` through
+- [x] Stop passing Markdown `repo_summary` text with language `repo` through
       source-code complexity analysis.
-- [ ] Select tracked, mutable source files only; exclude summaries, docs, data,
-      generated/vendor files, lockfiles, and binaries. Define whether mutable
-      test sources are included.
-- [ ] Analyze supported source files independently by language and aggregate
+- [x] Select candidate, mutable source files only; exclude summaries, docs,
+      data, generated/vendor files, lockfiles, and binaries. Mutable test
+      sources are included.
+- [x] Analyze supported source files independently by language and aggregate
       repository LOC, logical LOC, cyclomatic complexity, nesting, Halstead
       volume, weighted maintainability, and file-level score distribution.
-- [ ] Store a versioned structured repository-complexity record in metadata,
+- [x] Store a versioned structured repository-complexity record in metadata,
       while retaining a single display-compatible `Program.complexity` value.
-- [ ] Update sync/async database paths and complexity tests consistently. Keep
+- [x] Update sync/async database paths and complexity tests consistently. Keep
       complexity out of archive selection until the metric is qualified.
 - [ ] Defer: cache per-file metrics by Git blob/content hash plus analyzer
       version, so inherited files are not reanalyzed across worktrees.

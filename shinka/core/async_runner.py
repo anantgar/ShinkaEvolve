@@ -84,8 +84,10 @@ from shinka.utils import (
     truncate_log_tail,
 )
 from shinka.repo import (
+    REPO_COMPLEXITY_SCHEMA_VERSION,
     RepoWorktree,
     WorktreeManager,
+    analyze_repository_complexity,
     build_initial_summary,
     build_summary_template,
     validate_summary,
@@ -1805,6 +1807,40 @@ class ShinkaEvolveRunner:
         ):
             return await get_text_embedding_async(text, self.embedding_client)
 
+    async def _analyze_repository_complexity_async(
+        self, repo_path: Path
+    ) -> Dict[str, Any]:
+        """Analyze one committed candidate without blocking the event loop."""
+        try:
+            return await asyncio.to_thread(
+                analyze_repository_complexity,
+                repo_path,
+                mutable_paths=self.evo_config.mutable_paths,
+                immutable_paths=self.evo_config.immutable_paths,
+                ignore_paths=self.evo_config.ignore_paths,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Repository complexity analysis unavailable for %s: %s",
+                repo_path,
+                exc,
+            )
+            return {
+                "schema_version": REPO_COMPLEXITY_SCHEMA_VERSION,
+                "status": "unavailable",
+                "error": str(exc),
+                "aggregate": {},
+                "files": [],
+            }
+
+    @staticmethod
+    def _repository_complexity_score(analysis: Dict[str, Any]) -> float:
+        """Return the display-compatible aggregate complexity scalar."""
+        try:
+            return float(analysis.get("aggregate", {}).get("complexity_score", 0.0))
+        except (AttributeError, TypeError, ValueError):
+            return 0.0
+
     async def _setup_initial_repo(self):
         """Setup generation 0 for repo-backed evolution."""
         pipeline_started_at = time.time()
@@ -1843,6 +1879,7 @@ class ShinkaEvolveRunner:
         Path(results_dir).mkdir(parents=True, exist_ok=True)
         summary_artifact_path = Path(gen_dir) / "individual.md"
         await write_file_async(str(summary_artifact_path), summary_text)
+        repo_complexity = await self._analyze_repository_complexity_async(worktree.path)
 
         evaluation_failed = False
         # Run initial repo evaluation to get proper metrics
@@ -1916,6 +1953,7 @@ class ShinkaEvolveRunner:
                 "repo_path": str(worktree.path),
                 "worktree_path": str(worktree.path),
                 "summary_artifact_path": str(summary_artifact_path),
+                "repo_complexity": repo_complexity,
                 "timeline_lane_mode": "pool_slots",
                 "sampling_worker_capacity": self.max_proposal_jobs,
                 "evaluation_worker_capacity": self.max_evaluation_jobs,
@@ -1956,6 +1994,7 @@ class ShinkaEvolveRunner:
             text_feedback=text_feedback,
             timestamp=datetime.now().timestamp(),
             embedding=code_embedding or [],
+            complexity=self._repository_complexity_score(repo_complexity),
             metadata=metadata,
         )
 
@@ -2893,6 +2932,9 @@ class ShinkaEvolveRunner:
 
             snapshot = self.repo_worktree_manager.commit_child(worktree)
             child_commit = snapshot.commit_sha or parent_commit
+            repo_complexity = await self._analyze_repository_complexity_async(
+                worktree.path
+            )
             summary_path = worktree.path / self.evo_config.summary_filename
             summary_text = summary_path.read_text(encoding="utf-8")
             summary_check = validate_summary(
@@ -2917,6 +2959,7 @@ class ShinkaEvolveRunner:
                     "immutable_paths": self.evo_config.immutable_paths,
                     "candidate_digest": getattr(snapshot, "candidate_digest", None),
                     "candidate_artifact_uri": getattr(snapshot, "artifact_uri", None),
+                    "repo_complexity": repo_complexity,
                 }
             )
             text_embedding, e_cost = await self._get_text_embedding_async(summary_text)
@@ -4515,6 +4558,7 @@ Required constraints:
                 job.evaluation_started_at or job.evaluation_submitted_at
             )
             persisted_summary = job.repo_summary or ""
+            repo_complexity = (job.meta_patch_data or {}).get("repo_complexity", {})
             program = Program(
                 id=job.individual_id or str(uuid.uuid4()),
                 code=persisted_summary,
@@ -4549,6 +4593,7 @@ Required constraints:
                 agent_provider=job.agent_provider,
                 agent_model=job.agent_model,
                 embedding=job.code_embedding or [],
+                complexity=self._repository_complexity_score(repo_complexity),
                 system_prompt_id=system_prompt_id,  # Track evolved prompt
                 metadata=with_pipeline_timing(
                     {

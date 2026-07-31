@@ -66,6 +66,7 @@ def analyze_python_complexity(code_string):
         return {
             "cyclomatic_complexity": 0,
             "average_cyclomatic_complexity": 0,
+            "complexity_blocks": 0,
             "halstead_volume": 1,
             "halstead_difficulty": 0,
             "halstead_effort": 0,
@@ -115,6 +116,7 @@ def analyze_python_complexity(code_string):
     return {
         "cyclomatic_complexity": total_cc,
         "average_cyclomatic_complexity": avg_cc,
+        "complexity_blocks": len(cc_results),
         "halstead_volume": halstead_volume,
         "halstead_difficulty": halstead_difficulty,
         "halstead_effort": halstead_effort,
@@ -207,6 +209,7 @@ def analyze_cpp_complexity(code_string):
     return {
         "cyclomatic_complexity": total_cc,
         "average_cyclomatic_complexity": total_cc,  # Same as total for simplicity
+        "complexity_blocks": 1,
         "halstead_volume": volume,
         "halstead_difficulty": 1.0,  # Placeholder
         "halstead_effort": volume,  # Simplified
@@ -238,6 +241,7 @@ def analyze_generic_complexity(code_string):
     return {
         "cyclomatic_complexity": 1,
         "average_cyclomatic_complexity": 1,
+        "complexity_blocks": 1,
         "halstead_volume": max(1, loc),
         "halstead_difficulty": 1.0,
         "halstead_effort": max(1, loc),
@@ -266,6 +270,7 @@ def analyze_code_metrics(code_string, language="python"):
     Returns:
         Dictionary of complexity metrics including:
         - cyclomatic_complexity: Code complexity measure
+        - complexity_blocks: Number of analyzed complexity blocks
         - halstead_volume: Code volume metric
         - lines_of_code: Total lines
         - maintainability_index: Code maintainability score

@@ -6,6 +6,10 @@ from .summary import (
     build_summary_template,
     validate_summary,
 )
+from .complexity import (
+    REPO_COMPLEXITY_SCHEMA_VERSION,
+    analyze_repository_complexity,
+)
 from .worktree import (
     MutabilityViolation,
     RepoWorktree,
@@ -20,6 +24,8 @@ __all__ = [
     "build_initial_summary",
     "build_summary_template",
     "validate_summary",
+    "REPO_COMPLEXITY_SCHEMA_VERSION",
+    "analyze_repository_complexity",
     "MutabilityViolation",
     "RepoWorktree",
     "WorktreeManager",
