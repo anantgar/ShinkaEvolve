@@ -226,8 +226,9 @@ Source: the stable repo-contract backlog.
       volume, weighted maintainability, and file-level score distribution.
 - [x] Store a versioned structured repository-complexity record in metadata,
       while retaining a single display-compatible `Program.complexity` value.
-- [x] Update sync/async database paths and complexity tests consistently. Keep
-      complexity out of archive selection until the metric is qualified.
+- [x] Update sync/async database paths and complexity tests consistently. Use
+      rank-normalized aggregate cyclomatic complexity as a small, lower-is-
+      better archive-selection criterion alongside evaluator fitness.
 - [ ] Defer: cache per-file metrics by Git blob/content hash plus analyzer
       version, so inherited files are not reanalyzed across worktrees.
 - [ ] Defer: add child-versus-parent complexity deltas from before/after metrics

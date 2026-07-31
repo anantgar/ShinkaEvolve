@@ -2196,10 +2196,17 @@ class ProgramDatabase:
         if criterion == "combined_score":
             return repo.combined_score or 0.0
 
-        # Get code analysis metrics from metadata
-        metrics = {}
-        if repo.metadata:
-            metrics = repo.metadata.get("code_analysis_metrics", {})
+        # Repository individuals retain their per-file aggregate separately
+        # from legacy code-string metrics. Prefer the repository aggregate so
+        # archive criteria operate on the executable artifact, not its summary.
+        metadata = repo.metadata or {}
+        repo_analysis = metadata.get("repo_complexity", {})
+        repo_metrics = (
+            repo_analysis.get("aggregate", {})
+            if isinstance(repo_analysis, dict)
+            else {}
+        )
+        metrics = repo_metrics or metadata.get("code_analysis_metrics", {})
 
         if criterion == "loc":
             return metrics.get(
@@ -2370,13 +2377,14 @@ class ProgramDatabase:
         use_ranked = archive_programs is not None and len(criteria) > 1
 
         if use_ranked:
-            # Use rank-based scoring with archive context
-            # Include both programs for fair ranking
+            # Compare both programs against the same population, including
+            # each other. Omitting the counterpart makes a two-program archive
+            # ignore every non-primary criterion.
             context = [
                 p for p in archive_programs if p.id not in (program1.id, program2.id)
             ]
-            s1 = self._compute_archive_score_ranked(program1, context)
-            s2 = self._compute_archive_score_ranked(program2, context)
+            s1 = self._compute_archive_score_ranked(program1, [*context, program2])
+            s2 = self._compute_archive_score_ranked(program2, [*context, program1])
 
             if s1 != s2:
                 return s1 > s2

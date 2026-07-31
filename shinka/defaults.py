@@ -47,4 +47,6 @@ def default_prompt_patch_type_probs() -> list[float]:
 
 
 def default_archive_criteria() -> dict[str, float]:
-    return {"combined_score": 1.0}
+    # Keep evaluator fitness dominant while preferring less complex repository
+    # implementations among similarly ranked correct candidates.
+    return {"combined_score": 1.0, "complexity": -0.05}

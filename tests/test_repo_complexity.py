@@ -206,3 +206,44 @@ def test_async_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path)
         "shinka.database.async_dbase.analyze_code_metrics", fail_if_called
     )
     asyncio.run(run())
+
+
+def test_repository_complexity_is_used_by_archive_selection(tmp_path: Path):
+    db = ProgramDatabase(
+        DatabaseConfig(db_path=str(tmp_path / "programs.sqlite"), num_islands=1),
+        embedding_model=None,
+    )
+    try:
+        more_complex = Program(
+            id="more-complex",
+            language="repo",
+            repo_commit="more-complex-commit",
+            repo_summary="# Individual Summary\n",
+            correct=True,
+            combined_score=1.0,
+            metadata={
+                "repo_complexity": {
+                    "status": "ok",
+                    "aggregate": {"cyclomatic_complexity": 100},
+                }
+            },
+        )
+        simpler = Program(
+            id="simpler",
+            language="repo",
+            repo_commit="simpler-commit",
+            repo_summary="# Individual Summary\n",
+            correct=True,
+            combined_score=1.0,
+            metadata={
+                "repo_complexity": {
+                    "status": "ok",
+                    "aggregate": {"cyclomatic_complexity": 10},
+                }
+            },
+        )
+
+        assert db._get_criterion_value(simpler, "complexity") == 10
+        assert db._is_better(simpler, more_complex, [more_complex])
+    finally:
+        db.close()
