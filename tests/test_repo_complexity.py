@@ -145,11 +145,7 @@ def test_repository_complexity_empty_mutable_scope_includes_test_sources(
     assert analysis["coverage"]["excluded_file_counts"]["generated_or_vendor"] == 1
 
 
-def test_sync_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path):
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("repo summaries must not be analyzed as source")
-
-    monkeypatch.setattr("shinka.database.dbase.analyze_code_metrics", fail_if_called)
+def test_sync_database_never_analyzes_repo_summary(tmp_path: Path):
     db = ProgramDatabase(
         DatabaseConfig(db_path=str(tmp_path / "programs.sqlite"), num_islands=1),
         embedding_model=None,
@@ -157,8 +153,6 @@ def test_sync_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path):
     try:
         repo = Program(
             id="repo-sync",
-            code="# Individual Summary\n",
-            language="repo",
             repo_commit="abc123",
             repo_summary="# Individual Summary\n",
             metadata={"repo_complexity": {"status": "ok", "aggregate": {}}},
@@ -173,7 +167,7 @@ def test_sync_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path):
         db.close()
 
 
-def test_async_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path):
+def test_async_database_never_analyzes_repo_summary(tmp_path: Path):
     async def run() -> None:
         db = ProgramDatabase(
             DatabaseConfig(db_path=str(tmp_path / "programs.sqlite"), num_islands=1),
@@ -183,8 +177,6 @@ def test_async_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path)
         try:
             repo = Program(
                 id="repo-async",
-                code="# Individual Summary\n",
-                language="repo",
                 repo_commit="abc123",
                 repo_summary="# Individual Summary\n",
                 metadata={"repo_complexity": {"status": "ok", "aggregate": {}}},
@@ -199,12 +191,6 @@ def test_async_database_never_analyzes_repo_summary(monkeypatch, tmp_path: Path)
             await async_db.close_async()
             db.close()
 
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("repo summaries must not be analyzed as source")
-
-    monkeypatch.setattr(
-        "shinka.database.async_dbase.analyze_code_metrics", fail_if_called
-    )
     asyncio.run(run())
 
 
@@ -216,7 +202,6 @@ def test_repository_complexity_is_used_by_archive_selection(tmp_path: Path):
     try:
         more_complex = Program(
             id="more-complex",
-            language="repo",
             repo_commit="more-complex-commit",
             repo_summary="# Individual Summary\n",
             correct=True,
@@ -230,7 +215,6 @@ def test_repository_complexity_is_used_by_archive_selection(tmp_path: Path):
         )
         simpler = Program(
             id="simpler",
-            language="repo",
             repo_commit="simpler-commit",
             repo_summary="# Individual Summary\n",
             correct=True,

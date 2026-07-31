@@ -212,11 +212,10 @@ class SecureEvaluationScheduler:
 
     def submit_async(
         self,
-        exec_fname_t: str,
+        repo_path_t: str,
         results_dir_t: str,
-        repo_path_t: Optional[str] = None,
     ) -> str:
-        del exec_fname_t, results_dir_t
+        del results_dir_t
         if not repo_path_t:
             raise ConfigurationError("Secure evaluation requires a candidate path")
         candidate = self._candidate_artifact(repo_path_t)
@@ -239,12 +238,11 @@ class SecureEvaluationScheduler:
 
     def run(
         self,
-        exec_fname_t: str,
+        repo_path_t: str,
         results_dir_t: str,
-        repo_path_t: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], float]:
         started = time.monotonic()
-        job_id = self.submit_async(exec_fname_t, results_dir_t, repo_path_t)
+        job_id = self.submit_async(repo_path_t, results_dir_t)
         self.coordinator.wait(self._handles[job_id])
         return self.get_job_results(job_id, results_dir_t), time.monotonic() - started
 
@@ -339,12 +337,11 @@ class SecureEvaluationScheduler:
 
     async def submit_async_nonblocking(
         self,
-        exec_fname_t: str,
+        repo_path_t: str,
         results_dir_t: str,
-        repo_path_t: Optional[str] = None,
     ) -> str:
         return await asyncio.to_thread(
-            self.submit_async, exec_fname_t, results_dir_t, repo_path_t
+            self.submit_async, repo_path_t, results_dir_t
         )
 
     async def check_job_status_async(self, job: Any) -> bool:

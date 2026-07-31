@@ -31,7 +31,11 @@ class AsyncNoveltyJudge:
         self.async_llm_client = async_llm_client
 
     async def should_check_novelty_async(
-        self, code_embedding: List[float], current_gen: int, parent_program: Program, db
+        self,
+        summary_embedding: List[float],
+        current_gen: int,
+        parent_program: Program,
+        db,
     ) -> bool:
         """Async version of should_check_novelty.
 
@@ -40,7 +44,7 @@ class AsyncNoveltyJudge:
         """
         try:
             # Check basic conditions without database access
-            if not code_embedding or current_gen == 0 or not parent_program:
+            if not summary_embedding or current_gen == 0 or not parent_program:
                 return False
 
             # Check if parent program has island information and islands are initialized
@@ -62,7 +66,7 @@ class AsyncNoveltyJudge:
     async def assess_novelty_with_rejection_sampling_async(
         self,
         proposed_summary: str,
-        code_embedding: List[float],
+        summary_embedding: List[float],
         parent_program: Program,
         db,
     ) -> Tuple[bool, Dict[str, Any]]:
@@ -70,7 +74,7 @@ class AsyncNoveltyJudge:
 
         Args:
             proposed_summary: Proposed individual's repository summary text
-            code_embedding: Summary embedding vector
+            summary_embedding: Summary embedding vector
             parent_program: Parent program
             db: Database instance
 
@@ -95,7 +99,7 @@ class AsyncNoveltyJudge:
             similarity_scores = await loop.run_in_executor(
                 None,
                 db.compute_similarity_thread_safe,
-                code_embedding,
+                summary_embedding,
                 parent_program.island_idx,
             )
 
@@ -133,7 +137,7 @@ class AsyncNoveltyJudge:
                 most_similar_program = await loop.run_in_executor(
                     None,
                     db.get_most_similar_program_thread_safe,
-                    code_embedding,
+                    summary_embedding,
                     parent_program.island_idx,
                 )
 
@@ -230,39 +234,6 @@ class AsyncNoveltyJudge:
             logger.error(f"Error in novelty LLM check: {e}")
             return True, f"Error in novelty check: {e}", 0.0
 
-    async def _single_novelty_check_async(
-        self, code_content: str, similar_program: Program, parent_program: Program
-    ) -> Tuple[bool, float, str]:
-        """Perform a single async novelty check against a similar program.
-
-        Returns:
-            Tuple of (is_novel, cost, explanation)
-        """
-        try:
-            # Construct novelty prompt
-            novelty_prompt = self._construct_novelty_prompt(
-                code_content, similar_program, parent_program
-            )
-
-            # Query LLM asynchronously
-            response = await self.async_llm_client.query(
-                msg=novelty_prompt,
-                system_msg="You are a code novelty assessor. Determine if the new code is sufficiently different from the existing code.",
-            )
-
-            if not response or not response.content:
-                return True, 0.0, "No response from LLM"
-
-            # Parse response for novelty decision
-            is_novel = self._parse_novelty_response(response.content)
-            cost = response.cost if hasattr(response, "cost") else 0.0
-
-            return is_novel, cost, response.content[:200]  # Truncate explanation
-
-        except Exception as e:
-            logger.warning(f"Single novelty check failed: {e}")
-            return True, 0.0, f"Error: {str(e)}"
-
     def log_novelty_skip_message(self, reason: str):
         """Log novelty skip message."""
         self.sync_judge.log_novelty_skip_message(reason)
@@ -271,4 +242,3 @@ class AsyncNoveltyJudge:
     def __getattr__(self, name):
         """Delegate unknown methods to sync novelty judge."""
         return getattr(self.sync_judge, name)
-

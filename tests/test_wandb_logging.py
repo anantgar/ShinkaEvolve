@@ -20,7 +20,7 @@ def _make_db(tmp_path):
     db = ProgramDatabase(DatabaseConfig(db_path=str(tmp_path / "programs.sqlite")))
     first = Program(
         id="p0",
-        code="print(0)",
+        repo_summary="# Repository 0\n",
         generation=0,
         correct=True,
         combined_score=1.0,
@@ -49,7 +49,7 @@ def _make_db(tmp_path):
     )
     second = Program(
         id="p1",
-        code="print(1)",
+        repo_summary="# Repository 1\n",
         generation=1,
         parent_id="p0",
         correct=False,

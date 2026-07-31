@@ -632,21 +632,18 @@ class CombinedIslandManager:
         metadata: Dict[str, Any],
         timestamp: Optional[float] = None,
         children_count: Optional[int] = None,
-        code_diff: Any = None,
     ) -> None:
         """Insert a copied program row while preserving repo-backed fields."""
 
-        if code_diff is None:
-            code_diff = self._source_value(source, "code_diff")
         if children_count is None:
             children_count = self._source_value(source, "children_count", 0)
 
         self.cursor.execute(
             """
             INSERT INTO programs
-               (id, code, language, individual_type, parent_id,
+               (id, parent_id,
                 archive_inspiration_ids, top_k_inspiration_ids, generation,
-                timestamp, code_diff, repo_commit, repo_parent_commit,
+                timestamp, repo_commit, repo_parent_commit,
                 repo_diff, repo_summary, summary_version, changed_files,
                 artifact_uri, mutable_paths, immutable_paths, agent_session_id,
                 agent_session_name, agent_provider, agent_model, combined_score,
@@ -655,14 +652,10 @@ class CombinedIslandManager:
                 embedding_cluster_id, correct, children_count, metadata,
                 island_idx, migration_history, system_prompt_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?)
+                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_id,
-                self._source_value(source, "code", ""),
-                self._source_value(source, "language", "repo"),
-                self._source_value(source, "individual_type", "repo") or "repo",
                 new_parent_id,
                 self._json_field(
                     self._source_value(source, "archive_inspiration_ids"), []
@@ -674,7 +667,6 @@ class CombinedIslandManager:
                 timestamp
                 if timestamp is not None
                 else self._source_value(source, "timestamp", time.time()),
-                code_diff,
                 self._source_value(source, "repo_commit"),
                 self._source_value(source, "repo_parent_commit"),
                 self._source_value(source, "repo_diff"),

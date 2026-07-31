@@ -12,8 +12,7 @@ import traceback
 from typing import List, Optional, Tuple, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
-from .complexity import analyze_code_metrics
-from .dbase import Program, ProgramDatabase, is_repo_backed_individual
+from .dbase import Program, ProgramDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -368,13 +367,6 @@ class AsyncProgramDatabase:
     async def add_program_async(
         self,
         repo: Optional[Program] = None,
-        parent_id: Optional[str] = None,
-        archive_insp_ids: Optional[List[str]] = None,
-        top_k_insp_ids: Optional[List[str]] = None,
-        code_diff: Optional[str] = None,
-        meta_patch_data: Optional[Dict[str, Any]] = None,
-        code_embedding: Optional[List[float]] = None,
-        embed_cost: float = 0.0,
         verbose: bool = False,
         defer_maintenance: bool = False,
         program: Optional[Program] = None,
@@ -383,13 +375,6 @@ class AsyncProgramDatabase:
 
         Args:
             repo: Program to add
-            parent_id: ID of parent program
-            archive_insp_ids: List of archive inspiration IDs
-            top_k_insp_ids: List of top-k inspiration IDs
-            code_diff: Code diff from parent
-            meta_patch_data: Metadata about patch generation
-            code_embedding: Code embedding vector
-            embed_cost: Cost of embedding generation
             verbose: Whether to print the per-program rich summary
             defer_maintenance: When true, skip archive / best / migration
                 follow-up work so it can be replayed later off the insert
@@ -405,52 +390,13 @@ class AsyncProgramDatabase:
             "add_program_async",
             program_id=repo.id,
             generation=repo.generation,
-            parent_id=parent_id,
+            parent_id=repo.parent_id,
         )
 
         try:
             # Prepare program data outside the lock to reduce lock time
             await asyncio.sleep(0)  # Yield control to event loop
             should_recompute = False
-
-            # Repo individuals receive source-tree metrics from the runner. Never
-            # fall back to analyzing their Markdown summaries as generic code.
-            if repo.complexity == 0.0 and not is_repo_backed_individual(repo):
-                try:
-                    loop = asyncio.get_event_loop()
-                    # Get language from program, default to python
-                    language = getattr(repo, "language", "python")
-                    code_metrics = await loop.run_in_executor(
-                        self.executor,
-                        analyze_code_metrics,
-                        repo.code,
-                        language,
-                    )
-                    repo.complexity = code_metrics.get("complexity_score", 0.0)
-                    if repo.metadata is None:
-                        repo.metadata = {}
-                    repo.metadata["code_analysis_metrics"] = code_metrics
-                except Exception as e:
-                    logger.warning(
-                        f"Could not calculate complexity for program {repo.id}: {e}"
-                    )
-                    # Fallback to length
-                    repo.complexity = float(len(repo.code))
-
-            # Set additional metadata using setattr for dynamic attributes
-            if parent_id:
-                setattr(repo, "parent_id", parent_id)
-            if archive_insp_ids:
-                setattr(repo, "archive_inspiration_ids", archive_insp_ids)
-            if top_k_insp_ids:
-                setattr(repo, "top_k_inspiration_ids", top_k_insp_ids)
-            if code_diff:
-                setattr(repo, "code_diff", code_diff)
-            if meta_patch_data:
-                setattr(repo, "meta_patch_data", meta_patch_data)
-            if code_embedding:
-                setattr(repo, "code_embedding", code_embedding)
-            setattr(repo, "embed_cost", embed_cost)
 
             # Serialize writes so duplicate source_job_id checks and inserts
             # happen in a single critical section.
@@ -483,77 +429,33 @@ class AsyncProgramDatabase:
             logger.error(f"Error in async add_program: {e}")
             raise
 
-    async def add_programs_batch_async(
-        self,
-        programs_data: List[
-            Tuple[
-                Program,
-                Optional[str],
-                Optional[List[str]],
-                Optional[List[str]],
-                Optional[str],
-                Optional[Dict[str, Any]],
-                Optional[List[float]],
-                float,
-            ]
-        ],
-    ) -> None:
+    async def add_programs_batch_async(self, programs: List[Program]) -> None:
         """Add multiple programs in a batch for improved performance.
 
         Args:
-            programs_data: List of tuples containing repo data
+            programs: Repository individuals to persist
         """
-        if not programs_data:
+        if not programs:
             return
 
         # Debug tracking
         op_id = self._debug_track_start(
             "add_programs_batch_async",
-            batch_size=len(programs_data),
-            program_ids=[r[0].id for r in programs_data[:3]],  # First 3 IDs for context
+            batch_size=len(programs),
+            program_ids=[program.id for program in programs[:3]],
         )
 
         try:
             # Prepare all programs outside the lock
             await asyncio.sleep(0)  # Yield control to event loop
 
-            prepared_programs = []
-            for program_data in programs_data:
-                (
-                    repo,
-                    parent_id,
-                    archive_insp_ids,
-                    top_k_insp_ids,
-                    code_diff,
-                    meta_patch_data,
-                    code_embedding,
-                    embed_cost,
-                ) = program_data
-
-                # Set additional metadata using setattr for dynamic attributes
-                if parent_id:
-                    setattr(repo, "parent_id", parent_id)
-                if archive_insp_ids:
-                    setattr(repo, "archive_inspiration_ids", archive_insp_ids)
-                if top_k_insp_ids:
-                    setattr(repo, "top_k_inspiration_ids", top_k_insp_ids)
-                if code_diff:
-                    setattr(repo, "code_diff", code_diff)
-                if meta_patch_data:
-                    setattr(repo, "meta_patch_data", meta_patch_data)
-                if code_embedding:
-                    setattr(repo, "code_embedding", code_embedding)
-                setattr(repo, "embed_cost", embed_cost)
-
-                prepared_programs.append(repo)
-
             # Use lock only for the actual database writes
             async with self._lock:
-                for repo in prepared_programs:
+                for repo in programs:
                     await self._add_program_fast_async(repo)
 
                 # Track programs and schedule embedding recomputation
-                self.programs_added_since_embedding_recompute += len(prepared_programs)
+                self.programs_added_since_embedding_recompute += len(programs)
                 should_recompute = (
                     self.programs_added_since_embedding_recompute
                     >= self.embedding_recompute_interval
@@ -564,7 +466,7 @@ class AsyncProgramDatabase:
                 self._schedule_embedding_recomputation()
 
             logger.info(
-                f"Successfully added batch of {len(prepared_programs)} programs"
+                f"Successfully added batch of {len(programs)} programs"
             )
 
             self._debug_track_end(op_id, success=True)

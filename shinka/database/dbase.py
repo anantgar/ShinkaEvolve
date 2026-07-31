@@ -7,7 +7,6 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 import math
-from .complexity import analyze_code_metrics
 from .parents import CombinedParentSelector
 from .inspirations import CombinedContextSelector
 from .islands import CombinedIslandManager
@@ -19,17 +18,6 @@ if TYPE_CHECKING:
     from shinka.embed import EmbeddingClient
 
 logger = logging.getLogger(__name__)
-
-
-def is_repo_backed_individual(program: "Program") -> bool:
-    """Return whether a row represents a repository artifact, not legacy code."""
-    return bool(
-        getattr(program, "language", None) == "repo"
-        and (
-            getattr(program, "repo_commit", None)
-            or getattr(program, "repo_summary", None)
-        )
-    )
 
 
 def _np():
@@ -169,9 +157,6 @@ class Program:
 
     # Program identification
     id: str
-    code: str = ""
-    language: str = "repo"
-    individual_type: str = "repo"
 
     # Evolution information
     parent_id: Optional[str] = None
@@ -184,11 +169,10 @@ class Program:
     island_idx: Optional[int] = None
     generation: int = 0
     timestamp: float = field(default_factory=time.time)
-    code_diff: Optional[str] = None
     repo_commit: Optional[str] = None
     repo_parent_commit: Optional[str] = None
     repo_diff: Optional[str] = None
-    repo_summary: Optional[str] = None
+    repo_summary: str = ""
     summary_version: Optional[str] = None
     changed_files: List[str] = field(default_factory=list)
     artifact_uri: Optional[str] = None
@@ -208,7 +192,7 @@ class Program:
     children_count: int = 0
 
     # Derived features
-    complexity: float = 0.0  # Calculated based on code or other features
+    complexity: float = 0.0  # Aggregated repository source complexity
     embedding: List[float] = field(default_factory=list)
     embedding_pca_2d: List[float] = field(default_factory=list)
     embedding_pca_3d: List[float] = field(default_factory=list)
@@ -464,15 +448,11 @@ class ProgramDatabase:
             """
             CREATE TABLE IF NOT EXISTS programs (
                 id TEXT PRIMARY KEY,
-                code TEXT NOT NULL,
-                language TEXT NOT NULL,
-                individual_type TEXT NOT NULL DEFAULT 'repo',
                 parent_id TEXT,
                 archive_inspiration_ids TEXT,  -- JSON serialized List[str]
                 top_k_inspiration_ids TEXT,    -- JSON serialized List[str]
                 generation INTEGER NOT NULL,
                 timestamp REAL NOT NULL,
-                code_diff TEXT,     -- Stores edit difference
                 repo_commit TEXT,
                 repo_parent_commit TEXT,
                 repo_diff TEXT,
@@ -513,8 +493,6 @@ class ProgramDatabase:
             "CREATE INDEX IF NOT EXISTS idx_programs_complexity ON "
             "programs(complexity)",
             "CREATE INDEX IF NOT EXISTS idx_programs_parent_id ON programs(parent_id)",
-            "CREATE INDEX IF NOT EXISTS idx_programs_individual_type ON "
-            "programs(individual_type)",
             "CREATE INDEX IF NOT EXISTS idx_programs_repo_commit ON "
             "programs(repo_commit)",
             "CREATE INDEX IF NOT EXISTS idx_programs_children_count ON "
@@ -637,9 +615,8 @@ class ProgramDatabase:
         except sqlite3.Error as e:
             logger.error(f"Error during system_prompt_id migration: {e}")
 
-        # Migration 3: Add repo-backed individual artifact columns.
+        # Migration 3: Add repository artifact columns to pre-repository databases.
         repo_columns: dict[str, str] = {
-            "individual_type": "TEXT NOT NULL DEFAULT 'repo'",
             "repo_commit": "TEXT",
             "repo_parent_commit": "TEXT",
             "repo_diff": "TEXT",
@@ -666,8 +643,6 @@ class ProgramDatabase:
                 logger.error(f"Error during {column_name} migration: {e}")
 
         for index_cmd in [
-            "CREATE INDEX IF NOT EXISTS idx_programs_individual_type ON "
-            "programs(individual_type)",
             "CREATE INDEX IF NOT EXISTS idx_programs_repo_commit ON "
             "programs(repo_commit)",
         ]:
@@ -677,7 +652,24 @@ class ProgramDatabase:
             except sqlite3.Error as e:
                 logger.error(f"Error creating program index: {e}")
 
-        # Migration 4: Restore legacy compute_time semantics when detailed
+        # Migration 4: Remove the retired single-source representation.
+        self.cursor.execute("PRAGMA table_info(programs)")
+        columns = [row[1] for row in self.cursor.fetchall()]
+        try:
+            self.cursor.execute("DROP INDEX IF EXISTS idx_programs_individual_type")
+            for legacy_column in ("code", "language", "individual_type", "code_diff"):
+                if legacy_column in columns:
+                    self.cursor.execute(
+                        f"ALTER TABLE programs DROP COLUMN {legacy_column}"
+                    )
+            self.conn.commit()
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            raise RuntimeError(
+                "Could not migrate programs to the repository-only schema"
+            ) from e
+
+        # Migration 5: Restore compute_time semantics when detailed
         # pipeline timing is present. compute_time should mirror evaluation
         # runtime, while pipeline_seconds stores end-to-end wall time.
         try:
@@ -704,7 +696,7 @@ class ProgramDatabase:
         except sqlite3.Error as e:
             logger.error(f"Error during compute_time timing migration: {e}")
 
-        # Migration 4: Ensure attempt_log exists for proposal-failure accounting.
+        # Migration 6: Ensure attempt_log exists for proposal-failure accounting.
         try:
             self.cursor.execute(
                 """
@@ -969,21 +961,6 @@ class ProgramDatabase:
 
         self.island_manager.assign_island(repo)
 
-        # Repo individuals receive source-tree metrics from the runner. Never
-        # fall back to analyzing their Markdown summaries as generic code.
-        if repo.complexity == 0.0 and not is_repo_backed_individual(repo):
-            try:
-                code_metrics = analyze_code_metrics(repo.code, repo.language)
-                repo.complexity = code_metrics.get("complexity_score", 0.0)
-                if repo.metadata is None:
-                    repo.metadata = {}
-                repo.metadata["code_analysis_metrics"] = code_metrics
-            except Exception as e:
-                logger.warning(
-                    f"Could not calculate complexity for repo {repo.id}: {e}"
-                )
-                repo.complexity = float(len(repo.code))  # Fallback to length
-
         # Embedding is expected to be provided by the user.
         # Ensure repo.embedding is a list, even if empty.
         if not isinstance(repo.embedding, list):
@@ -1024,8 +1001,8 @@ class ProgramDatabase:
             self.cursor.execute(
                 """
                 INSERT INTO programs
-                   (id, code, language, individual_type, parent_id, archive_inspiration_ids,
-                    top_k_inspiration_ids, generation, timestamp, code_diff,
+                   (id, parent_id, archive_inspiration_ids,
+                    top_k_inspiration_ids, generation, timestamp,
                     repo_commit, repo_parent_commit, repo_diff, repo_summary,
                     summary_version, changed_files,
                     artifact_uri, mutable_paths, immutable_paths,
@@ -1037,20 +1014,15 @@ class ProgramDatabase:
                     children_count, metadata, island_idx, migration_history,
                     system_prompt_id)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?)
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     repo.id,
-                    repo.code,
-                    repo.language,
-                    repo.individual_type,
                     repo.parent_id,
                     archive_insp_ids_json,
                     top_k_insp_ids_json,
                     repo.generation,
                     repo.timestamp,
-                    repo.code_diff,
                     repo.repo_commit,
                     repo.repo_parent_commit,
                     repo.repo_diff,
@@ -1326,9 +1298,6 @@ class ProgramDatabase:
                     program_data[list_field] = []
             else:
                 program_data[list_field] = []
-
-        if not program_data.get("individual_type"):
-            program_data["individual_type"] = "repo"
 
         # Handle archive status
         program_data["in_archive"] = bool(program_data.get("in_archive", 0))
@@ -1868,7 +1837,7 @@ class ProgramDatabase:
     def get_programs_summary(self) -> List[Dict[str, Any]]:
         """
         Get lightweight summary of all programs for visualization.
-        Excludes heavy fields like code, embeddings, and large metadata.
+        Excludes embeddings and large metadata.
         Returns raw dicts instead of Program objects for efficiency.
         """
         if not self.cursor:
@@ -1899,8 +1868,6 @@ class ProgramDatabase:
                 {select_col("embedding_pca_2d", "'[]'")},
                 {select_col("embedding_pca_3d", "'[]'")},
                 {select_col("embedding_cluster_id", "NULL")},
-                {select_col("language", "'repo'")},
-                {select_col("individual_type", "'repo'")},
                 {select_col("repo_commit", "NULL")},
                 {select_col("repo_parent_commit", "NULL")},
                 {select_col("repo_summary", "NULL")},
@@ -2196,33 +2163,25 @@ class ProgramDatabase:
         if criterion == "combined_score":
             return repo.combined_score or 0.0
 
-        # Repository individuals retain their per-file aggregate separately
-        # from legacy code-string metrics. Prefer the repository aggregate so
-        # archive criteria operate on the executable artifact, not its summary.
+        # Archive criteria operate on the analyzed repository artifact.
         metadata = repo.metadata or {}
         repo_analysis = metadata.get("repo_complexity", {})
-        repo_metrics = (
+        metrics = (
             repo_analysis.get("aggregate", {})
             if isinstance(repo_analysis, dict)
             else {}
         )
-        metrics = repo_metrics or metadata.get("code_analysis_metrics", {})
 
         if criterion == "loc":
-            return metrics.get(
-                "lines_of_code", len(repo.code.split("\n")) if repo.code else 1
-            )
+            return metrics.get("lines_of_code", 0)
         elif criterion == "lloc":
-            return metrics.get(
-                "logical_lines_of_code",
-                len(repo.code.split("\n")) if repo.code else 1,
-            )
+            return metrics.get("logical_lines_of_code", 0)
         elif criterion == "complexity":
-            return metrics.get("cyclomatic_complexity", 1.0)
+            return metrics.get("cyclomatic_complexity", repo.complexity)
         elif criterion == "maintainability":
-            return metrics.get("maintainability_index", 100.0)
+            return metrics.get("maintainability_index", 0.0)
         elif criterion == "nesting":
-            return metrics.get("max_nesting_depth", 1)
+            return metrics.get("max_nesting_depth", 0)
 
         # Unknown criterion - return 0
         logger.warning(f"Unknown archive criterion: {criterion}")
@@ -2778,14 +2737,14 @@ class ProgramDatabase:
 
     @db_retry()
     def compute_similarity(
-        self, code_embedding: List[float], island_idx: int
+        self, summary_embedding: List[float], island_idx: int
     ) -> List[float]:
         """
         Compute similarity scores between the given embedding and all programs
         in the specified island.
 
         Args:
-            code_embedding: The embedding to compare against
+            summary_embedding: The repository-summary embedding to compare
             island_idx: The island index to constrain the search to
 
         Returns:
@@ -2794,8 +2753,8 @@ class ProgramDatabase:
         if not self.cursor:
             raise ConnectionError("DB not connected.")
 
-        if not code_embedding:
-            logger.warning("Empty code embedding provided to compute_similarity")
+        if not summary_embedding:
+            logger.warning("Empty summary embedding provided to compute_similarity")
             return []
 
         # Get all programs in the specified island that have embeddings
@@ -2818,7 +2777,7 @@ class ProgramDatabase:
             try:
                 embedding = json.loads(row["embedding"])
                 if embedding:  # Skip empty embeddings
-                    similarity = self._cosine_similarity(code_embedding, embedding)
+                    similarity = self._cosine_similarity(summary_embedding, embedding)
                     similarity_scores.append(similarity)
                 else:
                     similarity_scores.append(0.0)
@@ -2835,13 +2794,13 @@ class ProgramDatabase:
 
     @db_retry()
     def get_most_similar_program(
-        self, code_embedding: List[float], island_idx: int
+        self, summary_embedding: List[float], island_idx: int
     ) -> Optional[Program]:
         """
         Get the most similar repo to the given embedding in the specified island.
 
         Args:
-            code_embedding: The embedding to compare against
+            summary_embedding: The repository-summary embedding to compare
             island_idx: The island index to constrain the search to
 
         Returns:
@@ -2850,8 +2809,10 @@ class ProgramDatabase:
         if not self.cursor:
             raise ConnectionError("DB not connected.")
 
-        if not code_embedding:
-            logger.warning("Empty code embedding provided to get_most_similar_program")
+        if not summary_embedding:
+            logger.warning(
+                "Empty summary embedding provided to get_most_similar_program"
+            )
             return None
 
         # Get all programs in the specified island that have embeddings
@@ -2876,7 +2837,7 @@ class ProgramDatabase:
             try:
                 embedding = json.loads(row["embedding"])
                 if embedding:  # Skip empty embeddings
-                    similarity = self._cosine_similarity(code_embedding, embedding)
+                    similarity = self._cosine_similarity(summary_embedding, embedding)
                     if similarity > max_similarity:
                         max_similarity = similarity
                         most_similar_id = row["id"]
@@ -2890,21 +2851,22 @@ class ProgramDatabase:
 
     @db_retry()
     def get_most_similar_program_thread_safe(
-        self, code_embedding: List[float], island_idx: int
+        self, summary_embedding: List[float], island_idx: int
     ) -> Optional[Program]:
         """
         Thread-safe version of get_most_similar_program that creates its own DB connection.
 
         Args:
-            code_embedding: The embedding to compare against
+            summary_embedding: The repository-summary embedding to compare
             island_idx: The island index to constrain the search to
 
         Returns:
             The most similar Program object, or None if not found
         """
-        if not code_embedding:
+        if not summary_embedding:
             logger.warning(
-                "Empty code embedding provided to get_most_similar_program_thread_safe"
+                "Empty summary embedding provided to "
+                "get_most_similar_program_thread_safe"
             )
             return None
 
@@ -2931,7 +2893,7 @@ class ProgramDatabase:
                 return None
 
             # Compute similarities
-            
+
             similarities = []
             program_ids = []
 
@@ -2939,8 +2901,9 @@ class ProgramDatabase:
                 try:
                     embedding = json.loads(row["embedding"])
                     if embedding:  # Check if embedding is not empty
-                        similarity = _np().dot(code_embedding, embedding) / (
-                            _np().linalg.norm(code_embedding) * _np().linalg.norm(embedding)
+                        similarity = _np().dot(summary_embedding, embedding) / (
+                            _np().linalg.norm(summary_embedding)
+                            * _np().linalg.norm(embedding)
                         )
                         similarities.append(similarity)
                         program_ids.append(row["id"])

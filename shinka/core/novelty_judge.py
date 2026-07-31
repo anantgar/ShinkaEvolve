@@ -37,24 +37,17 @@ class NoveltyJudge:
         search_root = exec_path if exec_path.is_dir() else exec_path.parent
         return [root / self.summary_filename for root in [search_root, *search_root.parents]]
 
-    def load_proposed_novelty_text(self, exec_fname: str) -> str:
-        exec_path = Path(exec_fname)
+    def load_proposed_novelty_text(self, repo_path: str) -> str:
+        candidate_path = Path(repo_path)
 
-        for candidate in self._summary_candidates(exec_path):
+        for candidate in self._summary_candidates(candidate_path):
             if candidate.is_file():
                 summary_text = candidate.read_text(encoding="utf-8").strip()
                 if summary_text:
                     return summary_text
 
-        if exec_path.is_file():
-            logger.warning(
-                "No repo summary found for %s; falling back to file contents for novelty check.",
-                exec_fname,
-            )
-            return exec_path.read_text(encoding="utf-8")
-
         raise FileNotFoundError(
-            f"Could not locate repo summary {self.summary_filename!r} for {exec_fname!r}"
+            f"Could not locate repo summary {self.summary_filename!r} for {repo_path!r}"
         )
 
     def get_existing_novelty_text(self, most_similar_program: Program) -> str:
@@ -67,10 +60,10 @@ class NoveltyJudge:
             return repo_summary
 
         logger.warning(
-            "Most similar program %s is missing repo_summary; falling back to raw code.",
+            "Most similar program %s is missing repo_summary.",
             most_similar_program.id,
         )
-        return most_similar_program.code
+        return "No repository summary recorded."
 
     def build_novelty_user_message(
         self, proposed_summary: str, most_similar_program: Program
@@ -84,7 +77,7 @@ class NoveltyJudge:
 
     def should_check_novelty(
         self,
-        code_embedding: List[float],
+        summary_embedding: List[float],
         generation: int,
         parent_program: Optional[Program],
         database,
@@ -93,7 +86,7 @@ class NoveltyJudge:
         Check if novelty assessment should be performed.
 
         Args:
-            code_embedding: Embedding vector of the proposed code
+            summary_embedding: Embedding vector of the proposed summary
             generation: Current generation number
             parent_program: Parent program
             database: Database instance for similarity computation
@@ -101,7 +94,7 @@ class NoveltyJudge:
         Returns:
             Boolean indicating if novelty check should be performed
         """
-        if not code_embedding or generation == 0 or not parent_program:
+        if not summary_embedding or generation == 0 or not parent_program:
             return False
 
         # Check if parent program has island information and islands are initialized
@@ -119,7 +112,7 @@ class NoveltyJudge:
     def assess_novelty_with_rejection_sampling(
         self,
         proposed_summary: str,
-        code_embedding: List[float],
+        summary_embedding: List[float],
         parent_program: Program,
         database,
     ) -> Tuple[bool, dict]:
@@ -128,7 +121,7 @@ class NoveltyJudge:
 
         Args:
             proposed_summary: Proposed individual's repository summary text
-            code_embedding: Embedding vector of the proposed summary
+            summary_embedding: Embedding vector of the proposed summary
             parent_program: Parent program for island-based similarity
             database: Database instance for similarity computation
 
@@ -147,7 +140,7 @@ class NoveltyJudge:
         for attempt in range(self.max_novelty_attempts):
             # Compute similarities with programs in island
             similarity_scores = database.compute_similarity(
-                code_embedding, parent_program.island_idx
+                summary_embedding, parent_program.island_idx
             )
 
             if not similarity_scores:
@@ -182,7 +175,7 @@ class NoveltyJudge:
             if self.novelty_llm_client is not None:
                 # Get the most similar program for LLM comparison
                 most_similar_program = database.get_most_similar_program(
-                    code_embedding, parent_program.island_idx
+                    summary_embedding, parent_program.island_idx
                 )
 
                 if most_similar_program:

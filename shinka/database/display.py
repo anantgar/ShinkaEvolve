@@ -400,7 +400,7 @@ class DatabaseDisplay:
 
         # Fetch top performing programs ordered by combined_score
         query = (
-            "SELECT id, code, language, parent_id, generation, timestamp, "
+            "SELECT id, repo_summary, parent_id, generation, timestamp, "
             "combined_score, public_metrics, private_metrics, "
             "complexity, embedding, metadata, correct, island_idx, "
             "children_count "

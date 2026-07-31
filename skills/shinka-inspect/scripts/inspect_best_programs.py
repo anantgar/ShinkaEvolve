@@ -36,7 +36,6 @@ LIGHT_COLUMNS = (
     "agent_provider",
     "agent_model",
     "agent_session_id",
-    "code",
 )
 
 
@@ -71,7 +70,6 @@ def _parse_args(argv: list[str] | None = None) -> InspectConfig:
     parser.add_argument("--out", default=None, help="Output Markdown path.")
     parser.add_argument(
         "--max-summary-chars",
-        "--max-code-chars",
         dest="max_summary_chars",
         type=int,
         default=DEFAULT_MAX_SUMMARY_CHARS,
@@ -230,9 +228,7 @@ def _load_candidates(
             record.get("top_k_inspiration_ids")
         )
         record["feedback_text"] = _as_feedback(record.get("text_feedback"))
-        record["summary_text"] = str(
-            record.get("repo_summary") or record.get("code") or ""
-        )
+        record["summary_text"] = str(record.get("repo_summary") or "")
     return [record for record in records if record["score"] is not None]
 
 

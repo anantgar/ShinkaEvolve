@@ -19,7 +19,7 @@ Do not return a standalone full-code response for Shinka to apply.
 CROSS_ITER_MSG = """# Current repository individual
 
 Here is the current repository summary:
-{code_content}
+{repo_summary}
 
 Here are the performance metrics of the repository individual:
 
@@ -45,7 +45,7 @@ def get_cross_component(
     # Sample a random inspiration
     inspiration = random.choice(all_inspirations)
 
-    inspiration_summary = inspiration.repo_summary or inspiration.code or "No summary recorded."
+    inspiration_summary = inspiration.repo_summary or "No summary recorded."
     crossover_inspiration = "# Crossover Inspiration Repository Individual\n"
     crossover_inspiration += f"{inspiration_summary}\n\n"
     crossover_inspiration += f"Performance metrics: {perf_str(inspiration.combined_score, inspiration.public_metrics)}\n\n"

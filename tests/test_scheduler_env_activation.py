@@ -117,7 +117,7 @@ def test_job_scheduler_builds_local_sourced_command() -> None:
         ),
     )
 
-    cmd = scheduler._build_command("program.py", "results", repo_path_t="repo")
+    cmd = scheduler._build_command("repo", "results")
 
     assert cmd[0:2] == ["bash", "-lc"]
     assert 'source ".venv/bin/activate"' in cmd[2]
@@ -130,7 +130,7 @@ def test_job_scheduler_uses_current_python_without_activation() -> None:
         config=LocalJobConfig(eval_program_path="evaluate.py"),
     )
 
-    cmd = scheduler._build_command("program.py", "results", repo_path_t="repo")
+    cmd = scheduler._build_command("repo", "results")
 
     assert cmd[0] == sys.executable
     assert cmd[1:3] == ["evaluate.py", "--repo_path"]
@@ -144,7 +144,7 @@ def test_job_scheduler_rejects_missing_repo_path() -> None:
     )
 
     with pytest.raises(ValueError, match="repo_path is required"):
-        scheduler._build_command("program.py", "results")
+        scheduler._build_command("", "results")
 
 
 def test_job_scheduler_builds_local_numeric_thread_env_overrides() -> None:

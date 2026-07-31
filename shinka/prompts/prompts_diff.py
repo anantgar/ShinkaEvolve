@@ -8,7 +8,7 @@ The repository files you edit are the proposed change.
 DIFF_ITER_MSG = """# Current repository individual
 
 Here is the current repository summary:
-{code_content}
+{repo_summary}
 
 Here are the performance metrics of the repository individual:
 

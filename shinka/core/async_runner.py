@@ -49,9 +49,9 @@ from shinka.launch import (
     validate_secure_job_config,
 )
 from shinka.run_manifest import ensure_wandb_run_id, write_run_manifest
-from shinka.edit.async_apply import (
+from shinka.utils.async_io import (
     get_text_embedding_async,
-    write_file_async,
+    write_text_async,
 )
 from shinka.core.sampler import PromptSampler
 from shinka.core.summarizer import MetaSummarizer
@@ -79,7 +79,6 @@ from shinka.pricing.catalog import (
 )
 from shinka.wandb_logging import ShinkaWandbLogger
 from shinka.utils import (
-    get_language_extension,
     parse_time_to_seconds,
     truncate_log_tail,
 )
@@ -163,7 +162,7 @@ class AsyncRunningJob:
     """Async version of RunningJob with additional async metadata."""
 
     job_id: Union[str, Any]
-    exec_fname: str
+    repo_path: str
     results_dir: str
     start_time: float
     proposal_started_at: float
@@ -178,13 +177,12 @@ class AsyncRunningJob:
     parent_id: Optional[str] = None
     archive_insp_ids: List[str] = field(default_factory=list)
     top_k_insp_ids: List[str] = field(default_factory=list)
-    code_diff: Optional[str] = None
+    repo_diff: Optional[str] = None
     meta_patch_data: Dict[str, Any] = field(default_factory=dict)
-    code_embedding: Optional[List[float]] = None
+    summary_embedding: Optional[List[float]] = None
     embed_cost: float = 0.0
     novelty_cost: float = 0.0  # Track novelty checking cost
     proposal_task_id: Optional[str] = None  # Track which proposal task created this job
-    repo_path: Optional[str] = None
     repo_commit: Optional[str] = None
     repo_parent_commit: Optional[str] = None
     repo_summary: Optional[str] = None
@@ -785,7 +783,6 @@ class ShinkaEvolveRunner:
         )
         self.assigned_generations: Set[int] = set()  # Track assigned gens
         self.best_program_id: Optional[str] = None
-        self.lang_ext = get_language_extension(evo_config.language)
         # Async coordination
         self.slot_available = asyncio.Event()
         self.should_stop = asyncio.Event()
@@ -1878,7 +1875,7 @@ class ShinkaEvolveRunner:
         Path(gen_dir).mkdir(parents=True, exist_ok=True)
         Path(results_dir).mkdir(parents=True, exist_ok=True)
         summary_artifact_path = Path(gen_dir) / "individual.md"
-        await write_file_async(str(summary_artifact_path), summary_text)
+        await write_text_async(summary_artifact_path, summary_text)
         repo_complexity = await self._analyze_repository_complexity_async(worktree.path)
 
         evaluation_failed = False
@@ -1895,7 +1892,6 @@ class ShinkaEvolveRunner:
                 self.scheduler.run,
                 str(worktree.path),
                 results_dir,
-                str(worktree.path),
             )
             evaluation_finished_at = time.time()
             postprocess_started_at = evaluation_finished_at
@@ -1911,8 +1907,8 @@ class ShinkaEvolveRunner:
             rtime = 0.0
             evaluation_failed = True
 
-        code_embedding, e_cost = await self._get_text_embedding_async(summary_text)
-        if self.verbose and code_embedding:
+        summary_embedding, e_cost = await self._get_text_embedding_async(summary_text)
+        if self.verbose and summary_embedding:
             logger.info(f"Initial repo embedding computed (cost: ${e_cost:.4f})")
 
         # Extract metrics properly like the sync version.
@@ -1993,7 +1989,7 @@ class ShinkaEvolveRunner:
             correct=correct_val if not evaluation_failed else True,
             text_feedback=text_feedback,
             timestamp=datetime.now().timestamp(),
-            embedding=code_embedding or [],
+            embedding=summary_embedding or [],
             complexity=self._repository_complexity_score(repo_complexity),
             metadata=metadata,
         )
@@ -2674,10 +2670,8 @@ class ShinkaEvolveRunner:
 
             # Setup directories - create them synchronously to avoid race conditions
             gen_dir = f"{self.results_dir}/{FOLDER_PREFIX}_{generation}"
-            exec_fname = f"{gen_dir}/main.{self.lang_ext}"
             results_dir = f"{gen_dir}/results"
             lock_file = f"{gen_dir}/.generation_lock"
-            # TODO: I dont think that these paths are used
 
             # Check if another task is already working on this generation
             # Run blocking file IO in executor
@@ -2734,7 +2728,7 @@ class ShinkaEvolveRunner:
             return await self._generate_evolved_proposal(
                 generation,
                 task_id,
-                exec_fname,
+                gen_dir,
                 results_dir,
                 meta_recs,
                 meta_summary,
@@ -2775,7 +2769,7 @@ class ShinkaEvolveRunner:
         self,
         generation: int,
         task_id: str,
-        exec_fname: str,
+        generation_dir: str,
         results_dir: str,
         meta_recs: Optional[str],
         meta_summary: Optional[str],
@@ -2800,7 +2794,7 @@ class ShinkaEvolveRunner:
         parent_program: Optional[Program] = None
         archive_programs: List[Program] = []
         top_k_programs: List[Program] = []
-        code_diff: Optional[str] = None
+        repo_diff: Optional[str] = None
         meta_patch_data: Dict[str, Any] = {}
         text_embedding: Optional[List[float]] = None
         worktree: Optional[RepoWorktree] = None
@@ -2890,7 +2884,7 @@ class ShinkaEvolveRunner:
                     last_failure_reason = "Program patch generation returned no result"
                     continue
 
-                code_diff, meta_patch_data, success = agent_result
+                repo_diff, meta_patch_data, success = agent_result
                 api_costs += meta_patch_data.get("api_costs", 0.0)
 
                 snapshot = self.repo_worktree_manager.diff_parent(
@@ -3068,7 +3062,6 @@ class ShinkaEvolveRunner:
                     evaluation_started_at,
                     running_eval_jobs_at_submit,
                 ) = await self._submit_evaluation_job_with_slot(
-                    exec_fname=exec_fname,
                     results_dir=results_dir,
                     sampling_worker_id=sampling_worker_id,
                     repo_path=str(worktree.path) if worktree else None,
@@ -3077,7 +3070,7 @@ class ShinkaEvolveRunner:
                 # Create running job
                 running_job = AsyncRunningJob(
                     job_id=job_id,
-                    exec_fname=exec_fname,
+                    repo_path=str(worktree.path),
                     results_dir=results_dir,
                     start_time=proposal_started_at,
                     proposal_started_at=proposal_started_at,
@@ -3092,13 +3085,12 @@ class ShinkaEvolveRunner:
                     parent_id=parent_program.id,
                     archive_insp_ids=[p.id for p in archive_programs],
                     top_k_insp_ids=[p.id for p in top_k_programs],
-                    code_diff=code_diff,
+                    repo_diff=repo_diff,
                     meta_patch_data=meta_patch_data,
-                    code_embedding=text_embedding,
+                    summary_embedding=text_embedding,
                     embed_cost=embed_cost,
                     novelty_cost=novelty_total_cost,  # Store novelty cost in running job
                     proposal_task_id=task_id,
-                    repo_path=str(worktree.path) if worktree else None,
                     repo_commit=child_commit,
                     repo_parent_commit=parent_commit,
                     repo_summary=summary_text,
@@ -3151,16 +3143,16 @@ class ShinkaEvolveRunner:
                 logger.error(f"Error submitting job: {e}")
                 await self._record_terminal_failed_proposal(
                     generation=generation,
-                    exec_fname=exec_fname,
+                    generation_dir=generation_dir,
                     proposal_started_at=proposal_started_at,
                     sampling_worker_id=sampling_worker_id,
                     active_proposals_at_start=active_proposals_at_start,
                     parent_program=parent_program,
                     archive_programs=archive_programs,
                     top_k_programs=top_k_programs,
-                    code_diff=code_diff,
+                    repo_diff=repo_diff,
                     meta_patch_data=meta_patch_data,
-                    code_embedding=text_embedding,
+                    summary_embedding=text_embedding,
                     embed_cost=embed_cost,
                     novelty_cost=novelty_total_cost,
                     api_costs=api_costs,
@@ -3174,16 +3166,16 @@ class ShinkaEvolveRunner:
         )
         await self._record_terminal_failed_proposal(
             generation=generation,
-            exec_fname=exec_fname,
+            generation_dir=generation_dir,
             proposal_started_at=proposal_started_at,
             sampling_worker_id=sampling_worker_id,
             active_proposals_at_start=active_proposals_at_start,
             parent_program=parent_program,
             archive_programs=archive_programs,
             top_k_programs=top_k_programs,
-            code_diff=code_diff,
+            repo_diff=repo_diff,
             meta_patch_data=meta_patch_data,
-            code_embedding=text_embedding,
+            summary_embedding=text_embedding,
             embed_cost=embed_cost,
             novelty_cost=novelty_total_cost,
             api_costs=api_costs,
@@ -3236,7 +3228,7 @@ class ShinkaEvolveRunner:
         # Save LLM response
         if response and response.content:
             response_file = attempt_dir / "llm_response.txt"
-            await write_file_async(str(response_file), response.content)
+            await write_text_async(response_file, response.content)
 
         response_kwargs = getattr(response, "kwargs", {}) if response else {}
         response_kwargs = {**(headless_artifacts or {}), **response_kwargs}
@@ -3245,8 +3237,8 @@ class ShinkaEvolveRunner:
             prompt_source = Path(headless_prompt_path)
             if prompt_source.exists():
                 prompt_file = attempt_dir / "headless_prompt.md"
-                await write_file_async(
-                    str(prompt_file),
+                await write_text_async(
+                    prompt_file,
                     prompt_source.read_text(encoding="utf-8"),
                 )
         for source_key, destination_name in (
@@ -3258,15 +3250,15 @@ class ShinkaEvolveRunner:
                 continue
             source_path = Path(source_value)
             if source_path.is_file():
-                await write_file_async(
-                    str(attempt_dir / destination_name),
+                await write_text_async(
+                    attempt_dir / destination_name,
                     source_path.read_text(encoding="utf-8", errors="replace"),
                 )
 
         # Save patch text if available
         if patch_text:
             patch_file = attempt_dir / "patch.txt"
-            await write_file_async(str(patch_file), patch_text)
+            await write_text_async(patch_file, patch_text)
 
         # Save metadata as JSON
         metadata = {
@@ -3291,7 +3283,7 @@ class ShinkaEvolveRunner:
                 )
 
         metadata_file = attempt_dir / "metadata.json"
-        await write_file_async(str(metadata_file), json.dumps(metadata, indent=2))
+        await write_text_async(metadata_file, json.dumps(metadata, indent=2))
 
     def _classify_failed_proposal(
         self,
@@ -3317,11 +3309,7 @@ class ShinkaEvolveRunner:
 
         if (meta_patch_data or {}).get("route_failure_class"):
             return str((meta_patch_data or {})["route_failure_class"])
-        if (
-            "could not extract code" in combined
-            or "llm response content was none" in combined
-            or "no evolve-block regions found" in combined
-        ):
+        if "llm response content was none" in combined:
             return "llm_output_invalid"
         if (
             "did not apply any changes" in combined
@@ -3347,38 +3335,24 @@ class ShinkaEvolveRunner:
             )
         ):
             return "policy_violation"
-        if (
-            "search text not found" in combined
-            or "no changes applied" in combined
-            or "editable regions" in combined
-        ):
-            return "patch_apply_failed"
-
         return "proposal_generation_failed"
 
     def _collect_failure_artifacts(
         self,
         *,
-        exec_fname: str,
+        generation_dir: str,
         meta_patch_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Collect the well-known artifact paths for a failed generation."""
-        exec_path = Path(exec_fname)
-        gen_dir = exec_path.parent
+        gen_dir = Path(generation_dir)
         artifacts: Dict[str, Any] = {
             "generation_dir": str(gen_dir),
-            "generated_code_path": str(exec_path),
             "results_dir": str(gen_dir / "results"),
         }
 
         def add_if_exists(key: str, path: Path) -> None:
             if path.exists():
                 artifacts[key] = str(path)
-
-        add_if_exists("generation_diff_path", gen_dir / "edit.diff")
-        add_if_exists("generation_search_replace_path", gen_dir / "search_replace.txt")
-        add_if_exists("generation_rewrite_path", gen_dir / "rewrite.txt")
-        add_if_exists("generation_original_path", gen_dir / f"original.{self.lang_ext}")
 
         if meta_patch_data:
             novelty_attempt = meta_patch_data.get("novelty_attempt")
@@ -3398,7 +3372,7 @@ class ShinkaEvolveRunner:
                 artifacts["attempt_dir"] = str(attempt_dir)
                 add_if_exists("attempt_metadata_path", attempt_dir / "metadata.json")
                 add_if_exists("llm_response_path", attempt_dir / "llm_response.txt")
-                add_if_exists("attempt_patch_path", attempt_dir / "patch.txt")
+                add_if_exists("agent_response_path", attempt_dir / "agent_response.txt")
                 add_if_exists(
                     "headless_stdout_path", attempt_dir / "headless_stdout.log"
                 )
@@ -3411,34 +3385,11 @@ class ShinkaEvolveRunner:
 
         return artifacts
 
-    def _get_failure_language(self, exec_path: Path) -> str:
-        """Infer the failed proposal language from config or the generated filename."""
-        configured_language = getattr(self.evo_config, "language", None)
-        if configured_language:
-            return configured_language
-
-        ext = exec_path.suffix.lstrip(".").lower()
-        return {
-            "py": "python",
-            "js": "javascript",
-            "ts": "typescript",
-            "cpp": "cpp",
-            "cc": "cpp",
-            "cxx": "cpp",
-            "cu": "cuda",
-            "go": "go",
-            "sv": "verilog",
-            "f90": "fortran",
-            "f95": "fortran",
-            "f03": "fortran",
-            "f08": "fortran",
-        }.get(ext, ext or "python")
-
     async def _write_failure_artifact_async(
         self,
         *,
         generation: int,
-        exec_fname: str,
+        generation_dir: str,
         parent_program: Optional[Program],
         archive_programs: List[Program],
         top_k_programs: List[Program],
@@ -3449,23 +3400,21 @@ class ShinkaEvolveRunner:
         failure_stage: str,
         failure_class: str,
         failure_reason: str,
-        code_embedding: Optional[List[float]],
+        summary_embedding: Optional[List[float]],
         proposal_started_at: float,
         sampling_worker_id: Optional[int],
         active_proposals_at_start: int,
     ) -> Tuple[str, Dict[str, Any]]:
         """Write the durable `failure.json` payload for a failed generation."""
-        exec_path = Path(exec_fname)
-        failure_path = exec_path.parent / "failure.json"
+        failure_path = Path(generation_dir) / "failure.json"
         artifacts = self._collect_failure_artifacts(
-            exec_fname=exec_fname,
+            generation_dir=generation_dir,
             meta_patch_data=meta_patch_data,
         )
 
         payload = {
             "generation": generation,
             "node_kind": "failed_proposal",
-            "language": self._get_failure_language(exec_path),
             "failure_stage": failure_stage,
             "failure_class": failure_class,
             "failure_reason": failure_reason,
@@ -3474,8 +3423,7 @@ class ShinkaEvolveRunner:
             "sampling_worker_id": sampling_worker_id,
             "active_proposals_at_start": active_proposals_at_start,
             "downstream_eval_submitted": False,
-            "generated_code_available": exec_path.exists(),
-            "code_embedding_available": bool(code_embedding),
+            "summary_embedding_available": bool(summary_embedding),
             "parent_id": parent_program.id if parent_program else None,
             "archive_inspiration_ids": [p.id for p in archive_programs],
             "top_k_inspiration_ids": [p.id for p in top_k_programs],
@@ -3504,8 +3452,8 @@ class ShinkaEvolveRunner:
             "failure_json_path": str(failure_path),
         }
 
-        await write_file_async(
-            str(failure_path),
+        await write_text_async(
+            failure_path,
             json.dumps(payload, indent=2, sort_keys=True),
         )
         return str(failure_path), payload
@@ -3514,16 +3462,16 @@ class ShinkaEvolveRunner:
         self,
         *,
         generation: int,
-        exec_fname: str,
+        generation_dir: str,
         proposal_started_at: float,
         sampling_worker_id: Optional[int],
         active_proposals_at_start: int,
         parent_program: Optional[Program],
         archive_programs: List[Program],
         top_k_programs: List[Program],
-        code_diff: Optional[str],
+        repo_diff: Optional[str],
         meta_patch_data: Optional[Dict[str, Any]],
-        code_embedding: Optional[List[float]],
+        summary_embedding: Optional[List[float]],
         embed_cost: float,
         novelty_cost: float,
         api_costs: float,
@@ -3544,7 +3492,7 @@ class ShinkaEvolveRunner:
         )
         failure_json_path, failure_payload = await self._write_failure_artifact_async(
             generation=generation,
-            exec_fname=exec_fname,
+            generation_dir=generation_dir,
             parent_program=parent_program,
             archive_programs=archive_programs,
             top_k_programs=top_k_programs,
@@ -3555,7 +3503,7 @@ class ShinkaEvolveRunner:
             failure_stage=failure_stage,
             failure_class=failure_class,
             failure_reason=failure_reason,
-            code_embedding=code_embedding,
+            summary_embedding=summary_embedding,
             proposal_started_at=proposal_started_at,
             sampling_worker_id=sampling_worker_id,
             active_proposals_at_start=active_proposals_at_start,
@@ -3567,14 +3515,13 @@ class ShinkaEvolveRunner:
             status="failed",
             details={
                 "node_kind": "failed_proposal",
-                "language": failure_payload.get("language"),
                 "failure_stage": failure_stage,
                 "failure_class": failure_class,
                 "failure_reason": failure_reason,
                 "parent_id": parent_program.id if parent_program else None,
                 "archive_inspiration_ids": [p.id for p in archive_programs],
                 "top_k_inspiration_ids": [p.id for p in top_k_programs],
-                "code_diff_available": bool(code_diff),
+                "repo_diff_available": bool(repo_diff),
                 "patch_type": (meta_patch_data or {}).get("patch_type"),
                 "patch_name": (meta_patch_data or {}).get("patch_name"),
                 "patch_description": (meta_patch_data or {}).get("patch_description"),
@@ -3602,9 +3549,7 @@ class ShinkaEvolveRunner:
                 "sampling_worker_capacity": self.max_proposal_jobs,
                 "evaluation_worker_capacity": self.max_evaluation_jobs,
                 "postprocess_worker_capacity": self.max_db_workers,
-                "generated_code_available": failure_payload.get(
-                    "generated_code_available", False
-                ),
+                "summary_embedding_available": bool(summary_embedding),
                 "downstream_eval_submitted": False,
             },
         )
@@ -3768,8 +3713,8 @@ Required constraints:
                     parent_id=parent_program.id,
                     parent_commit=self._worktree_parent_identity(agent_target_worktree),
                 )
-                summary_written = await write_file_async(
-                    str(required_summary_path),
+                summary_written = await write_text_async(
+                    required_summary_path,
                     summary_template,
                 )
                 if not summary_written:
@@ -4311,152 +4256,6 @@ Required constraints:
             self.MAX_DB_RETRY_ATTEMPTS,
         )
 
-    async def _persist_failed_generation(
-        self,
-        *,
-        generation: int,
-        exec_fname: str,
-        proposal_started_at: float,
-        sampling_worker_id: Optional[int],
-        active_proposals_at_start: int,
-        parent_program: Optional[Program],
-        archive_programs: List[Program],
-        top_k_programs: List[Program],
-        code_diff: Optional[str],
-        meta_patch_data: Optional[Dict[str, Any]],
-        code_embedding: Optional[List[float]],
-        embed_cost: float,
-        novelty_cost: float,
-        api_costs: float,
-        failure_stage: str,
-        failure_reason: str,
-    ) -> Optional[Program]:
-        """Persist a pre-evaluation failure as an incorrect program row."""
-        sampling_finished_at = time.time()
-        postprocess_started_at = sampling_finished_at
-        postprocess_finished_at = postprocess_started_at
-        source_job_id = f"failed:{failure_stage}:{generation}"
-        try:
-            exec_path = Path(exec_fname)
-            code = ""
-            if exec_path.exists():
-                code = await self._read_file_async(exec_fname) or ""
-            failure_class = self._classify_failed_proposal(
-                failure_stage=failure_stage,
-                failure_reason=failure_reason,
-                meta_patch_data=meta_patch_data,
-            )
-            failure_json_path, failure_payload = (
-                await self._write_failure_artifact_async(
-                    generation=generation,
-                    exec_fname=exec_fname,
-                    parent_program=parent_program,
-                    archive_programs=archive_programs,
-                    top_k_programs=top_k_programs,
-                    meta_patch_data=meta_patch_data,
-                    embed_cost=embed_cost,
-                    novelty_cost=novelty_cost,
-                    api_costs=api_costs,
-                    failure_stage=failure_stage,
-                    failure_class=failure_class,
-                    failure_reason=failure_reason,
-                    code_embedding=code_embedding,
-                    proposal_started_at=proposal_started_at,
-                    sampling_worker_id=sampling_worker_id,
-                    active_proposals_at_start=active_proposals_at_start,
-                )
-            )
-            metadata = with_pipeline_timing(
-                {
-                    **(meta_patch_data or {}),
-                    "node_kind": "failed_proposal",
-                    "api_costs": api_costs,
-                    "embed_cost": embed_cost,
-                    "novelty_cost": novelty_cost,
-                    "failure_stage": failure_stage,
-                    "failure_class": failure_class,
-                    "failure_reason": failure_reason,
-                    "failure_persisted": True,
-                    "results_missing": True,
-                    "safe_processing": False,
-                    "downstream_eval_submitted": False,
-                    "failure_json_path": failure_json_path,
-                    "generated_code_available": bool(code.strip()),
-                    "failure_artifacts": failure_payload.get("artifacts", {}),
-                    "source_job_id": source_job_id,
-                    "source_generation": generation,
-                    "stdout_log": "",
-                    "stderr_log": failure_reason,
-                    "sampling_worker_id": sampling_worker_id,
-                    "evaluation_worker_id": None,
-                    "postprocess_worker_id": None,
-                    "active_proposals_at_start": active_proposals_at_start,
-                    "running_eval_jobs_at_submit": 0,
-                    "timeline_lane_mode": "pool_slots",
-                    "sampling_worker_capacity": self.max_proposal_jobs,
-                    "evaluation_worker_capacity": self.max_evaluation_jobs,
-                    "postprocess_worker_capacity": self.max_db_workers,
-                },
-                pipeline_started_at=proposal_started_at,
-                sampling_started_at=proposal_started_at,
-                sampling_finished_at=sampling_finished_at,
-                evaluation_started_at=sampling_finished_at,
-                evaluation_finished_at=sampling_finished_at,
-                postprocess_started_at=postprocess_started_at,
-                postprocess_finished_at=postprocess_finished_at,
-            )
-            program = Program(
-                id=str(uuid.uuid4()),
-                code=code,
-                generation=generation,
-                correct=False,
-                combined_score=0.0,
-                public_metrics={},
-                private_metrics={},
-                text_feedback=failure_reason,
-                timestamp=datetime.now().timestamp(),
-                parent_id=parent_program.id if parent_program else None,
-                archive_inspiration_ids=[p.id for p in archive_programs],
-                top_k_inspiration_ids=[p.id for p in top_k_programs],
-                code_diff=code_diff,
-                embedding=code_embedding or [],
-                system_prompt_id=(meta_patch_data or {}).get("system_prompt_id"),
-                metadata=metadata,
-            )
-
-            await self.async_db.add_program_async(
-                program,
-                parent_id=program.parent_id,
-                archive_insp_ids=program.archive_inspiration_ids,
-                top_k_insp_ids=program.top_k_inspiration_ids,
-                code_diff=program.code_diff,
-                meta_patch_data=meta_patch_data,
-                code_embedding=program.embedding,
-                embed_cost=embed_cost,
-                verbose=self.verbose,
-                defer_maintenance=True,
-            )
-
-            await self._update_completed_generations()
-            self._record_progress()
-            self.slot_available.set()
-            self._log_program_to_wandb(program)
-            logger.info(
-                "Persisted failed generation %s as incorrect program %s (%s)",
-                generation,
-                program.id,
-                failure_stage,
-            )
-            return program
-        except Exception as e:
-            logger.error(
-                "Failed to persist failed generation %s (%s): %r",
-                generation,
-                failure_stage,
-                e,
-            )
-            return None
-
     async def _persist_completed_job(
         self, job: AsyncRunningJob
     ) -> CompletedJobPersistResult:
@@ -4557,13 +4356,9 @@ Required constraints:
             evaluation_started_at = (
                 job.evaluation_started_at or job.evaluation_submitted_at
             )
-            persisted_summary = job.repo_summary or ""
             repo_complexity = (job.meta_patch_data or {}).get("repo_complexity", {})
             program = Program(
                 id=job.individual_id or str(uuid.uuid4()),
-                code=persisted_summary,
-                language="repo",
-                individual_type="repo",
                 generation=job.generation,
                 correct=correct_val,
                 combined_score=combined_score,
@@ -4574,11 +4369,10 @@ Required constraints:
                 parent_id=job.parent_id,
                 archive_inspiration_ids=job.archive_insp_ids,
                 top_k_inspiration_ids=job.top_k_insp_ids,
-                code_diff=job.code_diff,
                 repo_commit=job.repo_commit,
                 repo_parent_commit=job.repo_parent_commit,
-                repo_diff=job.code_diff,
-                repo_summary=job.repo_summary,
+                repo_diff=job.repo_diff,
+                repo_summary=job.repo_summary or "",
                 summary_version=job.summary_version,
                 changed_files=job.changed_files,
                 artifact_uri=(
@@ -4592,7 +4386,7 @@ Required constraints:
                 agent_session_name=job.agent_session_name,
                 agent_provider=job.agent_provider,
                 agent_model=job.agent_model,
-                embedding=job.code_embedding or [],
+                embedding=job.summary_embedding or [],
                 complexity=self._repository_complexity_score(repo_complexity),
                 system_prompt_id=system_prompt_id,  # Track evolved prompt
                 metadata=with_pipeline_timing(
@@ -4638,13 +4432,6 @@ Required constraints:
                 added = await asyncio.wait_for(
                     self.async_db.add_program_async(
                         program,
-                        parent_id=job.parent_id,
-                        archive_insp_ids=job.archive_insp_ids,
-                        top_k_insp_ids=job.top_k_insp_ids,
-                        code_diff=job.code_diff,
-                        meta_patch_data=job.meta_patch_data,
-                        code_embedding=job.code_embedding,
-                        embed_cost=job.embed_cost,
                         verbose=self.verbose,
                         defer_maintenance=True,
                     ),
@@ -4812,7 +4599,7 @@ Required constraints:
                 f"❌ CRITICAL: Exception in safe processing for job {job.job_id} (gen {job.generation}): {e}"
             )
             logger.error(
-                f"   Job details: exec_fname={job.exec_fname}, results_dir={job.results_dir}"
+                f"   Job details: repo_path={job.repo_path}, results_dir={job.results_dir}"
             )
             return CompletedJobPersistResult(job=job, success=False)
         finally:
@@ -5556,10 +5343,9 @@ Required constraints:
 
     async def _submit_evaluation_job_with_slot(
         self,
-        exec_fname: str,
         results_dir: str,
         sampling_worker_id: Optional[int],
-        repo_path: Optional[str] = None,
+        repo_path: str,
     ) -> tuple[Union[str, Any], int, float, float, int]:
         """Reserve an evaluation slot before submitting the evaluation job."""
         if repo_path is None:
@@ -5570,7 +5356,7 @@ Required constraints:
         evaluation_worker_id = await self.evaluation_slot_pool.acquire()
         try:
             job_id = await self.scheduler.submit_async_nonblocking(
-                exec_fname, results_dir, repo_path
+                repo_path, results_dir
             )
         except Exception:
             await self.evaluation_slot_pool.release(evaluation_worker_id)
@@ -6413,33 +6199,3 @@ Required constraints:
                     f"id {best_program.id[:6]}... "
                     f"Copied to {best_dir}"
                 )
-
-    def _extract_code_from_response(self, response_content: str) -> Optional[str]:
-        """Extract code from LLM response."""
-        # Look for code blocks
-        import re
-
-        # Try to find code between triple backticks
-        code_match = re.search(
-            r"```(?:python|py)?\s*\n(.*?)\n```", response_content, re.DOTALL
-        )
-        if code_match:
-            return code_match.group(1).strip()
-
-        # If no code block found, return the whole response
-        return response_content.strip()
-
-    async def _read_file_async(self, file_path: str) -> Optional[str]:
-        """Read file asynchronously."""
-        try:
-
-            def read_file():
-                with open(file_path, "r", encoding="utf-8") as f:
-                    return f.read()
-
-            loop = asyncio.get_event_loop()
-            content = await loop.run_in_executor(None, read_file)
-            return content
-        except Exception as e:
-            logger.warning(f"Failed to read file {file_path}: {e}")
-            return None

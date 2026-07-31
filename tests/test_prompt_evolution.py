@@ -545,7 +545,7 @@ class TestProgramSystemPromptId:
         """Test creating a program with system_prompt_id."""
         program = Program(
             id="test-program-id",
-            code="print('hello')",
+            repo_summary="# Repository\n",
             generation=1,
             system_prompt_id="test-prompt-id",
         )
@@ -556,7 +556,7 @@ class TestProgramSystemPromptId:
         """Test creating a program without system_prompt_id."""
         program = Program(
             id="test-program-id",
-            code="print('hello')",
+            repo_summary="# Repository\n",
             generation=1,
         )
 
@@ -566,7 +566,7 @@ class TestProgramSystemPromptId:
         """Test program serialization with system_prompt_id."""
         program = Program(
             id="test-id",
-            code="code",
+            repo_summary="# Repository\n",
             generation=1,
             system_prompt_id="prompt-id",
         )

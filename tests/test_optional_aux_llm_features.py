@@ -114,8 +114,7 @@ def test_side_effects_and_prompt_sampling_work_when_aux_features_disabled(
 
     program = Program(
         id="prog-1",
-        code="print(1)\n",
-        language="python",
+        repo_summary="# Repository\n",
         generation=1,
         correct=True,
         combined_score=1.0,
@@ -124,17 +123,17 @@ def test_side_effects_and_prompt_sampling_work_when_aux_features_disabled(
     job = AsyncRunningJob(
         job_id="job-1",
         generation=1,
-        exec_fname="unused.py",
+        repo_path=str(tmp_path / "worktree"),
         results_dir=str(tmp_path / "results" / "gen_1"),
         start_time=0.0,
         proposal_started_at=0.0,
         evaluation_submitted_at=0.0,
         evaluation_started_at=0.0,
-        code_diff="",
+        repo_diff="",
         parent_id=None,
         archive_insp_ids=[],
         top_k_insp_ids=[],
-        code_embedding=[],
+        summary_embedding=[],
         meta_patch_data={},
     )
     event = PersistedProgramEvent(

@@ -87,7 +87,7 @@ FULL_SYS_FORMAT_NAMES = [
 FULL_ITER_MSG = """# Current repository individual
 
 Here is the current repository summary:
-{code_content}
+{repo_summary}
 
 Here are the performance metrics of the repository individual:
 

@@ -75,8 +75,8 @@ class _FakeScheduler:
         self.cancelled_job_ids.append(job_id)
         return job_id in self._cancelled_job_ids
 
-    async def submit_async_nonblocking(self, exec_fname, results_dir, repo_path=None):
-        return f"job-for-{exec_fname}"
+    async def submit_async_nonblocking(self, repo_path, results_dir):
+        return f"job-for-{repo_path}"
 
 
 class _FakeAsyncDBWithGuard(_FakeAsyncDB):
@@ -143,8 +143,8 @@ class _TrackedScheduler:
     def __init__(self, events):
         self.events = events
 
-    async def submit_async_nonblocking(self, exec_fname, results_dir, repo_path=None):
-        self.events.append(f"submit:{exec_fname}:{results_dir}")
+    async def submit_async_nonblocking(self, repo_path, results_dir):
+        self.events.append(f"submit:{repo_path}:{results_dir}")
         return "job-123"
 
 
@@ -348,27 +348,6 @@ def test_get_in_flight_work_count_includes_completed_job_processing_lock():
     asyncio.run(_run())
 
 
-def test_get_failure_language_infers_fortran_from_generated_filename():
-    runner = _build_runner(evo_config=SimpleNamespace(language=None))
-
-    assert runner._get_failure_language(Path("main.f90")) == "fortran"
-    assert runner._get_failure_language(Path("main.f95")) == "fortran"
-    assert runner._get_failure_language(Path("main.f03")) == "fortran"
-    assert runner._get_failure_language(Path("main.f08")) == "fortran"
-
-
-def test_get_failure_language_infers_go_from_generated_filename():
-    runner = _build_runner(evo_config=SimpleNamespace(language=None))
-
-    assert runner._get_failure_language(Path("main.go")) == "go"
-
-
-def test_get_failure_language_infers_verilog_from_generated_filename():
-    runner = _build_runner(evo_config=SimpleNamespace(language=None))
-
-    assert runner._get_failure_language(Path("main.sv")) == "verilog"
-
-
 def test_job_monitor_stops_when_target_reached_with_no_running_jobs():
     async def _run():
         runner = _build_runner(
@@ -458,7 +437,7 @@ def test_evaluated_candidate_target_allows_generation_ids_beyond_target():
     asyncio.run(_run())
 
 
-def test_persist_failed_generation_stores_incorrect_program(tmp_path):
+def test_write_failure_artifact_records_repository_failure(tmp_path):
     async def _run():
         async_db = _RecordingAsyncDB()
         slot_event = _FakeEvent()
@@ -481,51 +460,33 @@ def test_persist_failed_generation_stores_incorrect_program(tmp_path):
 
         gen_dir = tmp_path / "gen_3"
         gen_dir.mkdir()
-        exec_path = gen_dir / "main.py"
-        exec_path.write_text("print('failed candidate')\n")
-
-        program = await runner._persist_failed_generation(
+        failure_path, failure_payload = await runner._write_failure_artifact_async(
             generation=3,
-            exec_fname=str(exec_path),
-            proposal_started_at=time.time(),
-            sampling_worker_id=5,
-            active_proposals_at_start=2,
+            generation_dir=str(gen_dir),
             parent_program=SimpleNamespace(id="parent-1"),
             archive_programs=[SimpleNamespace(id="archive-1")],
             top_k_programs=[SimpleNamespace(id="topk-1")],
-            code_diff="diff",
             meta_patch_data={"api_costs": 0.25, "system_prompt_id": "prompt-1"},
-            code_embedding=[0.1, 0.2],
             embed_cost=0.01,
             novelty_cost=0.02,
             api_costs=0.25,
             failure_stage="proposal_failed",
+            failure_class="proposal_generation_failed",
             failure_reason="LLM failed to generate a valid proposal",
+            summary_embedding=[0.1, 0.2],
+            proposal_started_at=time.time(),
+            sampling_worker_id=5,
+            active_proposals_at_start=2,
         )
 
-        assert program is not None
-        assert program.correct is False
-        assert program.combined_score == 0.0
-        assert program.text_feedback == "LLM failed to generate a valid proposal"
-        assert program.code == "print('failed candidate')\n"
-        assert program.metadata["node_kind"] == "failed_proposal"
-        assert program.metadata["failure_stage"] == "proposal_failed"
-        assert program.metadata["failure_class"] == "proposal_generation_failed"
-        assert program.metadata["failure_persisted"] is True
-        assert program.metadata["downstream_eval_submitted"] is False
-        assert program.metadata["failure_json_path"] == str(gen_dir / "failure.json")
-        assert runner.completed_generations == 1
-        assert slot_event.is_set() is True
-        assert len(async_db.programs) == 1
-
-        failure_payload = json.loads((gen_dir / "failure.json").read_text())
+        assert failure_path == str(gen_dir / "failure.json")
         assert failure_payload["generation"] == 3
         assert failure_payload["node_kind"] == "failed_proposal"
-        assert failure_payload["language"] == "python"
         assert failure_payload["failure_stage"] == "proposal_failed"
         assert failure_payload["failure_class"] == "proposal_generation_failed"
         assert failure_payload["failure_reason"] == "LLM failed to generate a valid proposal"
-        assert failure_payload["artifacts"]["generated_code_path"] == str(exec_path)
+        assert failure_payload["summary_embedding_available"] is True
+        assert failure_payload["artifacts"]["generation_dir"] == str(gen_dir)
         assert failure_payload["downstream_eval_submitted"] is False
 
     asyncio.run(_run())
@@ -591,12 +552,10 @@ def test_generate_evolved_proposal_records_failed_node_attempt_after_pre_eval_fa
 
         gen_dir = tmp_path / "gen_4"
         gen_dir.mkdir()
-        exec_path = gen_dir / "main.py"
-
         result = await runner._generate_evolved_proposal(
             generation=4,
             task_id="proposal-4",
-            exec_fname=str(exec_path),
+            generation_dir=str(gen_dir),
             results_dir=str(gen_dir / "results"),
             meta_recs=None,
             meta_summary=None,
@@ -617,7 +576,7 @@ def test_generate_evolved_proposal_records_failed_node_attempt_after_pre_eval_fa
         assert event["status"] == "failed"
         assert event["details"]["node_kind"] == "failed_proposal"
         assert event["details"]["failure_stage"] == "proposal"
-        assert event["details"]["failure_class"] == "patch_apply_failed"
+        assert event["details"]["failure_class"] == "proposal_generation_failed"
         assert event["details"]["failure_reason"] == "No changes applied"
         assert event["details"]["pipeline_started_at"] is not None
         assert event["details"]["sampling_started_at"] is not None
@@ -628,15 +587,14 @@ def test_generate_evolved_proposal_records_failed_node_attempt_after_pre_eval_fa
         assert event["details"]["postprocess_finished_at"] is not None
 
         failure_payload = json.loads((gen_dir / "failure.json").read_text())
-        assert failure_payload["language"] == "python"
         assert failure_payload["failure_stage"] == "proposal"
-        assert failure_payload["failure_class"] == "patch_apply_failed"
+        assert failure_payload["failure_class"] == "proposal_generation_failed"
         assert failure_payload["failure_reason"] == "No changes applied"
 
     asyncio.run(_run())
 
 
-def test_persist_failed_generation_skips_maintenance_and_handles_missing_code(tmp_path):
+def test_write_failure_artifact_does_not_require_repository_summary(tmp_path):
     async def _run():
         async_db = _RecordingAsyncDB()
         runner = _build_runner(
@@ -657,38 +615,34 @@ def test_persist_failed_generation_skips_maintenance_and_handles_missing_code(tm
 
         gen_dir = tmp_path / "gen_4"
         gen_dir.mkdir()
-        exec_path = gen_dir / "main.py"
-
-        program = await runner._persist_failed_generation(
+        failure_path, payload = await runner._write_failure_artifact_async(
             generation=4,
-            exec_fname=str(exec_path),
-            proposal_started_at=time.time(),
-            sampling_worker_id=None,
-            active_proposals_at_start=1,
+            generation_dir=str(gen_dir),
             parent_program=SimpleNamespace(id="parent-1"),
             archive_programs=[],
             top_k_programs=[],
-            code_diff=None,
             meta_patch_data={
                 "api_costs": 0.05,
                 "patch_type": "full",
                 "patch_name": "broken",
                 "error_attempt": "Max attempts reached without successful patch",
-                "last_error_msg": "Could not extract code from patch string",
+                "last_error_msg": "Agent produced no repository changes",
             },
-            code_embedding=None,
             embed_cost=0.0,
             novelty_cost=0.0,
             api_costs=0.05,
             failure_stage="proposal",
-            failure_reason="Could not extract code from patch string",
+            failure_class="proposal_generation_failed",
+            failure_reason="Agent produced no repository changes",
+            summary_embedding=None,
+            proposal_started_at=time.time(),
+            sampling_worker_id=None,
+            active_proposals_at_start=1,
         )
 
-        assert program is not None
-        assert program.code == ""
         assert async_db.maintenance_calls == 0
-        assert program.metadata["postprocess_worker_id"] is None
-        assert program.metadata["failure_json_path"] == str(gen_dir / "failure.json")
+        assert failure_path == str(gen_dir / "failure.json")
+        assert payload["summary_embedding_available"] is False
 
     asyncio.run(_run())
 
@@ -700,30 +654,28 @@ def test_record_terminal_failed_proposal_updates_total_api_cost_once(tmp_path):
 
         gen_dir = tmp_path / "gen_9"
         gen_dir.mkdir()
-        exec_path = gen_dir / "main.py"
-
         await runner._record_terminal_failed_proposal(
             generation=9,
-            exec_fname=str(exec_path),
+            generation_dir=str(gen_dir),
             proposal_started_at=time.time(),
             sampling_worker_id=None,
             active_proposals_at_start=2,
             parent_program=SimpleNamespace(id="parent-9"),
             archive_programs=[],
             top_k_programs=[],
-            code_diff=None,
+            repo_diff=None,
             meta_patch_data={
                 "api_costs": 0.06,
                 "novelty_attempt": 1,
                 "resample_attempt": 1,
                 "patch_attempt": 1,
             },
-            code_embedding=None,
+            summary_embedding=None,
             embed_cost=0.01,
             novelty_cost=0.02,
             api_costs=0.06,
             failure_stage="proposal",
-            failure_reason="Could not extract code from patch string",
+            failure_reason="Agent produced no repository changes",
         )
 
         assert runner.total_api_cost == 1.34
@@ -744,30 +696,28 @@ def test_record_terminal_failed_proposal_updates_avg_proposal_cost(tmp_path):
 
         gen_dir = tmp_path / "gen_10"
         gen_dir.mkdir()
-        exec_path = gen_dir / "main.py"
-
         await runner._record_terminal_failed_proposal(
             generation=10,
-            exec_fname=str(exec_path),
+            generation_dir=str(gen_dir),
             proposal_started_at=time.time(),
             sampling_worker_id=None,
             active_proposals_at_start=1,
             parent_program=SimpleNamespace(id="parent-10"),
             archive_programs=[],
             top_k_programs=[],
-            code_diff=None,
+            repo_diff=None,
             meta_patch_data={
                 "api_costs": 0.06,
                 "novelty_attempt": 1,
                 "resample_attempt": 1,
                 "patch_attempt": 1,
             },
-            code_embedding=None,
+            summary_embedding=None,
             embed_cost=0.01,
             novelty_cost=0.02,
             api_costs=0.06,
             failure_stage="proposal",
-            failure_reason="Could not extract code from patch string",
+            failure_reason="Agent produced no repository changes",
         )
 
         assert runner.total_api_cost == 0.59
@@ -817,7 +767,7 @@ def test_process_single_job_safely_applies_side_effects_inline():
         runner = _build_runner()
         job = AsyncRunningJob(
             job_id="job-side-effects",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -936,13 +886,10 @@ def test_generate_evolved_proposal_returns_none_when_all_attempts_fail(tmp_path)
 
         runner._run_patch_async = _run_patch_async
 
-        exec_path = tmp_path / "proposal_failed.py"
-        exec_path.write_text("print('candidate')\n")
-
         result = await runner._generate_evolved_proposal(
             generation=4,
             task_id="task-1",
-            exec_fname=str(exec_path),
+            generation_dir=str(tmp_path),
             results_dir=str(tmp_path / "results"),
             meta_recs=None,
             meta_summary=None,
@@ -960,7 +907,7 @@ def test_generate_evolved_proposal_returns_none_when_all_attempts_fail(tmp_path)
 def test_generate_evolved_proposal_returns_none_when_submit_fails(tmp_path):
     async def _run():
         class _FailingSubmitScheduler:
-            async def submit_async_nonblocking(self, exec_fname, results_dir, repo_path=None):
+            async def submit_async_nonblocking(self, repo_path, results_dir):
                 raise RuntimeError("submit boom")
 
         runner = _build_runner(
@@ -1000,13 +947,10 @@ def test_generate_evolved_proposal_returns_none_when_submit_fails(tmp_path):
 
         runner._run_patch_async = _run_patch_async
 
-        exec_path = tmp_path / "submit_failed.py"
-        exec_path.write_text("print('candidate')\n")
-
         result = await runner._generate_evolved_proposal(
             generation=4,
             task_id="task-1",
-            exec_fname=str(exec_path),
+            generation_dir=str(tmp_path),
             results_dir=str(tmp_path / "results"),
             meta_recs=None,
             meta_summary=None,
@@ -1061,14 +1005,12 @@ def test_generate_evolved_proposal_assigns_worker_ids_on_submit(tmp_path):
 
         runner._run_patch_async = _run_patch_async
 
-        exec_path = tmp_path / "submit_success.py"
-        exec_path.write_text("print('candidate')\n")
         results_dir = str(tmp_path / "results")
 
         result = await runner._generate_evolved_proposal(
             generation=4,
             task_id="task-1",
-            exec_fname=str(exec_path),
+            generation_dir=str(tmp_path),
             results_dir=results_dir,
             meta_recs=None,
             meta_summary=None,
@@ -1083,7 +1025,7 @@ def test_generate_evolved_proposal_assigns_worker_ids_on_submit(tmp_path):
         assert result.sampling_worker_id == 3
         assert result.evaluation_worker_id == 0
         assert result.running_eval_jobs_at_submit == 1
-        assert events == [f"submit:{exec_path}:{results_dir}"]
+        assert events == [f"submit:{result.repo_path}:{results_dir}"]
 
     asyncio.run(_run())
 
@@ -1158,7 +1100,7 @@ def test_retry_failed_db_jobs_refreshes_completion_progress():
         runner._record_progress = _record_progress
         job = AsyncRunningJob(
             job_id="job-retry",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1304,7 +1246,6 @@ def test_submit_evaluation_job_acquires_slot_before_submitting():
             _evaluation_started_at,
             running_eval_jobs_at_submit,
         ) = await runner._submit_evaluation_job_with_slot(
-            exec_fname="candidate.py",
             results_dir="results-dir",
             sampling_worker_id=3,
             repo_path="repo-dir",
@@ -1313,7 +1254,7 @@ def test_submit_evaluation_job_acquires_slot_before_submitting():
         assert events == [
             "sampling.release:3",
             "eval.acquire",
-            "submit:candidate.py:results-dir",
+            "submit:repo-dir:results-dir",
         ]
         assert job_id == "job-123"
         assert evaluation_worker_id == 7
@@ -1334,8 +1275,8 @@ def test_generate_evolved_proposal_uses_slot_reservation_helper():
                 False,
             )
 
-        async def submit_with_slot(exec_fname, results_dir, sampling_worker_id, repo_path=None):
-            helper_calls.append((exec_fname, results_dir, sampling_worker_id))
+        async def submit_with_slot(results_dir, sampling_worker_id, repo_path):
+            helper_calls.append((repo_path, results_dir, sampling_worker_id))
             return "job-123", 9, 10.0, 10.0, 1
 
         async def fail_if_called(*args, **kwargs):
@@ -1377,7 +1318,7 @@ def test_generate_evolved_proposal_uses_slot_reservation_helper():
         job = await runner._generate_evolved_proposal(
             generation=4,
             task_id="task-1",
-            exec_fname="program.py",
+            generation_dir="generation",
             results_dir="results",
             meta_recs=None,
             meta_summary=None,
@@ -1387,7 +1328,7 @@ def test_generate_evolved_proposal_uses_slot_reservation_helper():
             active_proposals_at_start=1,
         )
 
-        assert helper_calls == [("program.py", "results", None)]
+        assert helper_calls == [(job.repo_path, "results", None)]
         assert job is not None
         assert job.evaluation_worker_id == 9
         assert job.running_eval_jobs_at_submit == 1
@@ -1402,7 +1343,7 @@ def test_release_evaluation_slot_once_does_not_free_reassigned_slot():
         runner = _build_runner(evaluation_slot_pool=LogicalSlotPool(1, "evaluation"))
         old_job = AsyncRunningJob(
             job_id="job-old",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1445,7 +1386,7 @@ def test_is_job_hung_when_runtime_exceeds_limit():
     )
     job = AsyncRunningJob(
         job_id="job-1",
-        exec_fname="program.py",
+        repo_path="repo",
         results_dir="results",
         start_time=time.time() - 400.0,
         proposal_started_at=time.time() - 400.0,
@@ -1465,7 +1406,7 @@ def test_cancel_surplus_inflight_work_cancels_backlog_once_target_hit():
         proposal_task = asyncio.create_task(asyncio.sleep(60))
         job_1 = AsyncRunningJob(
             job_id="job-1",
-            exec_fname="program_1.py",
+            repo_path="repo_1",
             results_dir="results_1",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1476,7 +1417,7 @@ def test_cancel_surplus_inflight_work_cancels_backlog_once_target_hit():
         )
         job_2 = AsyncRunningJob(
             job_id="job-2",
-            exec_fname="program_2.py",
+            repo_path="repo_2",
             results_dir="results_2",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1519,7 +1460,7 @@ def test_process_single_job_skips_persistence_for_discarded_surplus_job():
         )
         job = AsyncRunningJob(
             job_id="job-surplus",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1549,7 +1490,7 @@ def test_mark_surplus_completed_jobs_discards_batch_overflow_after_target():
     completed_jobs = [
         AsyncRunningJob(
             job_id="job-101",
-            exec_fname="program_101.py",
+            repo_path="repo_101",
             results_dir="results_101",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1558,7 +1499,7 @@ def test_mark_surplus_completed_jobs_discards_batch_overflow_after_target():
         ),
         AsyncRunningJob(
             job_id="job-99",
-            exec_fname="program_99.py",
+            repo_path="repo_99",
             results_dir="results_99",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1567,7 +1508,7 @@ def test_mark_surplus_completed_jobs_discards_batch_overflow_after_target():
         ),
         AsyncRunningJob(
             job_id="job-100",
-            exec_fname="program_100.py",
+            repo_path="repo_100",
             results_dir="results_100",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1576,7 +1517,7 @@ def test_mark_surplus_completed_jobs_discards_batch_overflow_after_target():
         ),
         AsyncRunningJob(
             job_id="job-102",
-            exec_fname="program_102.py",
+            repo_path="repo_102",
             results_dir="results_102",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1606,7 +1547,7 @@ def test_mark_surplus_completed_jobs_discards_all_when_target_already_reached():
     completed_jobs = [
         AsyncRunningJob(
             job_id="job-101",
-            exec_fname="program_101.py",
+            repo_path="repo_101",
             results_dir="results_101",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1615,7 +1556,7 @@ def test_mark_surplus_completed_jobs_discards_all_when_target_already_reached():
         ),
         AsyncRunningJob(
             job_id="job-102",
-            exec_fname="program_102.py",
+            repo_path="repo_102",
             results_dir="results_102",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1646,7 +1587,7 @@ def test_job_monitor_preserves_jobs_added_during_status_poll():
 
         first_job = AsyncRunningJob(
             job_id="job-1",
-            exec_fname="program_1.py",
+            repo_path="repo_1",
             results_dir="results_1",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1655,7 +1596,7 @@ def test_job_monitor_preserves_jobs_added_during_status_poll():
         )
         second_job = AsyncRunningJob(
             job_id="job-2",
-            exec_fname="program_2.py",
+            repo_path="repo_2",
             results_dir="results_2",
             start_time=time.time(),
             proposal_started_at=time.time(),
@@ -1713,7 +1654,7 @@ def test_job_monitor_processes_completed_jobs_inline():
         now = time.time()
         job = AsyncRunningJob(
             job_id="job-complete",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=now - 3.0,
             proposal_started_at=now - 3.0,

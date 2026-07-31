@@ -23,7 +23,7 @@ def test_stagnation_detection():
         # Add initial program (generation 0)
         initial_program = Program(
             id="initial_prog",
-            code="def initial(): return 0",
+            repo_summary="# Initial repository\n",
             correct=True,
             combined_score=1.0,
             generation=0,
@@ -65,7 +65,7 @@ def test_dynamic_island_spawning():
         # Add initial program (generation 0)
         initial_program = Program(
             id="initial_prog",
-            code="def initial(): return 0",
+            repo_summary="# Initial repository\n",
             correct=True,
             combined_score=1.0,
             generation=0,
@@ -81,7 +81,7 @@ def test_dynamic_island_spawning():
         for gen in range(1, 5):
             program = Program(
                 id=f"prog_gen_{gen}",
-                code=f"def test(): return {gen}",
+                repo_summary=f"# Repository {gen}\n",
                 correct=True,
                 combined_score=0.5,  # Lower than initial, no improvement
                 generation=gen,
@@ -126,7 +126,7 @@ def test_no_spawning_when_disabled():
         # Add initial program
         initial_program = Program(
             id="initial_prog",
-            code="def initial(): return 0",
+            repo_summary="# Initial repository\n",
             correct=True,
             combined_score=1.0,
             generation=0,
@@ -140,7 +140,7 @@ def test_no_spawning_when_disabled():
         for gen in range(1, 10):
             program = Program(
                 id=f"prog_gen_{gen}",
-                code=f"def test(): return {gen}",
+                repo_summary=f"# Repository {gen}\n",
                 correct=True,
                 combined_score=0.5,
                 generation=gen,
@@ -177,7 +177,7 @@ def test_stagnation_reset_on_improvement():
         # Add initial program
         initial_program = Program(
             id="initial_prog",
-            code="def initial(): return 0",
+            repo_summary="# Initial repository\n",
             correct=True,
             combined_score=1.0,
             generation=0,
@@ -189,7 +189,7 @@ def test_stagnation_reset_on_improvement():
         for gen in range(1, 4):
             program = Program(
                 id=f"prog_gen_{gen}",
-                code=f"def test(): return {gen}",
+                repo_summary=f"# Repository {gen}\n",
                 correct=True,
                 combined_score=0.5,  # No improvement
                 generation=gen,
@@ -200,7 +200,7 @@ def test_stagnation_reset_on_improvement():
         # Now add a better program - should reset stagnation
         better_program = Program(
             id="better_prog",
-            code="def better(): return 100",
+            repo_summary="# Better repository\n",
             correct=True,
             combined_score=2.0,  # Improvement!
             generation=4,
@@ -252,7 +252,7 @@ def test_spawn_strategies():
             # Add initial program (generation 0)
             initial_program = Program(
                 id="initial_prog",
-                code="def initial(): return 0",
+                repo_summary="# Initial repository\n",
                 correct=True,
                 combined_score=1.0,
                 generation=0,
@@ -263,7 +263,7 @@ def test_spawn_strategies():
             # Add a better program (will be the "best")
             best_program = Program(
                 id="best_prog",
-                code="def best(): return 100",
+                repo_summary="# Best repository\n",
                 correct=True,
                 combined_score=5.0,  # Higher score
                 generation=1,
@@ -275,7 +275,7 @@ def test_spawn_strategies():
             for gen in range(2, 6):
                 program = Program(
                     id=f"prog_gen_{gen}",
-                    code=f"def test(): return {gen}",
+                    repo_summary=f"# Repository {gen}\n",
                     correct=True,
                     combined_score=0.5,  # Lower than best, no improvement
                     generation=gen,

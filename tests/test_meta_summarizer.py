@@ -35,8 +35,7 @@ class DummyMetaLLM:
 def make_program(program_id, generation, patch_name="patch", correct=True):
     return Program(
         id=program_id,
-        code=f"def fn_{generation}():\\n    return {generation}\\n",
-        language="python",
+        repo_summary=f"# Repository {generation}\\n",
         generation=generation,
         combined_score=float(generation),
         public_metrics={"score": float(generation)},

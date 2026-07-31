@@ -645,7 +645,7 @@ class MetaSummarizer:
                         continue
 
                     # Check if required fields exist
-                    required_fields = ["id", "code", "language", "generation"]
+                    required_fields = ["id", "repo_summary", "generation"]
                     missing_fields = [f for f in required_fields if f not in prog_dict]
                     if missing_fields:
                         logger.warning(
