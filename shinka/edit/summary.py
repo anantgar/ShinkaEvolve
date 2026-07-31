@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
+# TODO: Remove this file
 def summarize_diff(diff_file_path: str) -> dict:
     summary = {}
     try:
