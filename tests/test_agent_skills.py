@@ -102,8 +102,7 @@ def _create_inspection_db(path: Path) -> None:
                 top_k_inspiration_ids TEXT,
                 agent_provider TEXT,
                 agent_model TEXT,
-                agent_session_id TEXT,
-                code TEXT
+                agent_session_id TEXT
             )
             """
         )
@@ -150,7 +149,6 @@ Fewer interpreter transitions should reduce latency.
                 "headless",
                 "codex",
                 "session-best",
-                "compatibility summary",
             ),
             (
                 "second-candidate",
@@ -186,7 +184,6 @@ Repeated calls avoid duplicate parsing.
                 "headless",
                 "cursor",
                 "session-second",
-                "compatibility summary",
             ),
             (
                 "incorrect-high-score",
@@ -209,13 +206,12 @@ Repeated calls avoid duplicate parsing.
                 "headless",
                 "codex",
                 "session-bad",
-                "compatibility summary",
             ),
         ]
         connection.executemany(
             """
             INSERT INTO programs VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             rows,
@@ -255,7 +251,6 @@ def test_inspect_skill_builds_summary_based_context(tmp_path: Path) -> None:
     assert "Public evaluator feedback." in content
     assert "incorrect-high-score" not in content
     assert "secret_metric" not in content
-    assert "compatibility summary" not in content
 
 
 def test_inspect_skill_labels_no_correct_fallback(tmp_path: Path) -> None:

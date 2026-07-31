@@ -79,93 +79,13 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             return None
 
-    def _language_from_suffix(self, suffix: str) -> str:
-        ext = suffix.lstrip(".").lower()
-        return {
-            "py": "python",
-            "js": "javascript",
-            "ts": "typescript",
-            "cpp": "cpp",
-            "cc": "cpp",
-            "cxx": "cpp",
-            "cu": "cuda",
-            "go": "go",
-            "sv": "verilog",
-            "f90": "fortran",
-            "f95": "fortran",
-            "f03": "fortran",
-            "f08": "fortran",
-        }.get(ext, ext or "python")
-
-    def _resolve_failed_node_language(
-        self,
-        details: Dict[str, Any],
-        failure_payload: Optional[Dict[str, Any]],
-    ) -> str:
-        for source in (failure_payload or {}, details):
-            language = source.get("language")
-            if language:
-                return str(language)
-
-        generated_code_path = ((failure_payload or {}).get("artifacts", {}) or {}).get(
-            "generated_code_path"
-        )
-        if generated_code_path:
-            return self._language_from_suffix(Path(generated_code_path).suffix)
-
-        failure_json_path = details.get("failure_json_path")
-        if failure_json_path:
-            failure_path = Path(self.search_root) / failure_json_path
-            candidates = sorted(failure_path.parent.glob("main.*"))
-            if candidates:
-                return self._language_from_suffix(candidates[0].suffix)
-
-        return "python"
-
-    def _resolve_failed_node_code_path(
-        self,
-        details: Dict[str, Any],
-        failure_payload: Optional[Dict[str, Any]],
-    ) -> Optional[Path]:
-        generated_code_path = ((failure_payload or {}).get("artifacts", {}) or {}).get(
-            "generated_code_path"
-        )
-        if generated_code_path:
-            code_path = Path(self.search_root) / generated_code_path
-            if code_path.exists():
-                return code_path
-
-        failure_json_path = details.get("failure_json_path")
-        if not failure_json_path:
-            return None
-
-        failure_path = Path(self.search_root) / failure_json_path
-        language = self._resolve_failed_node_language(details, failure_payload)
-        preferred_suffix = {
-            "python": ".py",
-            "javascript": ".js",
-            "typescript": ".ts",
-            "cpp": ".cpp",
-            "cuda": ".cu",
-            "go": ".go",
-            "verilog": ".sv",
-            "fortran": ".f90",
-        }.get(language)
-        if preferred_suffix:
-            preferred_path = failure_path.parent / f"main{preferred_suffix}"
-            if preferred_path.exists():
-                return preferred_path
-
-        candidates = sorted(failure_path.parent.glob("main.*"))
-        return candidates[0] if candidates else None
-
     def _build_failed_node_dict(
         self,
         *,
         generation: int,
         created_at: float,
         details: Dict[str, Any],
-        include_code: bool = False,
+        include_summary: bool = False,
     ) -> Dict[str, Any]:
         failure_json_path = details.get("failure_json_path")
         failure_payload = self._read_failure_json(failure_json_path)
@@ -173,8 +93,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
         if failure_payload:
             for key in [
                 "failure_json_path",
-                "language",
-                "generated_code_available",
+                "summary_embedding_available",
                 "downstream_eval_submitted",
                 "artifacts",
                 "attempts",
@@ -187,27 +106,22 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if key in failure_payload:
                     metadata[key] = failure_payload[key]
 
-        language = self._resolve_failed_node_language(details, failure_payload)
-        code = None
-        if include_code and failure_payload:
-            code_path = self._resolve_failed_node_code_path(details, failure_payload)
-            if code_path is not None:
-                try:
-                    code = code_path.read_text(encoding="utf-8")
-                except Exception:
-                    code = None
+        repo_summary = None
+        if include_summary:
+            repo_summary = (failure_payload or {}).get("repo_summary") or details.get(
+                "repo_summary"
+            )
 
         return {
             "id": self._make_failed_node_id(generation),
-            "code": code,
-            "language": language,
+            "repo_summary": repo_summary,
             "parent_id": details.get("parent_id"),
             "archive_inspiration_ids": details.get("archive_inspiration_ids") or [],
             "top_k_inspiration_ids": details.get("top_k_inspiration_ids") or [],
             "island_idx": None,
             "generation": generation,
             "timestamp": created_at,
-            "code_diff": None,
+            "repo_diff": None,
             "combined_score": 0.0,
             "public_metrics": {},
             "private_metrics": {},
@@ -229,7 +143,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
         self,
         abs_db_path: str,
         *,
-        include_code: bool = False,
+        include_summary: bool = False,
         generation: Optional[int] = None,
     ) -> list[Dict[str, Any]]:
         conn = sqlite3.connect(abs_db_path, timeout=5.0, isolation_level=None)
@@ -264,7 +178,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
                     generation=gen,
                     created_at=float(row["created_at"]),
                     details=details,
-                    include_code=include_code,
+                    include_summary=include_summary,
                 )
 
             return [selected[g] for g in sorted(selected)]
@@ -477,7 +391,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Convert Program objects to dicts for JSON
                 programs_dict = [p.to_dict() for p in programs]
                 programs_dict.extend(
-                    self._load_failed_proposal_nodes(abs_db_path, include_code=False)
+                    self._load_failed_proposal_nodes(abs_db_path, include_summary=False)
                 )
 
                 # Update cache
@@ -566,7 +480,10 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 summaries = db.get_programs_summary()
                 summaries.extend(
-                    self._load_failed_proposal_nodes(abs_db_path, include_code=False)
+                    self._load_failed_proposal_nodes(
+                        abs_db_path,
+                        include_summary=False,
+                    )
                 )
                 self.send_json_response(summaries)
                 print(
@@ -636,7 +553,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 result = db.get_program_count_and_timestamp()
                 failed_nodes = self._load_failed_proposal_nodes(
-                    abs_db_path, include_code=False
+                    abs_db_path, include_summary=False
                 )
                 if failed_nodes:
                     result["count"] += len(failed_nodes)
@@ -687,7 +604,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
                         pass
 
     def handle_get_program_details(self, db_path: str, program_id: str):
-        """Get full details for a single program (including code and embeddings)."""
+        """Get full details for a single repository individual."""
         print(f"[SERVER] Fetching program details for ID: {program_id}")
 
         actual_db_path = self._get_actual_db_path(db_path)
@@ -702,7 +619,7 @@ class DatabaseRequestHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 failed_nodes = self._load_failed_proposal_nodes(
                     abs_db_path,
-                    include_code=True,
+                    include_summary=True,
                     generation=failed_generation,
                 )
                 if not failed_nodes:

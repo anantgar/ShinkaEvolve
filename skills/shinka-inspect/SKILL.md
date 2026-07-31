@@ -24,8 +24,8 @@ start or continue evolution.
 - cross-candidate ideas, performance hypotheses, risks, and frequently changed
   paths parsed from `.shinka/individual.md` summaries.
 
-The executable artifact is the repository commit. The bundle does not pretend
-that the compatibility `code` column contains a complete source program.
+The executable artifact is the repository commit; summaries are only its
+compact context representation.
 
 ## Workflow
 

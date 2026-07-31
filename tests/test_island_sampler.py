@@ -30,7 +30,7 @@ def test_island_samplers():
                 for i in range(island_idx + 1):  # Different counts per island
                     program = Program(
                         id=f"prog_{strategy}_{island_idx}_{i}",
-                        code=f"def test_{i}(): return {i}",
+                        repo_summary=f"# Repository {i}\n",
                         correct=True,
                         combined_score=float(island_idx + 1),  # Different scores
                         island_idx=island_idx,

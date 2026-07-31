@@ -67,8 +67,8 @@ def plot_lineage_tree(
         # Add available metrics as node attributes
         for col in df.columns:
             if col in row:
-                # Skip the code column as it's usually too long
-                if col != "code":
+                # Repository summaries are too large for graph attributes.
+                if col != "repo_summary":
                     node_attrs[col] = row[col]
 
         G.add_node(node_id, **node_attrs)

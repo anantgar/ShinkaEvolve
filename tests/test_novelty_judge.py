@@ -53,22 +53,20 @@ class DummyDatabase:
         self.most_similar_program = most_similar_program
         self.island_manager = DummyIslandManager(initialized=island_initialized)
 
-    def compute_similarity(self, code_embedding, island_idx):
+    def compute_similarity(self, summary_embedding, island_idx):
         if not self._similarity_sequences:
             return []
         if len(self._similarity_sequences) == 1:
             return self._similarity_sequences[0]
         return self._similarity_sequences.pop(0)
 
-    def get_most_similar_program(self, code_embedding, island_idx):
+    def get_most_similar_program(self, summary_embedding, island_idx):
         return self.most_similar_program
 
 
 def make_program(program_id="prog-1", island_idx=0, repo_summary=None):
     return Program(
         id=program_id,
-        code="def solve():\n    return 1\n",
-        language="python",
         generation=1,
         island_idx=island_idx,
         repo_summary=repo_summary,
@@ -108,7 +106,7 @@ def test_assess_novelty_accepts_when_similarity_is_empty():
 
     accepted, metadata = judge.assess_novelty_with_rejection_sampling(
         proposed_summary="# Individual Summary\n\nCandidate summary",
-        code_embedding=[0.1, 0.2],
+        summary_embedding=[0.1, 0.2],
         parent_program=parent_program,
         database=database,
     )
@@ -126,7 +124,7 @@ def test_assess_novelty_rejects_after_exhausting_attempts():
 
     accepted, metadata = judge.assess_novelty_with_rejection_sampling(
         proposed_summary="# Individual Summary\n\nCandidate summary",
-        code_embedding=[0.3, 0.4],
+        summary_embedding=[0.3, 0.4],
         parent_program=parent_program,
         database=database,
     )
@@ -160,7 +158,7 @@ def test_assess_novelty_accepts_high_similarity_when_llm_marks_novel():
 
     accepted, metadata = judge.assess_novelty_with_rejection_sampling(
         proposed_summary=proposed_summary,
-        code_embedding=[0.5, 0.6],
+        summary_embedding=[0.5, 0.6],
         parent_program=parent_program,
         database=database,
     )

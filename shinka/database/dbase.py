@@ -652,29 +652,10 @@ class ProgramDatabase:
             except sqlite3.Error as e:
                 logger.error(f"Error creating program index: {e}")
 
-        # Migration 4: Preserve useful repository-era data, then remove the
-        # single-source compatibility columns.
+        # Migration 4: Remove the retired single-source representation.
         self.cursor.execute("PRAGMA table_info(programs)")
         columns = [row[1] for row in self.cursor.fetchall()]
         try:
-            if "code" in columns:
-                self.cursor.execute(
-                    """
-                    UPDATE programs
-                    SET repo_summary = code
-                    WHERE (repo_summary IS NULL OR repo_summary = '')
-                      AND code IS NOT NULL
-                    """
-                )
-            if "code_diff" in columns:
-                self.cursor.execute(
-                    """
-                    UPDATE programs
-                    SET repo_diff = code_diff
-                    WHERE (repo_diff IS NULL OR repo_diff = '')
-                      AND code_diff IS NOT NULL
-                    """
-                )
             self.cursor.execute("DROP INDEX IF EXISTS idx_programs_individual_type")
             for legacy_column in ("code", "language", "individual_type", "code_diff"):
                 if legacy_column in columns:

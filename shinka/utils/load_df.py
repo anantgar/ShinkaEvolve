@@ -105,8 +105,6 @@ def load_programs_to_df(
                 timestamp = None
             flat_data = {
                 "id": p_dict.get("id"),
-                "code": p_dict.get("code"),
-                "language": p_dict.get("language"),
                 "parent_id": p_dict.get("parent_id"),
                 "archive_inspiration_ids": archive_insp_ids,
                 "top_k_inspiration_ids": top_k_insp_ids,
@@ -114,7 +112,12 @@ def load_programs_to_df(
                 "timestamp": timestamp,
                 "complexity": p_dict.get("complexity"),
                 "embedding": embedding,
-                "code_diff": p_dict.get("code_diff"),
+                "repo_commit": p_dict.get("repo_commit"),
+                "repo_parent_commit": p_dict.get("repo_parent_commit"),
+                "repo_diff": p_dict.get("repo_diff"),
+                "repo_summary": p_dict.get("repo_summary"),
+                "summary_version": p_dict.get("summary_version"),
+                "artifact_uri": p_dict.get("artifact_uri"),
                 "correct": bool(p_dict.get("correct", False)),
                 "combined_score": p_dict.get("combined_score"),
                 **metadata_dict,
@@ -337,10 +340,10 @@ def store_best_path(df: pd.DataFrame, results_dir: str):
     best_path = get_path_to_best_node(df)
     path_dir = Path(f"{results_dir}/best_path")
     path_dir.mkdir(exist_ok=True)
-    patch_dir = Path(f"{path_dir}/patches")
-    patch_dir.mkdir(exist_ok=True)
-    code_dir = Path(f"{path_dir}/code")
-    code_dir.mkdir(exist_ok=True)
+    diff_dir = path_dir / "diffs"
+    diff_dir.mkdir(exist_ok=True)
+    summary_dir = path_dir / "summaries"
+    summary_dir.mkdir(exist_ok=True)
     meta_dir = Path(f"{path_dir}/meta")
     meta_dir.mkdir(exist_ok=True)
 
@@ -348,13 +351,13 @@ def store_best_path(df: pd.DataFrame, results_dir: str):
     for _, row in best_path.iterrows():
         print(f"\nGeneration {row['generation']} - Score: {row['combined_score']:.2f}")
 
-        if row["code_diff"] is not None:
-            patch_path = patch_dir / f"patch_{i}.patch"
-            patch_path.write_text(str(row["code_diff"]), encoding="utf-8")
-            print(f"Saved patch to {patch_path}")
+        if row.get("repo_diff"):
+            diff_path = diff_dir / f"repo_{i}.diff"
+            diff_path.write_text(str(row["repo_diff"]), encoding="utf-8")
+            print(f"Saved repository diff to {diff_path}")
 
-        base_path = code_dir / f"main_{i}.py"
-        base_path.write_text(str(row["code"]), encoding="utf-8")
+        summary_path = summary_dir / f"individual_{i}.md"
+        summary_path.write_text(str(row.get("repo_summary") or ""), encoding="utf-8")
 
         # store row data as json, handle non-serializable types
         import datetime
@@ -377,6 +380,6 @@ def store_best_path(df: pd.DataFrame, results_dir: str):
             encoding="utf-8",
         )
         print(f"Saved meta data to {row_data_path}")
-        print(f"Saved base code to {base_path}")
+        print(f"Saved repository summary to {summary_path}")
         print(row["patch_name"])
         i += 1

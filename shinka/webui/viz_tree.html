@@ -1845,8 +1845,8 @@
                 <div class="tab" data-tab="pareto-front">Pareto</div>
                 <div class="tab" data-tab="meta-analysis">Scratch</div>
                 <div class="tab" data-tab="node-details">Node</div>
-                <div class="tab" data-tab="agent-code">Code</div>
-                <div class="tab" data-tab="code-diff">Diff</div>
+                <div class="tab" data-tab="agent-code">Summary</div>
+                <div class="tab" data-tab="code-diff">Repo Diff</div>
                 <div class="tab" data-tab="log-output">Eval</div>
                 <div class="tab" data-tab="llm-result">LLM</div>
                 <div class="tab" data-tab="analysis">Analysis</div>
@@ -1905,11 +1905,11 @@
                 </div>
                 <div id="agent-code" class="content-section" style="position: relative;">
                     <div class="code-controls">
-                        <button id="copy-code-btn" title="Copy code to clipboard">📋 Copy</button>
-                        <button id="download-code-btn" title="Download code as file">💾 Download</button>
+                        <button id="copy-code-btn" title="Copy summary to clipboard">📋 Copy</button>
+                        <button id="download-code-btn" title="Download summary">💾 Download</button>
                     </div>
                     <div id="agent-code-wrapper">
-                        <p>Select a node from the tree to view code.</p>
+                        <p>Select a node from the tree to view its repository summary.</p>
                     </div>
                 </div>
                 <div id="code-diff" class="content-section">
@@ -1922,7 +1922,7 @@
                         <button id="toggle-unchanged-btn" onclick="toggleUnchangedLines()" title="Show only modified lines">Show Changes Only</button>
                     </div>
                     <div id="code-diff-content">
-                        <p>Select a node to view its code diff.</p>
+                        <p>Select a node to view its repository diff.</p>
                     </div>
                 </div>
                 <div id="log-output" class="content-section">
@@ -2234,7 +2234,7 @@
                                 setTimeout(() => { copyBtn.innerHTML = '📋 Copy'; }, 2000);
                             }).catch(err => {
                                 console.error('Failed to copy text: ', err);
-                                alert('Failed to copy code.');
+                                alert('Failed to copy summary.');
                             });
                         }
                     });
@@ -2250,34 +2250,25 @@
                             const nodeData = window.treeData.find(d => d.id === selectedNodeId);
                             if (nodeData) {
                                 try {
-                                    const code = codeElement.innerText;
-                                    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+                                    const summaryText = codeElement.innerText;
+                                    const blob = new Blob([summaryText], { type: 'text/markdown;charset=utf-8' });
                                     const url = URL.createObjectURL(blob);
                                     const a = document.createElement('a');
                                     a.href = url;
                                     const agentName = (nodeData.metadata.patch_name || 'agent').replace(/\s+/g, '_');
                                     const gen = nodeData.generation;
-                                    const language = nodeData.language || 'py';
-                                    const extension = {
-                                        'python': 'py',
-                                        'cpp': 'cpp',
-                                        'javascript': 'js',
-                                        'cuda': 'cu',
-                                        'fortran': 'f90'
-                                    }[language] || language;
-
-                                    a.download = `${agentName}_gen${gen}.${extension}`;
+                                    a.download = `${agentName}_gen${gen}.md`;
                                     document.body.appendChild(a);
                                     a.click();
                                     document.body.removeChild(a);
                                     URL.revokeObjectURL(url);
                                 } catch (e) {
                                     console.error('Download failed:', e);
-                                    alert('Failed to download code.');
+                                    alert('Failed to download summary.');
                                 }
                             }
                         } else {
-                            alert('Could not get code or node data to download.');
+                            alert('Could not get summary or node data to download.');
                         }
                     });
                 }
@@ -3858,10 +3849,10 @@ ${'='.repeat(80)}
             document.getElementById("node-summary").innerHTML = "";
             d3.selectAll('.node').classed('selected', false);
             
-            document.getElementById("agent-code-wrapper").innerHTML = "<p>Select a node from the tree to view code.</p>";
+            document.getElementById("agent-code-wrapper").innerHTML = "<p>Select a node from the tree to view its repository summary.</p>";
             document.querySelector('#agent-code .code-controls').style.display = 'none';
             document.getElementById("node-details").innerHTML = "<p>Select a node to view its details.</p>";
-            document.getElementById("code-diff-content").innerHTML = "<p>Select a node to view its code diff.</p>";
+            document.getElementById("code-diff-content").innerHTML = "<p>Select a node to view its repository diff.</p>";
             document.querySelector('#code-diff .diff-controls').style.display = 'none';
             document.getElementById("code-diff").classList.remove('hide-unchanged');
             const toggleBtn = document.getElementById('toggle-unchanged-btn');
@@ -3871,7 +3862,7 @@ ${'='.repeat(80)}
             }
             // Reset diff mode
             window.currentDiffMode = 'parent';
-            window.currentDiffData = { parentDiff: null, initialDiff: null, currentCode: null, initialCode: null };
+            window.currentDiffData = { parentDiff: null, initialDiff: null, currentSummary: null, initialSummary: null };
             const diffParentBtn = document.getElementById('diff-vs-parent-btn');
             const diffInitialBtn = document.getElementById('diff-vs-initial-btn');
             if (diffParentBtn) diffParentBtn.classList.add('active');
@@ -4212,8 +4203,7 @@ console.error("[DEBUG] Error in processData:", error);
                     const unifiedRoot = {
                         id: unifiedRootId,
                         parent_id: null,
-                        code: firstGen0.code,
-                        language: firstGen0.language,
+                        repo_summary: firstGen0.repo_summary,
                         generation: 0,
                         timestamp: Math.min(...gen0Programs.map(p => p.timestamp)),
                         agent_name: 'Initial Program',
@@ -5621,24 +5611,24 @@ console.error("[DEBUG] Error in processData:", error);
             console.log("[DEBUG] Meta Info tab text content updated");
         }
 
-        // Helper function to display code content in the code wrapper
+        // Display the persisted repository summary.
         function displayCodeContent(data, codeWrapper) {
-            if (!data.code) {
+            if (!data.repo_summary) {
                 document.querySelector('#agent-code .code-controls').style.display = 'none';
-                codeWrapper.innerHTML = "<p>No code available for this node.</p>";
+                codeWrapper.innerHTML = "<p>No repository summary available for this node.</p>";
                 return;
             }
             
             document.querySelector('#agent-code .code-controls').style.display = 'flex';
             
-            const sanitizedCode = escapeHtml(data.code);
-            const lines = data.code.split('\n');
+            const sanitizedCode = escapeHtml(data.repo_summary);
+            const lines = data.repo_summary.split('\n');
             const lineNumbers = Array.from({length: lines.length}, (_, i) => `<span>${i + 1}</span>`).join('');
 
             codeWrapper.innerHTML = `
                 <div class="code-container">
                     <div class="line-numbers-gutter">${lineNumbers}</div>
-                    <pre><code class="language-${data.language || 'python'}">${sanitizedCode}</code></pre>
+                    <pre><code class="language-markdown">${sanitizedCode}</code></pre>
                 </div>
             `;
 
@@ -5800,7 +5790,7 @@ console.error("[DEBUG] Error in processData:", error);
             let gridItemsHtml = `
                     <div class="details-section">
                         <h5>General</h5>
-                        <p><strong>Language:</strong> ${data.language || 'N/A'}</p>
+                        <p><strong>Commit:</strong> ${data.repo_commit || 'N/A'}</p>
                         <p><strong>Island:</strong> ${data.island_idx !== null && data.island_idx !== undefined ? data.island_idx : 'N/A'}</p>
                         <p><strong>Timestamp:</strong> ${formatTimestamp(data.timestamp)}</p>
                         <p><strong>Correct:</strong> ${data.correct ? 'Yes' : 'No'}</p>
@@ -6021,7 +6011,7 @@ console.error("[DEBUG] Error in processData:", error);
             
             nodeDetailsContainer.innerHTML = nodeDetailsHtml;
             
-            // Update code tab - lazy load if code not in summary data
+            // Load the full repository summary and stored Git diff on demand.
             const codeWrapper = document.getElementById("agent-code-wrapper");
             const diffContentWrapper = document.getElementById("code-diff-content");
             const diffControls = document.querySelector('#code-diff .diff-controls');
@@ -6030,20 +6020,19 @@ console.error("[DEBUG] Error in processData:", error);
             window.currentDiffData = {
                 parentDiff: null,
                 initialDiff: null,
-                currentCode: null,
-                initialCode: null
+                currentSummary: null,
+                initialSummary: null
             };
             window.currentDiffMode = 'parent';
             document.getElementById('diff-vs-parent-btn').classList.add('active');
             document.getElementById('diff-vs-initial-btn').classList.remove('active');
             
-            if (data.code) {
-                // Code already loaded, display it
+            if (data.repo_summary) {
                 displayCodeContent(data, codeWrapper);
             } else if (window.currentDbPath && data.id) {
                 // Lazy load: fetch full program details
                 document.querySelector('#agent-code .code-controls').style.display = 'none';
-                codeWrapper.innerHTML = `<p style="color: #666;">Loading code...</p>`;
+                codeWrapper.innerHTML = `<p style="color: #666;">Loading repository summary...</p>`;
                 diffContentWrapper.innerHTML = `<p style="color: #666;">Loading diff...</p>`;
                 diffControls.style.display = 'none';
                 
@@ -6062,32 +6051,30 @@ console.error("[DEBUG] Error in processData:", error);
                             Object.assign(treeNode, fullData);
                         }
                         
-                        // Display the loaded code
+                        // Display the loaded repository summary.
                         displayCodeContent(fullData, codeWrapper);
                         
-                        // Store diff data in cache
-                        window.currentDiffData.parentDiff = fullData.code_diff || null;
-                        window.currentDiffData.currentCode = fullData.code || null;
+                        window.currentDiffData.parentDiff = fullData.repo_diff || null;
+                        window.currentDiffData.currentSummary = fullData.repo_summary || null;
                         
-                        // Update diff tab (shows parent diff by default)
-                        if (fullData.code_diff || fullData.code) {
+                        if (fullData.repo_diff || fullData.repo_summary) {
                             diffControls.style.display = 'flex';
                             displayCurrentDiff();
                         } else {
-                            diffContentWrapper.innerHTML = "<p>No code diff available for this node.</p>";
+                            diffContentWrapper.innerHTML = "<p>No repository diff available for this node.</p>";
                             diffControls.style.display = 'none';
                         }
                     })
                     .catch(err => {
                         console.error("[DEBUG] Failed to load program details:", err);
-                        codeWrapper.innerHTML = `<p style="color: #dc3545;">Failed to load code: ${err.message}</p>`;
+                        codeWrapper.innerHTML = `<p style="color: #dc3545;">Failed to load summary: ${err.message}</p>`;
                         diffContentWrapper.innerHTML = "<p>Failed to load diff.</p>";
                         diffControls.style.display = 'none';
                     });
             } else {
                 document.querySelector('#agent-code .code-controls').style.display = 'none';
-                codeWrapper.innerHTML = "<p>No code available for this node.</p>";
-                diffContentWrapper.innerHTML = "<p>No code diff available for this node.</p>";
+                codeWrapper.innerHTML = "<p>No repository summary available for this node.</p>";
+                diffContentWrapper.innerHTML = "<p>No repository diff available for this node.</p>";
                 diffControls.style.display = 'none';
             }
             
@@ -6353,8 +6340,8 @@ console.error("[DEBUG] Error in processData:", error);
         window.currentDiffData = {
             parentDiff: null,
             initialDiff: null,
-            currentCode: null,
-            initialCode: null
+            currentSummary: null,
+            initialSummary: null
         };
         
         // Set diff comparison mode (parent or initial)
@@ -6376,7 +6363,7 @@ console.error("[DEBUG] Error in processData:", error);
                 initialBtn.classList.add('active');
                 
                 // If we don't have the initial diff cached, compute it
-                if (!window.currentDiffData.initialDiff && window.currentDiffData.currentCode) {
+                if (!window.currentDiffData.initialDiff && window.currentDiffData.currentSummary) {
                     computeInitialDiff();
                 } else {
                     displayCurrentDiff();
@@ -6403,16 +6390,15 @@ console.error("[DEBUG] Error in processData:", error);
             }
         }
         
-        // Compute diff between current code and initial program
+        // Compare the current and initial repository summaries.
         function computeInitialDiff() {
             const diffContentWrapper = document.getElementById('code-diff-content');
             
-            // First check if we already have the initial code
-            if (window.currentDiffData.initialCode !== null) {
+            if (window.currentDiffData.initialSummary !== null) {
                 // Generate the diff
                 window.currentDiffData.initialDiff = generateUnifiedDiff(
-                    window.currentDiffData.initialCode,
-                    window.currentDiffData.currentCode,
+                    window.currentDiffData.initialSummary,
+                    window.currentDiffData.currentSummary,
                     'initial',
                     'current'
                 );
@@ -6420,8 +6406,7 @@ console.error("[DEBUG] Error in processData:", error);
                 return;
             }
             
-            // Need to fetch the initial program's code
-            diffContentWrapper.innerHTML = `<p style="color: #666;">Loading initial program code...</p>`;
+            diffContentWrapper.innerHTML = `<p style="color: #666;">Loading initial repository summary...</p>`;
             
             // Find the initial node (generation 0)
             const initialNode = window.treeData?.find(d => d.generation === 0);
@@ -6430,19 +6415,18 @@ console.error("[DEBUG] Error in processData:", error);
                 return;
             }
             
-            // Fetch the initial program's code
             fetch(`/get_program_details?db_path=${encodeURIComponent(window.currentDbPath)}&id=${encodeURIComponent(initialNode.id)}`)
                 .then(r => {
                     if (!r.ok) throw new Error('Failed to load initial program');
                     return r.json();
                 })
                 .then(data => {
-                    window.currentDiffData.initialCode = data.code || '';
+                    window.currentDiffData.initialSummary = data.repo_summary || '';
                     
                     // Generate the diff
                     window.currentDiffData.initialDiff = generateUnifiedDiff(
-                        window.currentDiffData.initialCode,
-                        window.currentDiffData.currentCode,
+                        window.currentDiffData.initialSummary,
+                        window.currentDiffData.currentSummary,
                         'initial',
                         'current'
                     );
@@ -6466,7 +6450,7 @@ console.error("[DEBUG] Error in processData:", error);
             newText = newText || '';
             
             // Use the Diff library to create a unified diff
-            const patch = Diff.createPatch('code', oldText, newText, oldName, newName);
+            const patch = Diff.createPatch('repository-summary', oldText, newText, oldName, newName);
             
             // Remove the first 4 lines (diff header) if present, keeping just the hunks
             // Actually, let's keep the full format but make it cleaner
@@ -8386,7 +8370,7 @@ console.error("[DEBUG] Error in processData:", error);
             if (gen0Programs.length > 1) {
                 const gen0Groups = {};
                 gen0Programs.forEach(prog => {
-                    const key = prog.code || prog.id || 'no-code';
+                    const key = prog.repo_commit || prog.id;
                     if (!gen0Groups[key]) {
                         gen0Groups[key] = [];
                     }
@@ -12890,12 +12874,12 @@ console.error("[DEBUG] Error in processData:", error);
 
             // Get top performing programs
             const correctPrograms = window.treeData
-                .filter(d => d.correct && d.combined_score !== null && d.code)
+                .filter(d => d.correct && d.combined_score !== null && d.repo_summary)
                 .sort((a, b) => b.combined_score - a.combined_score)
                 .slice(0, numPrograms);
 
             if (correctPrograms.length === 0) {
-                alert('No correct programs with code found.');
+                alert('No correct repository individuals with summaries found.');
                 return;
             }
 
@@ -12908,40 +12892,15 @@ console.error("[DEBUG] Error in processData:", error);
             let summary = `Top ${actualCount} Performing Programs\n`;
             summary += `Generated on: ${new Date().toISOString()}\n`;
             summary += `Database: ${window.currentDbPath || 'Unknown'}\n\n`;
-            summary += `Rank\tGeneration\tScore\tName\tType\tLanguage\tAPI_Cost\tComplexity\tModel\tID\tParent_ID\tDescription\tFilename\n`;
+            summary += `Rank\tGeneration\tScore\tName\tType\tCommit\tAPI_Cost\tComplexity\tModel\tID\tParent_ID\tDescription\tFilename\n`;
             
             correctPrograms.forEach((program, index) => {
                 const rank = index + 1;
                 const gen = program.generation;
                 const score = program.combined_score.toFixed(6);
                 const name = program.metadata.patch_name || 'unnamed';
-                const language = program.language || 'py';
-                const extension = {
-                    'python': 'py',
-                    'cpp': 'cpp',
-                    'javascript': 'js',
-                    'cuda': 'cu',
-                    'fortran': 'f90'
-                }[language] || language;
-                
-                // Determine comment style based on language
-                const commentStyle = {
-                    'python': '#',
-                    'py': '#',
-                    'cpp': '//',
-                    'c++': '//',
-                    'javascript': '//',
-                    'js': '//',
-                    'cuda': '//',
-                    'cu': '//',
-                    'fortran': '!',
-                    'f90': '!',
-                    'f95': '!',
-                    'f03': '!',
-                    'f08': '!'
-                }[language.toLowerCase()] || '//';
-                
-                const filename = `${rank}_gen${gen}_${name.replace(/[^a-zA-Z0-9_-]/g, '_')}.${extension}`;
+                const commit = program.repo_commit || 'N/A';
+                const filename = `${rank}_gen${gen}_${name.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`;
                 
                 // Collect additional metadata
                 const patchType = program.metadata.patch_type || 'N/A';
@@ -12955,30 +12914,8 @@ console.error("[DEBUG] Error in processData:", error);
                     (program.metadata.patch_description.length > 100 ? '...' : '') : 'N/A';
                 
                 // Add to summary with all metadata
-                summary += `${rank}\t${gen}\t${score}\t${name}\t${patchType}\t${language}\t${apiCost}\t${complexity}\t${model}\t${programId}\t${parentId}\t${description}\t${filename}\n`;
-                
-                // Create program file content with appropriate comment style
-                let content = `${commentStyle} Rank: ${rank}\n`;
-                content += `${commentStyle} Generation: ${gen}\n`;
-                content += `${commentStyle} Score: ${score}\n`;
-                content += `${commentStyle} Name: ${name}\n`;
-                content += `${commentStyle} ID: ${program.id}\n`;
-                if (program.parent_id) {
-                    content += `${commentStyle} Parent ID: ${program.parent_id}\n`;
-                }
-                content += `${commentStyle} Type: ${program.metadata.patch_type || 'N/A'}\n`;
-                if (program.metadata.patch_description) {
-                    // Split description by line breaks and comment each line properly
-                    const descriptionLines = program.metadata.patch_description.split(/\r?\n/);
-                    content += `${commentStyle} Description: ${descriptionLines[0]}\n`;
-                    // Add continuation lines with proper commenting
-                    for (let i = 1; i < descriptionLines.length; i++) {
-                        if (descriptionLines[i].trim()) { // Only add non-empty lines
-                            content += `${commentStyle}              ${descriptionLines[i]}\n`;
-                        }
-                    }
-                }
-                content += `\n${program.code}`;
+                summary += `${rank}\t${gen}\t${score}\t${name}\t${patchType}\t${commit}\t${apiCost}\t${complexity}\t${model}\t${programId}\t${parentId}\t${description}\t${filename}\n`;
+                const content = program.repo_summary;
                 
                 // Add file to ZIP
                 zip.file(filename, content);

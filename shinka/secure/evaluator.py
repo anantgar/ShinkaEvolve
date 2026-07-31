@@ -1,4 +1,4 @@
-"""Trusted evaluator API; generated code is reachable only through a runner."""
+"""Trusted evaluator API; candidate repositories are reachable only through a runner."""
 
 from __future__ import annotations
 

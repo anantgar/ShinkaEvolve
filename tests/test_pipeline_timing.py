@@ -250,7 +250,7 @@ def test_process_single_job_safely_persists_timing_metadata():
 
         job = AsyncRunningJob(
             job_id="job-1",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=now - 6.0,
             proposal_started_at=now - 6.0,
@@ -328,7 +328,7 @@ def test_process_single_job_uses_completion_detection_time_for_eval_finish():
         completion_detected_at = now - 0.25
         job = AsyncRunningJob(
             job_id="job-detected-finish",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=now - 2.0,
             proposal_started_at=now - 2.0,
@@ -392,7 +392,7 @@ def test_process_single_job_safely_flushes_metadata_once_after_side_effects():
 
         job = AsyncRunningJob(
             job_id="job-flush-once",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time() - 4.0,
             proposal_started_at=time.time() - 4.0,
@@ -444,7 +444,7 @@ def test_process_single_job_safely_skips_duplicate_source_job():
 
         job = AsyncRunningJob(
             job_id="job-dup",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time() - 4.0,
             proposal_started_at=time.time() - 4.0,
@@ -513,8 +513,7 @@ def test_process_single_job_safely_reuses_existing_row_when_duplicate_matches():
 
         existing_program = Program(
             id="persisted-dup",
-            code="print('hi')\n",
-            language="python",
+            repo_summary="# Repository\n",
             generation=4,
             correct=True,
             combined_score=2.5,
@@ -528,7 +527,7 @@ def test_process_single_job_safely_reuses_existing_row_when_duplicate_matches():
 
         job = AsyncRunningJob(
             job_id="job-dup",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time() - 4.0,
             proposal_started_at=time.time() - 4.0,
@@ -596,8 +595,7 @@ def test_process_single_job_safely_ignores_duplicate_marker_on_existing_row():
 
         existing_program = Program(
             id="persisted-dup",
-            code="print('hi')\n",
-            language="python",
+            repo_summary="# Repository\n",
             generation=4,
             correct=True,
             combined_score=2.5,
@@ -614,7 +612,7 @@ def test_process_single_job_safely_ignores_duplicate_marker_on_existing_row():
 
         job = AsyncRunningJob(
             job_id="job-dup",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time() - 4.0,
             proposal_started_at=time.time() - 4.0,
@@ -672,7 +670,7 @@ def test_process_single_job_safely_reuses_initial_eval_finish_time_on_retry():
 
         job = AsyncRunningJob(
             job_id="job-retry",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=now - 6.0,
             proposal_started_at=now - 6.0,
@@ -758,7 +756,7 @@ def test_process_completed_jobs_safely_persists_completed_jobs_concurrently():
         jobs = [
             AsyncRunningJob(
                 job_id="job-a",
-                exec_fname="program_a.py",
+                repo_path="repo_a",
                 results_dir="results_a",
                 start_time=now - 6.0,
                 proposal_started_at=now - 6.0,
@@ -771,7 +769,7 @@ def test_process_completed_jobs_safely_persists_completed_jobs_concurrently():
             ),
             AsyncRunningJob(
                 job_id="job-b",
-                exec_fname="program_b.py",
+                repo_path="repo_b",
                 results_dir="results_b",
                 start_time=now - 5.5,
                 proposal_started_at=now - 5.5,
@@ -812,7 +810,7 @@ def test_process_completed_jobs_safely_waits_for_slow_side_effects():
 
         job = AsyncRunningJob(
             job_id="job-1",
-            exec_fname="program.py",
+            repo_path="repo",
             results_dir="results",
             start_time=time.time() - 3.0,
             proposal_started_at=time.time() - 3.0,
@@ -821,8 +819,7 @@ def test_process_completed_jobs_safely_waits_for_slow_side_effects():
         )
         program = Program(
             id="program-1",
-            code="print('hi')\n",
-            language="python",
+            repo_summary="# Repository\n",
             generation=4,
             metadata={},
         )

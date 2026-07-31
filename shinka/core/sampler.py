@@ -166,7 +166,7 @@ class PromptSampler:
         if patch_type == "diff":
             iter_msg = DIFF_ITER_MSG.format(
                 language=self.language,
-                code_content=parent_content,
+                repo_summary=parent_content,
                 performance_metrics=perf_str(
                     parent.combined_score, parent.public_metrics
                 ),
@@ -175,7 +175,7 @@ class PromptSampler:
         elif patch_type == "full":
             iter_msg = FULL_ITER_MSG.format(
                 language=self.language,
-                code_content=parent_content,
+                repo_summary=parent_content,
                 performance_metrics=perf_str(
                     parent.combined_score, parent.public_metrics
                 ),
@@ -184,7 +184,7 @@ class PromptSampler:
         elif patch_type == "cross":
             iter_msg = CROSS_ITER_MSG.format(
                 language=self.language,
-                code_content=parent_content,
+                repo_summary=parent_content,
                 performance_metrics=perf_str(
                     parent.combined_score, parent.public_metrics
                 ),

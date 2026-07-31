@@ -19,7 +19,7 @@ Do not return a standalone full-code response for Shinka to apply.
 CROSS_ITER_MSG = """# Current repository individual
 
 Here is the current repository summary:
-{code_content}
+{repo_summary}
 
 Here are the performance metrics of the repository individual:
 

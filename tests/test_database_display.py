@@ -13,8 +13,7 @@ def test_print_summary_shows_total_programs_as_stored_over_target():
         """
         CREATE TABLE programs (
             id TEXT PRIMARY KEY,
-            code TEXT,
-            language TEXT,
+            repo_summary TEXT,
             parent_id TEXT,
             generation INTEGER,
             timestamp REAL,
@@ -34,15 +33,14 @@ def test_print_summary_shows_total_programs_as_stored_over_target():
     cursor.execute(
         """
         INSERT INTO programs (
-            id, code, language, parent_id, generation, timestamp, metadata,
+            id, repo_summary, parent_id, generation, timestamp, metadata,
             combined_score, public_metrics, private_metrics, complexity,
             embedding, correct, island_idx, children_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "p1",
-            "print('hi')",
-            "python",
+            "# Individual Summary\n",
             None,
             0,
             0.0,

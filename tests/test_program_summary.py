@@ -16,7 +16,7 @@ def test_program_summary_excludes_full_embeddings_but_keeps_pca_fields():
             db.add(
                 Program(
                     id="p0",
-                    code="def f():\n    return 1\n",
+                    repo_summary="# Repository\n",
                     correct=True,
                     combined_score=1.0,
                     generation=0,
@@ -51,7 +51,7 @@ def test_program_summary_includes_text_feedback_for_lightweight_details():
             db.add(
                 Program(
                     id="failure-node",
-                    code="",
+                    repo_summary="",
                     correct=False,
                     combined_score=0.0,
                     generation=3,

@@ -11,7 +11,7 @@ from shinka.database.async_dbase import AsyncProgramDatabase
 def _program(program_id: str) -> Program:
     return Program(
         id=program_id,
-        code="def f():\n    return 1\n",
+        repo_summary="# Repository\n",
         correct=True,
         combined_score=1.0,
         generation=0,

@@ -1,7 +1,10 @@
-import sys
+import json
 import sqlite3
+import sys
 from pathlib import Path
 from types import ModuleType
+
+from shinka.database import DatabaseConfig, ProgramDatabase
 
 markdown_stub = ModuleType("markdown")
 setattr(markdown_stub, "markdown", lambda text: text)
@@ -26,26 +29,45 @@ def _make_handler(search_root: Path):
     return handler
 
 
-def test_failed_node_language_infers_verilog_from_suffix(tmp_path):
-    handler = _make_handler(tmp_path)
-
-    assert handler._language_from_suffix(".sv") == "verilog"
-
-
-def test_failed_node_code_path_prefers_verilog_extension(tmp_path):
-    handler = _make_handler(tmp_path)
-    failure_dir = tmp_path / "results" / "gen_1"
-    failure_dir.mkdir(parents=True)
-    expected_path = failure_dir / "main.sv"
-    expected_path.write_text("module main; endmodule\n", encoding="utf-8")
-    (failure_dir / "main.py").write_text("print('fallback')\n", encoding="utf-8")
-
-    code_path = handler._resolve_failed_node_code_path(
-        {"failure_json_path": "results/gen_1/failure.json"},
-        {"language": "verilog"},
+def _create_program_database(path: Path) -> None:
+    database = ProgramDatabase(
+        DatabaseConfig(db_path=str(path), num_islands=1),
+        embedding_model=None,
     )
+    database.close()
 
-    assert code_path == expected_path
+
+def _record_failed_proposal(
+    db_path: Path,
+    *,
+    generation: int = 7,
+    details: dict | None = None,
+) -> None:
+    payload = {
+        "node_kind": "failed_proposal",
+        "failure_stage": "proposal",
+        "failure_class": "proposal_generation_failed",
+        "failure_reason": "proposal failed",
+        "parent_id": "parent-1",
+        "failure_json_path": f"results/gen_{generation}/failure.json",
+        "pipeline_started_at": 100.0,
+        "sampling_started_at": 100.0,
+        "sampling_finished_at": 105.0,
+        "evaluation_started_at": 105.0,
+        "evaluation_finished_at": 105.0,
+        "postprocess_started_at": 105.0,
+        "postprocess_finished_at": 105.0,
+    }
+    payload.update(details or {})
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO attempt_log
+                (generation, stage, status, details, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (generation, "proposal", "failed", json.dumps(payload), 123.0),
+        )
 
 
 def test_handle_get_meta_files_returns_processed_counts(tmp_path):
@@ -87,8 +109,10 @@ def test_handle_get_meta_content_returns_processed_count(tmp_path):
     meta_dir.mkdir(parents=True)
     db_path = results_dir / "programs.sqlite"
     db_path.write_text("", encoding="utf-8")
-    meta_path = meta_dir / "meta_60.txt"
-    meta_path.write_text("# META RECOMMENDATIONS", encoding="utf-8")
+    (meta_dir / "meta_60.txt").write_text(
+        "# META RECOMMENDATIONS",
+        encoding="utf-8",
+    )
 
     handler = _make_handler(tmp_path)
     sent = {}
@@ -110,79 +134,20 @@ def test_handle_get_programs_summary_merges_failed_attempt_nodes(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
     db_path = results_dir / "programs.sqlite"
+    _create_program_database(db_path)
 
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            parent_id TEXT,
-            generation INTEGER,
-            timestamp REAL,
-            combined_score REAL,
-            correct INTEGER,
-            complexity REAL,
-            island_idx INTEGER,
-            children_count INTEGER,
-            public_metrics TEXT,
-            private_metrics TEXT,
-            metadata TEXT,
-            embedding_pca_2d TEXT,
-            embedding_pca_3d TEXT,
-            embedding_cluster_id INTEGER,
-            language TEXT,
-            text_feedback TEXT,
-            top_k_inspiration_ids TEXT,
-            archive_inspiration_ids TEXT,
-            migration_history TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE archive (
-            program_id TEXT PRIMARY KEY
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE metadata_store (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE attempt_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            generation INTEGER NOT NULL,
-            stage TEXT NOT NULL,
-            status TEXT NOT NULL,
-            details TEXT,
-            created_at REAL NOT NULL
-        )
-        """
-    )
-    failure_json = results_dir / "gen_7" / "failure.json"
-    failure_json.parent.mkdir(parents=True)
-    failure_json.write_text(
-        '{"failure_reason":"proposal failed","failure_json_path":"results/gen_7/failure.json"}',
+    failure_path = results_dir / "gen_7" / "failure.json"
+    failure_path.parent.mkdir(parents=True)
+    failure_path.write_text(
+        json.dumps(
+            {
+                "failure_reason": "proposal failed",
+                "failure_json_path": "results/gen_7/failure.json",
+            }
+        ),
         encoding="utf-8",
     )
-    conn.execute(
-        "INSERT INTO attempt_log (generation, stage, status, details, created_at) VALUES (?, ?, ?, ?, ?)",
-        (
-            7,
-            "proposal",
-            "failed",
-            '{"node_kind":"failed_proposal","failure_stage":"proposal","failure_class":"patch_apply_failed","failure_reason":"proposal failed","parent_id":"parent-1","failure_json_path":"results/gen_7/failure.json","pipeline_started_at":100.0,"sampling_started_at":100.0,"sampling_finished_at":105.0,"evaluation_started_at":105.0,"evaluation_finished_at":105.0,"postprocess_started_at":105.0,"postprocess_finished_at":105.0}',
-            123.0,
-        ),
-    )
-    conn.commit()
-    conn.close()
+    _record_failed_proposal(db_path)
 
     handler = _make_handler(tmp_path)
     sent = {}
@@ -196,70 +161,33 @@ def test_handle_get_programs_summary_merges_failed_attempt_nodes(tmp_path):
     failed_node = sent["data"][0]
     assert failed_node["id"] == "failed:proposal:7"
     assert failed_node["parent_id"] == "parent-1"
+    assert failed_node["repo_summary"] is None
     assert failed_node["metadata"]["node_kind"] == "failed_proposal"
     assert failed_node["text_feedback"] == "proposal failed"
     assert failed_node["metadata"]["sampling_started_at"] == 100.0
     assert failed_node["metadata"]["postprocess_finished_at"] == 105.0
 
 
-def test_handle_get_program_details_returns_failed_attempt_node(tmp_path):
+def test_handle_get_program_details_returns_failed_repo_summary(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
     db_path = results_dir / "programs.sqlite"
+    _create_program_database(db_path)
 
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            code TEXT,
-            generation INTEGER,
-            correct INTEGER,
-            combined_score REAL,
-            timestamp REAL,
-            metadata TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE metadata_store (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE attempt_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            generation INTEGER NOT NULL,
-            stage TEXT NOT NULL,
-            status TEXT NOT NULL,
-            details TEXT,
-            created_at REAL NOT NULL
-        )
-        """
-    )
-    gen_dir = results_dir / "gen_7"
-    gen_dir.mkdir(parents=True)
-    (gen_dir / "main.py").write_text("print('candidate')\n", encoding="utf-8")
-    (gen_dir / "failure.json").write_text(
-        '{"artifacts":{"generated_code_path":"results/gen_7/main.py"},"failure_reason":"proposal failed","failure_json_path":"results/gen_7/failure.json"}',
+    summary = "# Individual Summary\n\nFailed candidate summary.\n"
+    failure_path = results_dir / "gen_7" / "failure.json"
+    failure_path.parent.mkdir(parents=True)
+    failure_path.write_text(
+        json.dumps(
+            {
+                "repo_summary": summary,
+                "failure_reason": "proposal failed",
+                "failure_json_path": "results/gen_7/failure.json",
+            }
+        ),
         encoding="utf-8",
     )
-    conn.execute(
-        "INSERT INTO attempt_log (generation, stage, status, details, created_at) VALUES (?, ?, ?, ?, ?)",
-        (
-            7,
-            "proposal",
-            "failed",
-            '{"node_kind":"failed_proposal","failure_stage":"proposal","failure_class":"llm_output_invalid","failure_reason":"proposal failed","failure_json_path":"results/gen_7/failure.json","pipeline_started_at":100.0,"sampling_started_at":100.0,"sampling_finished_at":105.0,"evaluation_started_at":105.0,"evaluation_finished_at":105.0,"postprocess_started_at":105.0,"postprocess_finished_at":105.0}',
-            123.0,
-        ),
-    )
-    conn.commit()
-    conn.close()
+    _record_failed_proposal(db_path)
 
     handler = _make_handler(tmp_path)
     sent = {}
@@ -267,276 +195,51 @@ def test_handle_get_program_details_returns_failed_attempt_node(tmp_path):
     handler.send_error = lambda code, msg: sent.setdefault("error", (code, msg))
 
     handler.handle_get_program_details(
-        "results/programs.sqlite", "failed:proposal:7"
+        "results/programs.sqlite",
+        "failed:proposal:7",
     )
 
     assert "error" not in sent
     assert sent["data"]["id"] == "failed:proposal:7"
-    assert sent["data"]["code"] == "print('candidate')\n"
-    assert sent["data"]["metadata"]["failure_class"] == "llm_output_invalid"
+    assert sent["data"]["repo_summary"] == summary
+    assert sent["data"]["metadata"]["failure_class"] == (
+        "proposal_generation_failed"
+    )
     assert sent["data"]["metadata"]["pipeline_started_at"] == 100.0
     assert sent["data"]["metadata"]["postprocess_finished_at"] == 105.0
 
 
-def test_handle_get_program_details_loads_failed_non_python_node_with_language_fallback(
-    tmp_path,
-):
-    results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    db_path = results_dir / "programs.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            code TEXT,
-            generation INTEGER,
-            correct INTEGER,
-            combined_score REAL,
-            timestamp REAL,
-            metadata TEXT
+def _create_stats_database(db_path: Path, rows: list[tuple]) -> None:
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE programs (
+                id TEXT PRIMARY KEY,
+                repo_summary TEXT,
+                generation INTEGER,
+                correct INTEGER,
+                combined_score REAL,
+                timestamp REAL,
+                metadata TEXT
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE metadata_store (
-            key TEXT PRIMARY KEY,
-            value TEXT
+        connection.executemany(
+            "INSERT INTO programs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            rows,
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE attempt_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            generation INTEGER NOT NULL,
-            stage TEXT NOT NULL,
-            status TEXT NOT NULL,
-            details TEXT,
-            created_at REAL NOT NULL
-        )
-        """
-    )
-    gen_dir = results_dir / "gen_8"
-    gen_dir.mkdir(parents=True)
-    (gen_dir / "main.js").write_text("console.log('candidate');\n", encoding="utf-8")
-    (gen_dir / "failure.json").write_text(
-        '{"language":"javascript","failure_reason":"proposal failed","failure_json_path":"results/gen_8/failure.json"}',
-        encoding="utf-8",
-    )
-    conn.execute(
-        "INSERT INTO attempt_log (generation, stage, status, details, created_at) VALUES (?, ?, ?, ?, ?)",
-        (
-            8,
-            "proposal",
-            "failed",
-            '{"node_kind":"failed_proposal","failure_stage":"proposal","failure_class":"llm_output_invalid","failure_reason":"proposal failed","failure_json_path":"results/gen_8/failure.json"}',
-            130.0,
-        ),
-    )
-    conn.commit()
-    conn.close()
-
-    handler = _make_handler(tmp_path)
-    sent = {}
-    handler.send_json_response = lambda data: sent.setdefault("data", data)
-    handler.send_error = lambda code, msg: sent.setdefault("error", (code, msg))
-
-    handler.handle_get_program_details(
-        "results/programs.sqlite", "failed:proposal:8"
-    )
-
-    assert "error" not in sent
-    assert sent["data"]["id"] == "failed:proposal:8"
-    assert sent["data"]["language"] == "javascript"
-    assert sent["data"]["code"] == "console.log('candidate');\n"
-
-
-def test_handle_get_program_details_infers_failed_fortran_node_from_suffix(
-    tmp_path,
-):
-    results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    db_path = results_dir / "programs.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            code TEXT,
-            generation INTEGER,
-            correct INTEGER,
-            combined_score REAL,
-            timestamp REAL,
-            metadata TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE metadata_store (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE attempt_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            generation INTEGER NOT NULL,
-            stage TEXT NOT NULL,
-            status TEXT NOT NULL,
-            details TEXT,
-            created_at REAL NOT NULL
-        )
-        """
-    )
-    gen_dir = results_dir / "gen_9"
-    gen_dir.mkdir(parents=True)
-    (gen_dir / "main.f90").write_text(
-        "program main\nend program main\n",
-        encoding="utf-8",
-    )
-    (gen_dir / "failure.json").write_text(
-        '{"artifacts":{"generated_code_path":"results/gen_9/main.f90"}}',
-        encoding="utf-8",
-    )
-    conn.execute(
-        "INSERT INTO attempt_log (generation, stage, status, details, created_at) VALUES (?, ?, ?, ?, ?)",
-        (
-            9,
-            "proposal",
-            "failed",
-            '{"node_kind":"failed_proposal","failure_stage":"proposal","failure_class":"llm_output_invalid","failure_reason":"proposal failed","failure_json_path":"results/gen_9/failure.json"}',
-            140.0,
-        ),
-    )
-    conn.commit()
-    conn.close()
-
-    handler = _make_handler(tmp_path)
-    sent = {}
-    handler.send_json_response = lambda data: sent.setdefault("data", data)
-    handler.send_error = lambda code, msg: sent.setdefault("error", (code, msg))
-
-    handler.handle_get_program_details(
-        "results/programs.sqlite", "failed:proposal:9"
-    )
-
-    assert "error" not in sent
-    assert sent["data"]["id"] == "failed:proposal:9"
-    assert sent["data"]["language"] == "fortran"
-    assert sent["data"]["code"] == "program main\nend program main\n"
-
-
-def test_handle_get_program_details_infers_failed_go_node_from_suffix(
-    tmp_path,
-):
-    results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    db_path = results_dir / "programs.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            code TEXT,
-            generation INTEGER,
-            correct INTEGER,
-            combined_score REAL,
-            timestamp REAL,
-            metadata TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE metadata_store (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE attempt_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            generation INTEGER NOT NULL,
-            stage TEXT NOT NULL,
-            status TEXT NOT NULL,
-            details TEXT,
-            created_at REAL NOT NULL
-        )
-        """
-    )
-    gen_dir = results_dir / "gen_10"
-    gen_dir.mkdir(parents=True)
-    (gen_dir / "main.go").write_text(
-        "package main\nfunc main() {}\n",
-        encoding="utf-8",
-    )
-    (gen_dir / "failure.json").write_text(
-        '{"artifacts":{"generated_code_path":"results/gen_10/main.go"}}',
-        encoding="utf-8",
-    )
-    conn.execute(
-        "INSERT INTO attempt_log (generation, stage, status, details, created_at) VALUES (?, ?, ?, ?, ?)",
-        (
-            10,
-            "proposal",
-            "failed",
-            '{"node_kind":"failed_proposal","failure_stage":"proposal","failure_class":"llm_output_invalid","failure_reason":"proposal failed","failure_json_path":"results/gen_10/failure.json"}',
-            150.0,
-        ),
-    )
-    conn.commit()
-    conn.close()
-
-    handler = _make_handler(tmp_path)
-    sent = {}
-    handler.send_json_response = lambda data: sent.setdefault("data", data)
-    handler.send_error = lambda code, msg: sent.setdefault("error", (code, msg))
-
-    handler.handle_get_program_details(
-        "results/programs.sqlite", "failed:proposal:10"
-    )
-
-    assert "error" not in sent
-    assert sent["data"]["id"] == "failed:proposal:10"
-    assert sent["data"]["language"] == "go"
-    assert sent["data"]["code"] == "package main\nfunc main() {}\n"
 
 
 def test_handle_get_database_stats_uses_best_correct_program(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
     db_path = results_dir / "programs.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            code TEXT,
-            generation INTEGER,
-            correct INTEGER,
-            combined_score REAL,
-            timestamp REAL,
-            metadata TEXT
-        )
-        """
-    )
-    conn.executemany(
-        "INSERT INTO programs VALUES (?, ?, ?, ?, ?, ?, ?)",
+    _create_stats_database(
+        db_path,
         [
             (
                 "incorrect-best",
-                "print('bad')",
+                "# Incorrect\n",
                 5,
                 0,
                 10.0,
@@ -545,7 +248,7 @@ def test_handle_get_database_stats_uses_best_correct_program(tmp_path):
             ),
             (
                 "correct-best",
-                "print('good')",
+                "# Correct\n",
                 2,
                 1,
                 3.5,
@@ -554,8 +257,6 @@ def test_handle_get_database_stats_uses_best_correct_program(tmp_path):
             ),
         ],
     )
-    conn.commit()
-    conn.close()
 
     handler = _make_handler(tmp_path)
     sent = {}
@@ -573,34 +274,19 @@ def test_handle_get_database_stats_uses_best_correct_program(tmp_path):
     assert sent["data"]["gens_since_improvement"] == 3
 
 
-def test_handle_get_database_stats_returns_no_best_when_no_correct_programs(tmp_path):
+def test_handle_get_database_stats_returns_no_best_when_no_correct_programs(
+    tmp_path,
+):
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
     db_path = results_dir / "programs.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE programs (
-            id TEXT PRIMARY KEY,
-            code TEXT,
-            generation INTEGER,
-            correct INTEGER,
-            combined_score REAL,
-            timestamp REAL,
-            metadata TEXT
-        )
-        """
-    )
-    conn.executemany(
-        "INSERT INTO programs VALUES (?, ?, ?, ?, ?, ?, ?)",
+    _create_stats_database(
+        db_path,
         [
-            ("p1", "print('a')", 1, 0, 2.0, 100.0, "{}"),
-            ("p2", "print('b')", 4, 0, 9.0, 130.0, "{}"),
+            ("p1", "# One\n", 1, 0, 2.0, 100.0, "{}"),
+            ("p2", "# Two\n", 4, 0, 9.0, 130.0, "{}"),
         ],
     )
-    conn.commit()
-    conn.close()
 
     handler = _make_handler(tmp_path)
     sent = {}

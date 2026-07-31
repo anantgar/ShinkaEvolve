@@ -436,9 +436,6 @@ def test_repo_database_fields_roundtrip(tmp_path):
     )
     repo = Program(
         id="repo-1",
-        code="# summary\n",
-        language="repo",
-        individual_type="repo",
         generation=0,
         repo_commit="abc",
         repo_parent_commit="parent",
@@ -460,7 +457,6 @@ def test_repo_database_fields_roundtrip(tmp_path):
     loaded = db.get("repo-1")
 
     assert loaded is not None
-    assert loaded.individual_type == "repo"
     assert loaded.repo_commit == "abc"
     assert loaded.changed_files == ["src/app.py"]
     assert loaded.agent_session_id == "shinka-gen-0-repo1"
@@ -478,11 +474,7 @@ def test_repo_island_copies_preserve_repo_fields(tmp_path):
     )
     repo = Program(
         id="repo-root",
-        code="# summary\n",
-        language="repo",
-        individual_type="repo",
         generation=0,
-        code_diff="diff --git a/src/app.py b/src/app.py\n",
         repo_commit="abc",
         repo_parent_commit="parent",
         repo_diff="diff --git a/src/app.py b/src/app.py\n",
@@ -516,7 +508,6 @@ def test_repo_island_copies_preserve_repo_fields(tmp_path):
     assert len(copies) == 2
 
     for copy in copies:
-        assert copy["individual_type"] == "repo"
         assert copy["parent_id"] is None
         assert copy["repo_commit"] == "abc"
         assert copy["repo_parent_commit"] == "parent"
@@ -532,7 +523,6 @@ def test_repo_island_copies_preserve_repo_fields(tmp_path):
         assert copy["agent_provider"] == "codex"
         assert copy["agent_model"] == "gpt-test"
         assert copy["system_prompt_id"] == "prompt-1"
-        assert copy["code_diff"] == repo.code_diff
         assert copy["combined_score"] == 1.25
         assert json.loads(copy["public_metrics"]) == {"valid": True}
         assert json.loads(copy["private_metrics"]) == {"lengths": [1.0, 2.0]}
@@ -556,9 +546,6 @@ def test_dynamic_spawned_island_copy_preserves_repo_fields(tmp_path):
     )
     repo = Program(
         id="repo-root",
-        code="# summary\n",
-        language="repo",
-        individual_type="repo",
         generation=0,
         repo_commit="abc",
         repo_parent_commit="parent",
@@ -636,7 +623,7 @@ def test_scheduler_passes_repo_path_and_cwd(tmp_path):
         config=LocalJobConfig(eval_program_path=str(evaluator)),
     )
 
-    results, _ = scheduler.run(str(repo), str(tmp_path / "results"), str(repo))
+    results, _ = scheduler.run(str(repo), str(tmp_path / "results"))
 
     assert results["correct"]["correct"] is True
 
