@@ -38,10 +38,22 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Detect required W&B credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "${WANDB_API_KEY:-}" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "WANDB_API_KEY is not configured; skipping W&B integration tests."
+          fi
+
       - name: Install project
         run: uv sync --dev --extra wandb
 
       - name: Run secret-backed integration tests
+        if: steps.credentials.outputs.available == 'true'
         run: |
           set +e
           uv run pytest -q -m "requires_secrets"

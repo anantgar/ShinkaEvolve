@@ -16,6 +16,7 @@ from shinka.secure.canonical import canonical_json_bytes
 from shinka.secure.containers import (
     ContainerMount,
     ContainerPlan,
+    DockerEngine,
     _validate_headless_image_agents,
     normalize_candidate_permissions,
     prepare_bind_source,
@@ -37,6 +38,7 @@ from shinka.secure.dependencies import (
 )
 from shinka.secure.errors import (
     ConfigurationError,
+    FailureClass,
     ResultValidationError,
     SecureExecutionError,
     SecurityPolicyError,
@@ -63,6 +65,41 @@ IMAGE = "example.invalid/runtime@sha256:" + "a" * 64
 
 def _limits() -> ResourceLimits:
     return ResourceLimits(cpus=1, memory_bytes=128 * 1024 * 1024, pids=16)
+
+
+def test_list_managed_ignores_container_removed_during_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = DockerEngine()
+    monkeypatch.setattr(
+        engine,
+        "_run",
+        lambda argv, **kwargs: SimpleNamespace(stdout=b"gone\nlive\n"),
+    )
+
+    def inspect(identifier: str):
+        if identifier == "gone":
+            raise SecureExecutionError(
+                FailureClass.CONTAINER_PREFLIGHT,
+                "The secure container engine rejected an operation",
+                private_diagnostic="Error: No such object: gone",
+            )
+        return {
+            "Id": "live",
+            "Name": "/shinka-live",
+            "Config": {
+                "Labels": {
+                    "shinka.managed": "true",
+                    "shinka.job_id": "job",
+                    "shinka.attempt_id": "attempt",
+                    "shinka.role": "runtime",
+                }
+            },
+        }
+
+    monkeypatch.setattr(engine, "inspect", inspect)
+    handles = engine.list_managed()
+    assert [handle.container_id for handle in handles] == ["live"]
 
 
 def _spec(*, allowlist: tuple[str, ...] = ("score",)) -> JobSpec:
@@ -534,7 +571,6 @@ def test_secure_mutation_invokes_headless_adapter() -> None:
         "124",
         "--allow",
         "yolo",
-        "--json",
         "--usage",
     )
     assert stdin_data == b"reply exactly ok"
@@ -563,7 +599,6 @@ def test_secure_mutation_supports_every_pinned_native_headless_agent(
         "/workspace",
         "--allow",
         "yolo",
-        "--json",
         "--usage",
     )
     assert stdin_data == b"prompt"

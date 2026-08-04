@@ -23,6 +23,10 @@ def test_integration_workflow_exists_for_secret_backed_tests() -> None:
     assert 'pytest -q -m "requires_secrets"' in workflow
     assert 'pytest -q -m "models_dev_live"' in workflow
     assert "OPENAI_API_KEY" in workflow
+    assert "Detect required W&B credentials" in workflow
+    assert 'if [[ -n "${WANDB_API_KEY:-}" ]]; then' in workflow
+    assert 'echo "available=false" >> "$GITHUB_OUTPUT"' in workflow
+    assert "if: steps.credentials.outputs.available == 'true'" in workflow
 
 
 def test_headless_image_workflow_qualifies_immutable_digest() -> None:

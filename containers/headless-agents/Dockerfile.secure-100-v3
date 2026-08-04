@@ -1,0 +1,11 @@
+FROM shinka-headless-agents:secure-100-v2-20260731
+
+USER root
+
+RUN cp /usr/local/bin/agy /usr/local/bin/agy-real
+COPY agy-print-timeout-wrapper.sh /usr/local/bin/agy
+RUN chmod 0755 /usr/local/bin/agy /usr/local/bin/agy-real
+
+LABEL io.shinka.antigravity.print-timeout="900s"
+
+USER 65532:65532

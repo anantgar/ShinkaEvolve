@@ -854,7 +854,17 @@ class DockerEngine:
         ).splitlines():
             if not identifier.strip():
                 continue
-            data = self.inspect(identifier.strip())
+            try:
+                data = self.inspect(identifier.strip())
+            except SecureExecutionError as exc:
+                # A concurrent worker may remove a managed container after
+                # `docker ps` returns it but before this inspection.  That
+                # container is already cleaned; preserve fail-closed behavior
+                # for every other Docker error.
+                diagnostic = (exc.private_diagnostic or "").lower()
+                if "no such object" in diagnostic or "not found" in diagnostic:
+                    continue
+                raise
             labels = (data.get("Config") or {}).get("Labels") or {}
             handles.append(
                 ContainerHandle(

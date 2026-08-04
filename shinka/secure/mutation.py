@@ -343,7 +343,10 @@ def _agent_command(
         if not _SESSION_NAME.fullmatch(session_name):
             raise SecurityPolicyError("Invalid Headless session name")
         args.extend(["--session", session_name])
-    args.extend(["--allow", "yolo", "--json", "--usage"])
+    # Headless 0.4.x treats --json and --usage as mutually exclusive.  The
+    # usage mode still emits the final assistant message plus its normalized
+    # usage record, which is all the secure adapter needs.
+    args.extend(["--allow", "yolo", "--usage"])
     return tuple(args), prompt.encode("utf-8")
 
 
@@ -839,6 +842,13 @@ def run_agent_in_workspace(
                         -4000:
                     ],
                 )
+            if resolved_session_home is not None:
+                # The agent needs the copied auth file during this turn, and
+                # some CLIs refresh it before exiting. Remove that known path
+                # before scanning the durable home so expected auth refreshes
+                # do not look like credential exfiltration; unexpected copies
+                # elsewhere are still rejected below.
+                _remove_persisted_credentials(resolved_session_home, agent.agent)
             leak_error: SecurityPolicyError | None = None
             try:
                 _reject_exact_secret_copies(

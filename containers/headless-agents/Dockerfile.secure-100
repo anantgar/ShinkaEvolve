@@ -1,0 +1,10 @@
+FROM shinka-headless-agents:test
+
+USER root
+
+RUN npm install --global "@openai/codex@0.146.0" \
+    && npm cache clean --force
+
+LABEL io.shinka.codex.version="0.146.0"
+
+USER 65532:65532

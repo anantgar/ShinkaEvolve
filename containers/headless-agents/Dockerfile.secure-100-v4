@@ -1,0 +1,17 @@
+FROM shinka-headless-agents:secure-100-v3-20260731
+
+USER root
+
+ARG AGY_VERSION=1.1.9
+ARG AGY_SHA256=deeb815d07a656074482b2e428ffd9794a2fffbf5df2056e9bf75936b85ebb49
+
+RUN curl -fsSL "https://github.com/google-antigravity/antigravity-cli/releases/download/${AGY_VERSION}/agy_cli_linux_arm64.tar.gz" -o /tmp/agy.tar.gz \
+    && echo "${AGY_SHA256}  /tmp/agy.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/agy.tar.gz -C /tmp antigravity \
+    && install -m 0755 /tmp/antigravity /usr/local/bin/agy-real \
+    && rm -f /tmp/agy.tar.gz /tmp/antigravity
+
+LABEL io.shinka.antigravity.release="1.1.9" \
+      io.shinka.antigravity.print-timeout="900s"
+
+USER 65532:65532
