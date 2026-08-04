@@ -8,8 +8,6 @@ from shinka.defaults import (
     default_llm_models,
     default_patch_type_probs,
     default_patch_types,
-    default_prompt_patch_type_probs,
-    default_prompt_patch_types,
 )
 
 FOLDER_PREFIX = "gen"
@@ -127,10 +125,6 @@ class EvolutionConfig:
 
     # Meta-prompt evolution settings.
     evolve_prompts: bool = False
-    prompt_patch_types: List[str] = field(default_factory=default_prompt_patch_types)
-    prompt_patch_type_probs: List[float] = field(
-        default_factory=default_prompt_patch_type_probs
-    )
     prompt_evolution_interval: Optional[int] = None
     prompt_archive_size: int = 10
     prompt_llm_models: Optional[List[str]] = None

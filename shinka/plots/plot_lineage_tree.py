@@ -155,7 +155,6 @@ def plot_lineage_tree(
                 levels[depth].append(node)
 
             # Create clean hierarchical positioning
-            max_depth = max(levels.keys()) if levels else 0
             # Total nodes in graph for base spacing
             total_nodes = len(G.nodes())
             for depth in sorted(levels.keys()):
@@ -425,7 +424,7 @@ def plot_lineage_tree(
             current_node_color = "lightgray"
             current_edge_color = "black"
             current_linewidth = 1.5
-            current_node_shape = "o"  # Default shape, circle for "diff"
+            current_node_shape = "o"  # Default shape for unknown legacy values
 
             # Check if node is incorrect first (overrides other shape logic)
             is_correct = node_attrs.get("correct", True)  # Default to True
@@ -568,18 +567,7 @@ def plot_lineage_tree(
             markersize=20,
             label="Best Score",
         )
-        # Create line legend with appropriate width
-        path_line = Line2D([0], [0], color="red", linewidth=4, label=r"Path$\to$Best")
         # Legend for patch types
-        diff_patch = Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            label="Diff Edit",
-            markerfacecolor="gray",
-            markersize=10,
-        )
         full_patch = Line2D(
             [0],
             [0],
@@ -630,8 +618,6 @@ def plot_lineage_tree(
 
         legend_handles = [
             star_patch,
-            # path_line,
-            diff_patch,
             full_patch,
             init_patch,
             # paper_patch,

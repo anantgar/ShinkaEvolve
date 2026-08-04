@@ -53,13 +53,11 @@ db_config:
 evo_config:
   # Allowed patch formats for code evolution.
   patch_types:
-    - diff
     - full
     - cross
   # Sampling probabilities aligned with patch_types order.
   patch_type_probs:
-    - 0.6
-    - 0.3
+    - 0.9
     - 0.1
   # Total number of generations to run.
   num_generations: 200
@@ -154,10 +152,6 @@ evo_config:
   evolve_prompts: False
   # Interval (in generations) between prompt-evolution steps.
   prompt_evolution_interval: 10
-  # Allowed patch formats when mutating prompts.
-  prompt_patch_types: ["diff", "full"]
-  # Sampling probabilities aligned with prompt_patch_types order.
-  prompt_patch_type_probs: [0.5, 0.5]
   # Maximum number of prompt variants kept in the prompt archive.
   prompt_archive_size: 10
   # Interval (in generations) for recomputing prompt percentiles.

@@ -1544,8 +1544,6 @@ class ShinkaEvolveRunner:
         # Initialize prompt evolver
         self.prompt_evolver = AsyncSystemPromptEvolver(
             llm_client=self.prompt_llm,
-            patch_types=self.evo_config.prompt_patch_types,
-            patch_type_probs=self.evo_config.prompt_patch_type_probs,
             llm_kwargs=self.evo_config.prompt_llm_kwargs,
         )
 
@@ -3642,7 +3640,10 @@ class ShinkaEvolveRunner:
                 archive_inspirations=archive_programs,
                 top_k_inspirations=top_k_programs or [],
                 meta_recommendations=meta_recs,
+                patch_type="full" if fix_mode else None,
             )
+            if fix_mode:
+                patch_type = "fix"
             if worktree is not None:
                 presentation_paths = self._agent_hidden_paths_for_worktree(
                     worktree.path

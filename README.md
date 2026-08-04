@@ -219,8 +219,8 @@ Class defaults below come from `shinka/core/config.py` (`EvolutionConfig`). Hydr
 | Key | Default Value | Type | Explanation |
 |-----|---------------|------|-------------|
 | `task_sys_msg` | `"You are an expert optimization and algorithm design assistant. Improve the program while preserving correctness and immutable regions."` | `Optional[str]` | System message describing the optimization task |
-| `patch_types` | `["diff", "full", "cross"]` | `List[str]` | Types of patches to generate: "diff", "full", "cross" |
-| `patch_type_probs` | `[0.6, 0.3, 0.1]` | `List[float]` | Probabilities for each patch type |
+| `patch_types` | `["full", "cross"]` | `List[str]` | Mutation strategies to generate: "full" or "cross" |
+| `patch_type_probs` | `[0.9, 0.1]` | `List[float]` | Probabilities for each mutation strategy |
 | `num_generations` | `50` | `int` | Number of evolution generations to run |
 | `max_patch_resamples` | `3` | `int` | Max times to resample a patch if it fails |
 | `max_patch_attempts` | `1` | `int` | Max attempts to generate a valid patch |
@@ -270,8 +270,6 @@ Class defaults below come from `shinka/core/config.py` (`EvolutionConfig`). Hydr
 | `proposal_target_ewma_alpha` | `0.3` | `float` | EWMA smoothing factor for proposal/evaluation timing estimates. |
 | `inspiration_sort_order` | `"ascending"` | `str` | Inspiration ordering (`"ascending"`, `"chronological"`, `"none"`) |
 | `evolve_prompts` | `False` | `bool` | Enable meta-prompt evolution loop |
-| `prompt_patch_types` | `["diff", "full"]` | `List[str]` | Patch formats used for prompt evolution |
-| `prompt_patch_type_probs` | `[0.7, 0.3]` | `List[float]` | Sampling probabilities for prompt patch formats |
 | `prompt_evolution_interval` | `None` | `Optional[int]` | Prompt-evolution cadence in generations (`None` disables periodic updates) |
 | `prompt_archive_size` | `10` | `int` | Size of system-prompt archive |
 | `prompt_llm_models` | `None` | `Optional[List[str]]` | LLM models for prompt evolution (`None` falls back to `llm_models`) |
@@ -515,8 +513,8 @@ shinka_run \
     --max-proposal-jobs 1 \
     --set evo.llm_models='["headless/codex@gpt-5.5?effort=high"]' \
     --set evo.embedding_model=null \
-    --set evo.patch_types='["full", "diff"]' \
-    --set evo.patch_type_probs='[0.5, 0.5]'
+    --set evo.patch_types='["full", "cross"]' \
+    --set evo.patch_type_probs='[0.9, 0.1]'
 ```
 
 For a Python runner using both Codex and Claude through Headless:

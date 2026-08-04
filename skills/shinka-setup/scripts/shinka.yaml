@@ -18,8 +18,8 @@ evo:
   max_novelty_attempts: 1
   max_patch_resamples: 1
   max_patch_attempts: 1
-  patch_types: [diff, full, cross]
-  patch_type_probs: [0.6, 0.3, 0.1]
+  patch_types: [full, cross]
+  patch_type_probs: [0.9, 0.1]
   task_sys_msg: >-
     Improve the candidate repository while preserving its evaluator-facing
     behavior and correctness. Validate useful changes and complete the required

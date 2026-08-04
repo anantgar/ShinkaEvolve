@@ -2,8 +2,7 @@
 SystemPrompt Database for meta-prompt evolution.
 
 This module provides a database for storing and managing system prompts
-during an evolutionary process. System prompts are evolved alongside
-programs using similar mutation operators (diff, full, cross).
+during an evolutionary process. System prompts are evolved with full rewrites.
 """
 
 import json
@@ -122,7 +121,7 @@ class SystemPrompt:
     parent_id: Optional[str] = None
     generation: int = 0  # Chronological prompt generation counter
     program_generation: int = 0  # Program generation at which this prompt was evolved
-    patch_type: str = "init"  # "init", "diff", "full", "cross"
+    patch_type: str = "init"  # "init" or "full"
     timestamp: float = field(default_factory=time.time)
 
     # Fitness tracking (percentile-based)
@@ -1282,7 +1281,7 @@ class SystemPromptDatabase:
         archive = self.get_archive()
         best = self.get_best_prompt()
 
-        console.print(f"\n[bold]SystemPrompt Database Summary[/bold]")
+        console.print("\n[bold]SystemPrompt Database Summary[/bold]")
         console.print(f"Total prompts: {total}")
         console.print(f"Archive size: {len(archive)}/{self.config.archive_size}")
 
@@ -1330,7 +1329,7 @@ def create_system_prompt(
         parent_id: ID of parent prompt (if evolved from another)
         generation: Chronological prompt generation counter
         program_generation: Program generation at which this prompt was evolved
-        patch_type: How this prompt was created ("init", "diff", "full", "cross")
+        patch_type: How this prompt was created ("init" or "full")
         metadata: Additional metadata
         name: Short name for the prompt (from LLM generation)
         description: Description of the prompt approach (from LLM generation)

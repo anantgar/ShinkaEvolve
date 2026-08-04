@@ -5,7 +5,6 @@ from .prompts_base import (
     format_text_feedback_section,
     BASE_SYSTEM_MSG,
 )
-from .prompts_diff import DIFF_SYS_FORMAT, DIFF_ITER_MSG
 from .prompts_full import (
     FULL_SYS_FORMAT_DEFAULT,
     FULL_ITER_MSG,
@@ -27,12 +26,9 @@ from .prompts_meta import (
 )
 from .prompts_novelty import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
 from .prompts_prompt_evo import (
-    PROMPT_EVO_DIFF_SYSTEM,
-    PROMPT_EVO_DIFF_USER,
     PROMPT_EVO_FULL_SYSTEM,
     PROMPT_EVO_FULL_USER,
     PROMPT_EVO_SYSTEM_BASE,
-    construct_diff_evolution_prompt,
     construct_full_evolution_prompt,
     construct_prompt_evolution_context,
     format_top_programs,
@@ -46,8 +42,6 @@ __all__ = [
     "perf_str",
     "format_text_feedback_section",
     "BASE_SYSTEM_MSG",
-    "DIFF_SYS_FORMAT",
-    "DIFF_ITER_MSG",
     "FULL_SYS_FORMAT_DEFAULT",
     "FULL_SYS_FORMATS",
     "FULL_ITER_MSG",
@@ -65,12 +59,9 @@ __all__ = [
     "NOVELTY_SYSTEM_MSG",
     "NOVELTY_USER_MSG",
     # Prompt evolution prompts
-    "PROMPT_EVO_DIFF_SYSTEM",
-    "PROMPT_EVO_DIFF_USER",
     "PROMPT_EVO_FULL_SYSTEM",
     "PROMPT_EVO_FULL_USER",
     "PROMPT_EVO_SYSTEM_BASE",
-    "construct_diff_evolution_prompt",
     "construct_full_evolution_prompt",
     "construct_prompt_evolution_context",
     "format_top_programs",

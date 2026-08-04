@@ -116,8 +116,8 @@ def test_shinka_run_happy_path_with_authoritative_overrides(tmp_path, monkeypatc
     assert evo_config.num_generations == 7
     assert evo_config.seed_repo_path == str((task_dir / "seed_repo").resolve())
     assert evo_config.task_sys_msg is not None
-    assert evo_config.patch_types == ["diff", "full", "cross"]
-    assert evo_config.patch_type_probs == [0.6, 0.3, 0.1]
+    assert evo_config.patch_types == ["full", "cross"]
+    assert evo_config.patch_type_probs == [0.9, 0.1]
     assert evo_config.max_patch_attempts == 1
     assert evo_config.llm_models == [
         "gpt-5-mini",
@@ -568,8 +568,8 @@ def test_dataclass_defaults_match_shared_baseline():
     job_config = cli_run.LocalJobConfig()
 
     assert evo_config.task_sys_msg is not None
-    assert evo_config.patch_types == ["diff", "full", "cross"]
-    assert evo_config.patch_type_probs == [0.6, 0.3, 0.1]
+    assert evo_config.patch_types == ["full", "cross"]
+    assert evo_config.patch_type_probs == [0.9, 0.1]
     assert evo_config.num_generations == 50
     assert evo_config.max_patch_attempts == 1
     assert evo_config.llm_models == [

@@ -7,8 +7,6 @@ from shinka.prompts import (
     perf_str,
     format_text_feedback_section,
     BASE_SYSTEM_MSG,
-    DIFF_SYS_FORMAT,
-    DIFF_ITER_MSG,
     FULL_ITER_MSG,
     FULL_SYS_FORMATS,
     CROSS_SYS_FORMAT,
@@ -20,6 +18,7 @@ from shinka.defaults import default_patch_type_probs, default_patch_types
 import logging
 
 logger = logging.getLogger(__name__)
+SUPPORTED_PATCH_TYPES = {"full", "cross"}
 
 
 class PromptSampler:
@@ -43,6 +42,15 @@ class PromptSampler:
         self.language = language
         self.patch_types = patch_types
         self.patch_type_probs = patch_type_probs
+        if not patch_types:
+            raise ValueError("At least one patch type is required")
+        if len(patch_types) != len(patch_type_probs):
+            raise ValueError("Patch types and probabilities must have equal lengths")
+        unsupported = set(patch_types) - SUPPORTED_PATCH_TYPES
+        if unsupported:
+            raise ValueError(
+                f"Unsupported patch types: {', '.join(sorted(unsupported))}"
+            )
         # Check if probabilities sum to 1.0 w. tolerance for errors
         prob_sum = np.sum(patch_type_probs)
         if not np.isclose(prob_sum, 1.0, atol=1e-6):
@@ -77,15 +85,18 @@ class PromptSampler:
         archive_inspirations: List[Program],
         top_k_inspirations: List[Program],
         meta_recommendations: Optional[str] = None,
+        patch_type: Optional[Literal["full", "cross"]] = None,
     ) -> Tuple[str, str, str]:
         if self.task_sys_msg is None:
             sys_msg = BASE_SYSTEM_MSG
         else:
             sys_msg = self.task_sys_msg
 
-        # Sample coding type
-        # Filter out crossover if no inspirations
-        if len(archive_inspirations) == 0 and len(top_k_inspirations) == 0:
+        if patch_type is not None:
+            if patch_type not in SUPPORTED_PATCH_TYPES:
+                raise ValueError(f"Unsupported patch type: {patch_type}")
+        # Filter out crossover if no inspirations.
+        elif len(archive_inspirations) == 0 and len(top_k_inspirations) == 0:
             valid_types = [t for t in self.patch_types if t != "cross"]
             valid_probs = [
                 p
@@ -131,9 +142,7 @@ class PromptSampler:
             )
 
         # Add format instructions AFTER meta-recommendations
-        if patch_type == "diff":
-            sys_msg += DIFF_SYS_FORMAT
-        elif patch_type == "full":
+        if patch_type == "full":
             # Randomly sample from different full rewrite variants
             full_variant_idx = np.random.randint(0, len(FULL_SYS_FORMATS))
             selected_format = FULL_SYS_FORMATS[full_variant_idx]
@@ -163,16 +172,7 @@ class PromptSampler:
             )
         parent_content = parent.repo_summary or "No summary recorded."
 
-        if patch_type == "diff":
-            iter_msg = DIFF_ITER_MSG.format(
-                language=self.language,
-                repo_summary=parent_content,
-                performance_metrics=perf_str(
-                    parent.combined_score, parent.public_metrics
-                ),
-                text_feedback_section=text_feedback_section,
-            )
-        elif patch_type == "full":
+        if patch_type == "full":
             iter_msg = FULL_ITER_MSG.format(
                 language=self.language,
                 repo_summary=parent_content,
@@ -195,8 +195,6 @@ class PromptSampler:
                 top_k_inspirations,
                 language=self.language,
             )
-        elif patch_type == "paper":
-            raise NotImplementedError("Paper edit not implemented.")
         else:
             raise ValueError(f"Invalid patch type: {patch_type}")
 

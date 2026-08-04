@@ -25,7 +25,7 @@ evo:
     max_tokens: 16384
   embedding_model: gemini-embedding-001
   patch_types:
-    - diff
+    - full
   patch_type_probs:
     - 1.0
   max_patch_resamples: 1

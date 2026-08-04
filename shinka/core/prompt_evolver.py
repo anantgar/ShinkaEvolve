@@ -1,24 +1,19 @@
 """
 SystemPromptEvolver and SystemPromptSampler for meta-prompt evolution.
 
-This module provides utilities for evolving system prompts using
-similar mutation operators as program evolution (diff, full).
+This module provides utilities for evolving system prompts with full rewrites.
 """
 
 import logging
 import re
 from typing import List, Optional, Tuple
-import numpy as np
 
 from shinka.database.prompt_dbase import (
     SystemPromptDatabase,
     SystemPrompt,
     create_system_prompt,
 )
-from shinka.prompts.prompts_prompt_evo import (
-    construct_diff_evolution_prompt,
-    construct_full_evolution_prompt,
-)
+from shinka.prompts.prompts_prompt_evo import construct_full_evolution_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -166,19 +161,11 @@ class SystemPromptSampler:
 
 
 class SystemPromptEvolver:
-    """
-    Evolves system prompts using LLM-based mutation operators.
-
-    Supports three mutation types:
-    - diff: Targeted modifications to specific parts of the prompt
-    - full: Complete rewrite of the prompt
-    """
+    """Evolves system prompts using complete LLM rewrites."""
 
     def __init__(
         self,
         llm_client,
-        patch_types: Optional[List[str]] = None,
-        patch_type_probs: Optional[List[float]] = None,
         llm_kwargs: Optional[dict] = None,
     ):
         """
@@ -186,28 +173,9 @@ class SystemPromptEvolver:
 
         Args:
             llm_client: LLM client for generating prompt mutations
-            patch_types: List of mutation types (default: ["diff", "full"])
-            patch_type_probs: Probabilities for each patch type
             llm_kwargs: Additional kwargs for LLM queries
         """
         self.llm_client = llm_client
-
-        for p in patch_types:
-            if p not in ["diff", "full"]:
-                raise ValueError(f"Invalid patch type: {p}")
-        if patch_types is None:
-            patch_types = ["diff", "full"]
-        if patch_type_probs is None:
-            patch_type_probs = [0.7, 0.3]
-
-        # Normalize probabilities
-        prob_sum = sum(patch_type_probs)
-        if not np.isclose(prob_sum, 1.0, atol=1e-6):
-            patch_type_probs = [p / prob_sum for p in patch_type_probs]
-            logger.warning("Prompt evolution probabilities normalized to sum to 1.0")
-
-        self.patch_types = patch_types
-        self.patch_type_probs = patch_type_probs
         self.llm_kwargs = llm_kwargs or {}
 
     def evolve(
@@ -236,8 +204,7 @@ class SystemPromptEvolver:
             Tuple of (new_prompt, patch_type, api_cost)
             Returns (None, patch_type, cost) if evolution fails
         """
-        # Sample patch type
-        patch_type = self._sample_patch_type()
+        patch_type = "full"
 
         num_programs = len(top_programs) if top_programs else 0
         has_scratchpad = global_scratchpad is not None and len(global_scratchpad) > 0
@@ -247,27 +214,13 @@ class SystemPromptEvolver:
             + (", with global scratchpad" if has_scratchpad else "")
         )
 
-        # Generate mutation based on patch type
-        # Both diff and full use the same context now
-        if patch_type == "diff":
-            result = self._diff_mutate(
-                parent_prompt,
-                top_programs,
-                language,
-                include_text_feedback,
-                global_scratchpad,
-            )
-        elif patch_type == "full":
-            result = self._full_rewrite(
-                parent_prompt,
-                top_programs,
-                language,
-                include_text_feedback,
-                global_scratchpad,
-            )
-        else:
-            logger.error(f"Unknown patch type: {patch_type}")
-            return None, patch_type, 0.0
+        result = self._full_rewrite(
+            parent_prompt,
+            top_programs,
+            language,
+            include_text_feedback,
+            global_scratchpad,
+        )
 
         new_text, name, description, cost, llm_metadata = result
 
@@ -307,71 +260,6 @@ class SystemPromptEvolver:
         )
 
         return new_prompt, patch_type, cost
-
-    def _sample_patch_type(self) -> str:
-        """Sample a patch type."""
-        return np.random.choice(self.patch_types, p=self.patch_type_probs)
-
-    def _diff_mutate(
-        self,
-        parent_prompt: SystemPrompt,
-        top_programs: Optional[List] = None,
-        language: str = "python",
-        include_text_feedback: bool = False,
-        global_scratchpad: Optional[str] = None,
-    ) -> Tuple[Optional[str], Optional[str], Optional[str], float, Optional[dict]]:
-        """
-        Apply diff-style mutation to the prompt.
-
-        Makes targeted modifications to specific parts of the prompt.
-
-        Returns:
-            Tuple of (prompt_text, name, description, cost, llm_metadata)
-        """
-        system_msg, user_msg = construct_diff_evolution_prompt(
-            parent_prompt,
-            top_programs,
-            language,
-            include_text_feedback,
-            global_scratchpad,
-        )
-
-        try:
-            response = self.llm_client.query(
-                msg=user_msg,
-                system_msg=system_msg,
-                llm_kwargs=self.llm_kwargs,
-            )
-
-            if response is None or not response.content:
-                logger.warning("Empty response from LLM for diff mutation")
-                return None, None, None, 0.0, None
-
-            cost = response.cost or 0.0
-
-            # Extract LLM metadata from response
-            llm_metadata = _extract_llm_metadata(response)
-
-            # Parse NAME, DESCRIPTION, and PROMPT from response
-            parsed = _parse_prompt_response(response.content)
-            name, description, new_text = parsed
-
-            # Basic validation
-            if not new_text or len(new_text) < 50:
-                logger.warning(
-                    f"Generated prompt too short "
-                    f"({len(new_text) if new_text else 0} chars)"
-                )
-                return None, None, None, cost, llm_metadata
-
-            logger.debug(f"Diff mutation: {len(new_text)} char prompt")
-            if name:
-                logger.debug(f"Prompt name: {name}")
-            return new_text, name, description, cost, llm_metadata
-
-        except Exception as e:
-            logger.error(f"Error in diff mutation: {e}")
-            return None, None, None, 0.0, None
 
     def _full_rewrite(
         self,
@@ -443,8 +331,6 @@ class AsyncSystemPromptEvolver:
     def __init__(
         self,
         llm_client,  # AsyncLLMClient
-        patch_types: Optional[List[str]] = None,
-        patch_type_probs: Optional[List[float]] = None,
         llm_kwargs: Optional[dict] = None,
     ):
         """
@@ -452,24 +338,9 @@ class AsyncSystemPromptEvolver:
 
         Args:
             llm_client: Async LLM client for generating prompt mutations
-            patch_types: List of mutation types to use
-            patch_type_probs: Probabilities for each patch type
             llm_kwargs: Additional kwargs for LLM queries
         """
         self.llm_client = llm_client
-
-        if patch_types is None:
-            patch_types = ["diff", "full"]
-        if patch_type_probs is None:
-            patch_type_probs = [0.7, 0.3]
-
-        # Normalize probabilities
-        prob_sum = sum(patch_type_probs)
-        if not np.isclose(prob_sum, 1.0, atol=1e-6):
-            patch_type_probs = [p / prob_sum for p in patch_type_probs]
-
-        self.patch_types = patch_types
-        self.patch_type_probs = patch_type_probs
         self.llm_kwargs = llm_kwargs or {}
 
     async def evolve(
@@ -497,8 +368,7 @@ class AsyncSystemPromptEvolver:
         Returns:
             Tuple of (new_prompt, patch_type, api_cost)
         """
-        # Sample patch type
-        patch_type = self._sample_patch_type()
+        patch_type = "full"
 
         num_programs = len(top_programs) if top_programs else 0
         has_scratchpad = global_scratchpad is not None and len(global_scratchpad) > 0
@@ -508,27 +378,13 @@ class AsyncSystemPromptEvolver:
             + (", with global scratchpad" if has_scratchpad else "")
         )
 
-        # Generate mutation based on patch type
-        # Both diff and full use the same context now
-        if patch_type == "diff":
-            result = await self._diff_mutate_async(
-                parent_prompt,
-                top_programs,
-                language,
-                include_text_feedback,
-                global_scratchpad,
-            )
-        elif patch_type == "full":
-            result = await self._full_rewrite_async(
-                parent_prompt,
-                top_programs,
-                language,
-                include_text_feedback,
-                global_scratchpad,
-            )
-        else:
-            logger.error(f"Unknown patch type: {patch_type}")
-            return None, patch_type, 0.0
+        result = await self._full_rewrite_async(
+            parent_prompt,
+            top_programs,
+            language,
+            include_text_feedback,
+            global_scratchpad,
+        )
 
         new_text, name, description, cost, llm_metadata = result
 
@@ -568,57 +424,6 @@ class AsyncSystemPromptEvolver:
         )
 
         return new_prompt, patch_type, cost
-
-    def _sample_patch_type(self) -> str:
-        """Sample a patch type."""
-        return np.random.choice(self.patch_types, p=self.patch_type_probs)
-
-    async def _diff_mutate_async(
-        self,
-        parent_prompt: SystemPrompt,
-        top_programs: Optional[List] = None,
-        language: str = "python",
-        include_text_feedback: bool = False,
-        global_scratchpad: Optional[str] = None,
-    ) -> Tuple[Optional[str], Optional[str], Optional[str], float, Optional[dict]]:
-        """Async diff mutation."""
-        system_msg, user_msg = construct_diff_evolution_prompt(
-            parent_prompt,
-            top_programs,
-            language,
-            include_text_feedback,
-            global_scratchpad,
-        )
-
-        try:
-            # Pass None if llm_kwargs is empty to let client sample params
-            kwargs = self.llm_kwargs if self.llm_kwargs else None
-            response = await self.llm_client.query(
-                msg=user_msg,
-                system_msg=system_msg,
-                llm_kwargs=kwargs,
-            )
-
-            if response is None or not response.content:
-                return None, None, None, 0.0, None
-
-            cost = response.cost or 0.0
-
-            # Extract LLM metadata from response
-            llm_metadata = _extract_llm_metadata(response)
-
-            # Parse NAME, DESCRIPTION, and PROMPT from response
-            parsed = _parse_prompt_response(response.content)
-            name, description, new_text = parsed
-
-            if not new_text or len(new_text) < 50:
-                return None, None, None, cost, llm_metadata
-
-            return new_text, name, description, cost, llm_metadata
-
-        except Exception as e:
-            logger.error(f"Error in async diff mutation: {e}")
-            return None, None, None, 0.0, None
 
     async def _full_rewrite_async(
         self,

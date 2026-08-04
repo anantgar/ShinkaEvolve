@@ -55,8 +55,8 @@ MAX_DB_WORKERS = 4
 
 evo_config = EvolutionConfig(
     task_sys_msg=search_task_sys_msg,
-    patch_types=["diff", "full", "cross"],
-    patch_type_probs=[0.6, 0.3, 0.1],
+    patch_types=["full", "cross"],
+    patch_type_probs=[0.9, 0.1],
     num_generations=100,
     max_patch_resamples=3,
     max_patch_attempts=3,

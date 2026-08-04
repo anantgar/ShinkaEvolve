@@ -46,14 +46,14 @@ class TestSystemPromptDataclass:
         prompt = create_system_prompt(
             prompt_text="Test prompt",
             generation=1,
-            patch_type="diff",
+            patch_type="full",
             metadata={"test_key": "test_value"},
         )
 
         data = prompt.to_dict()
         assert data["prompt_text"] == "Test prompt"
         assert data["generation"] == 1
-        assert data["patch_type"] == "diff"
+        assert data["patch_type"] == "full"
         assert data["metadata"]["test_key"] == "test_value"
 
     def test_prompt_from_dict(self):
@@ -302,7 +302,7 @@ class TestSystemPromptDatabase:
         memory_db.add(prompt0)
 
         prompt1 = create_system_prompt(
-            "Prompt 1", parent_id=prompt0.id, generation=1, patch_type="diff"
+            "Prompt 1", parent_id=prompt0.id, generation=1, patch_type="full"
         )
         memory_db.add(prompt1)
 
@@ -440,29 +440,6 @@ class TestSystemPromptSampler:
 class TestPromptEvolutionPrompts:
     """Test the prompt evolution prompt templates."""
 
-    def test_diff_prompt_construction(self):
-        """Test constructing diff evolution prompts."""
-        from shinka.prompts.prompts_prompt_evo import (
-            construct_diff_evolution_prompt,
-        )
-
-        prompt = create_system_prompt(
-            prompt_text="Original prompt",
-            generation=0,
-            patch_type="init",
-        )
-        prompt.fitness = 0.5
-        prompt.program_count = 10
-
-        # New signature takes top_programs list instead of recent_improvements
-        sys_msg, user_msg = construct_diff_evolution_prompt(prompt, top_programs=[])
-
-        assert "expert prompt engineer" in sys_msg.lower()
-        assert "Original prompt" in user_msg
-        assert (
-            "targeted" in sys_msg.lower()
-        )  # Diff should mention targeted modifications
-
     def test_full_prompt_construction(self):
         """Test constructing full rewrite prompts."""
         from shinka.prompts.prompts_prompt_evo import (
@@ -489,7 +466,7 @@ class TestPromptEvolutionPrompts:
             create_system_prompt(
                 prompt_text=f"Inspiration {i}",
                 generation=i,
-                patch_type="diff",
+                patch_type="full",
             )
             for i in range(3)
         ]
@@ -515,8 +492,6 @@ class TestEvolutionConfigPromptSettings:
         config = EvolutionConfig()
 
         assert config.evolve_prompts is False
-        assert config.prompt_patch_types == ["diff", "full"]
-        assert config.prompt_patch_type_probs == [0.7, 0.3]
         assert config.prompt_evolution_interval is None
         assert config.prompt_archive_size == 10
 
@@ -526,14 +501,11 @@ class TestEvolutionConfigPromptSettings:
 
         config = EvolutionConfig(
             evolve_prompts=True,
-            prompt_patch_types=["diff", "full", "cross"],
-            prompt_patch_type_probs=[0.5, 0.3, 0.2],
             prompt_evolution_interval=20,
             prompt_archive_size=15,
         )
 
         assert config.evolve_prompts is True
-        assert "cross" in config.prompt_patch_types
         assert config.prompt_evolution_interval == 20
         assert config.prompt_archive_size == 15
 

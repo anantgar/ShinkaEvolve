@@ -4549,7 +4549,6 @@ console.error("[DEBUG] Error in processData:", error);
                 const shapeMap = {
                     'init': d3.symbolDiamond,
                     'full': d3.symbolCircle,
-                    'diff': d3.symbolSquare,
                     'cross': d3.symbolCross,
                     'fix': d3.symbolTriangle
                 };
@@ -10031,7 +10030,6 @@ console.error("[DEBUG] Error in processData:", error);
             const shapeMap = {
                 'init': d3.symbolDiamond,
                 'full': d3.symbolCircle,
-                'diff': d3.symbolSquare,
                 'cross': d3.symbolCross,
                 'fix': d3.symbolTriangle
             };
@@ -13532,7 +13530,7 @@ console.error("[DEBUG] Error in processData:", error);
                 return timeA - timeB;
             });
             
-            const patchTypes = ['diff', 'full', 'cross', 'init', 'fix'];
+            const patchTypes = ['full', 'cross', 'init', 'fix'];
             
             // Calculate rolling correctness rates
             let overallCorrect = 0;
@@ -13608,7 +13606,7 @@ console.error("[DEBUG] Error in processData:", error);
                 return timeA - timeB;
             });
             
-            const patchTypes = ['diff', 'full', 'cross', 'init', 'fix'];
+            const patchTypes = ['full', 'cross', 'init', 'fix'];
             
             // Calculate rolling improvement rates
             // Note: To match the bar plot, we count improvements where the result is CORRECT
@@ -14020,7 +14018,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14151,7 +14148,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14276,7 +14272,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14331,7 +14326,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14392,7 +14386,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14518,7 +14511,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14639,7 +14631,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14697,7 +14688,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14763,7 +14753,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -14883,7 +14872,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -15084,7 +15072,6 @@ console.error("[DEBUG] Error in processData:", error);
             const symbolMap = {
                 'init': 'diamond',
                 'full': 'circle',
-                'diff': 'square',
                 'cross': 'x',
                 'fix': 'triangle-up'
             };
@@ -15122,7 +15109,7 @@ console.error("[DEBUG] Error in processData:", error);
             const trendY = trendX.map(x => regression.slope * x + regression.intercept);
             
             // Group data by patch type for separate traces (for legend)
-            const patchTypes = ['diff', 'full', 'cross', 'init', 'fix'];
+            const patchTypes = ['full', 'cross', 'init', 'fix'];
             const traces = [];
             
             patchTypes.forEach(patchType => {
@@ -15217,7 +15204,6 @@ console.error("[DEBUG] Error in processData:", error);
             
             // Patch type traces with matching symbols from tree visualization
             const patchTypeConfig = {
-                'diff': { color: '#3498db', name: 'Diff' },
                 'full': { color: '#e74c3c', name: 'Full' },
                 'cross': { color: '#f39c12', name: 'Cross' },
                 'init': { color: '#9b59b6', name: 'Init' },
@@ -15282,7 +15268,6 @@ console.error("[DEBUG] Error in processData:", error);
             
             // Patch type traces with matching symbols from tree visualization
             const patchTypeConfig = {
-                'diff': { color: '#3498db', name: 'Diff' },
                 'full': { color: '#e74c3c', name: 'Full' },
                 'cross': { color: '#f39c12', name: 'Cross' },
                 'init': { color: '#9b59b6', name: 'Init' },
@@ -15436,7 +15421,6 @@ console.error("[DEBUG] Error in processData:", error);
             const patchTypeSymbols = {
                 'init': '◆',
                 'full': '●',
-                'diff': '■',
                 'cross': '✕',
                 'fix': '▲'
             };
@@ -17148,7 +17132,6 @@ console.error("[DEBUG] Error in processData:", error);
             const shapeMap = {
                 'init': d3.symbolDiamond,
                 'full': d3.symbolCircle,
-                'diff': d3.symbolSquare,
                 'cross': d3.symbolCross,
                 'fix': d3.symbolTriangle
             };
@@ -17339,7 +17322,6 @@ console.error("[DEBUG] Error in processData:", error);
             // Patch type badge color
             const patchTypeColors = {
                 'init': '#3498db',
-                'diff': '#9b59b6',
                 'full': '#e67e22',
                 'cross': '#1abc9c'
             };
