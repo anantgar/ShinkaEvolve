@@ -53,6 +53,7 @@ from shinka.secure.mutation import (
     run_agent_in_workspace,
 )
 from shinka.secure.protocol import encode_frame, read_frame
+from shinka.secure.session_caches import SharedSessionCacheStore
 from shinka.launch.secure import SecureEvaluationScheduler
 
 DIGEST = "sha256:" + "1" * 64
@@ -365,6 +366,83 @@ def test_agent_purges_durable_session_after_credential_copy(
     assert engine.plan is not None
     assert "--no-same-permissions" in " ".join(engine.plan.command)
     assert not any(session_home.iterdir())
+
+
+def test_agent_mounts_trusted_static_cache_and_prunes_session_copy(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / ".git").mkdir(parents=True)
+    auth = tmp_path / "auth" / ".codex"
+    auth.mkdir(parents=True)
+    (auth / "auth.json").write_text('{"token":"auth-secret"}', encoding="utf-8")
+    session_home = tmp_path / "session-home"
+    cache = session_home / ".codex" / "plugins" / "cache"
+    cache.mkdir(parents=True)
+    (cache / "plugin.js").write_text("static", encoding="utf-8")
+    private_state = session_home / ".codex" / "state.sqlite"
+    private_state.parent.mkdir(parents=True, exist_ok=True)
+    private_state.write_text("private", encoding="utf-8")
+    shared_root = tmp_path / "shared-caches"
+    SharedSessionCacheStore(shared_root, agent="codex", image=IMAGE).seed_from_trusted_home(
+        session_home
+    )
+    store = EvaluationJobStore(tmp_path / "state" / "jobs.sqlite")
+
+    class _Engine:
+        def __init__(self) -> None:
+            self.plan = None
+
+        def create(self, plan):
+            self.plan = plan
+            return SimpleNamespace(container_id="fake-container")
+
+        def run_capture(self, _handle, **_kwargs):
+            return SimpleNamespace(
+                exit_code=0,
+                stdout=b"",
+                stderr=b"",
+                timed_out=False,
+                output_limited=False,
+            )
+
+        def remove(self, _handle, *, force: bool):
+            assert force is True
+
+    engine = _Engine()
+    run_agent_in_workspace(
+        engine=engine,
+        workspace=workspace,
+        image=IMAGE,
+        limits=_limits(),
+        network=NetworkMode.DISABLED,
+        provider_network=None,
+        provider_proxy=None,
+        sandbox_user="65532:65532",
+        prompt="prompt",
+        agent=AgentSpec(agent="codex"),
+        auth_profile=auth.parent,
+        credential_environment={"OPENAI_API_KEY": "fake-secret"},
+        job_id="job",
+        attempt_id="shared-cache-attempt",
+        parent_digest=DIGEST,
+        mutation_store=store,
+        timeout_seconds=10,
+        session_home=session_home,
+        session_name="session",
+        shared_cache_root=shared_root,
+    )
+
+    assert engine.plan is not None
+    mount = next(
+        mount
+        for mount in engine.plan.mounts
+        if mount.target == "/headless-home/.codex/plugins/cache"
+    )
+    assert mount.read_only is True
+    assert cache.is_dir()
+    assert not any(cache.iterdir())
+    assert private_state.exists()
 
 
 def test_container_plan_has_hardened_exact_policy(tmp_path: Path) -> None:

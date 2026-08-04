@@ -1057,6 +1057,12 @@ def _secure_query(
         "headless_session_name", None
     )
     session_home = _validated_session_home(kwargs.pop("headless_session_home", None))
+    shared_cache_root_raw = kwargs.pop("headless_shared_cache_root", None)
+    shared_cache_root = (
+        Path(shared_cache_root_raw).expanduser()
+        if shared_cache_root_raw is not None
+        else None
+    )
     # The durable home key is an internal handle, not agent/evolution result
     # data. It must not survive in QueryResult.kwargs or persisted metadata.
     kwargs.pop("headless_session_key", None)
@@ -1071,6 +1077,8 @@ def _secure_query(
         raise LLMProcessError(
             "Secure Headless mutation requires a durable proposal session home and name"
         )
+    if shared_cache_root is not None and not shared_cache_root.is_absolute():
+        raise LLMProcessError("headless_shared_cache_root must be an absolute path")
     if not isinstance(auth_profiles, dict) or parsed.agent not in auth_profiles:
         raise LLMAuthenticationError(
             f"No minimal auth profile is configured for secure agent {parsed.agent}"
@@ -1205,6 +1213,7 @@ def _secure_query(
             timeout_seconds=headless_timeout(parsed, configured_timeout),
             session_home=session_home,
             session_name=str(session_name),
+            shared_cache_root=shared_cache_root,
         )
         candidate, _metadata = artifact_store.put_tree(
             work_dir,

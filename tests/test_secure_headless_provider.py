@@ -102,6 +102,7 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
         "headless_session_name": "proposal-session",
         "headless_session_home": str(session_home),
         "headless_session_key": "public-home-key",
+        "headless_shared_cache_root": str(tmp_path / "shared-caches"),
         "headless_timeout_seconds": 10,
     }
 
@@ -165,5 +166,8 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
     assert all(str(worktree) not in call["prompt"] for call in calls)
     assert all(
         "The proposal repository is `/workspace`" in call["prompt"] for call in calls
+    )
+    assert all(
+        call["shared_cache_root"] == tmp_path / "shared-caches" for call in calls
     )
     assert (worktree / "generated.txt").read_text() == "turn 2\n"

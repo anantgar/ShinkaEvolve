@@ -428,6 +428,17 @@ class ShinkaEvolveRunner:
             session_root = self.secure_runtime_settings.state_root / "headless-sessions"
         else:
             session_root = None
+        configured_shared_cache_root = evo_config.headless_shared_cache_root
+        if configured_shared_cache_root:
+            self.headless_shared_cache_root: Optional[Path] = Path(
+                configured_shared_cache_root
+            )
+        elif self.secure_runtime_settings is not None:
+            self.headless_shared_cache_root = (
+                self.secure_runtime_settings.state_root / "headless-shared-caches"
+            )
+        else:
+            self.headless_shared_cache_root = None
         self.proposal_sessions = (
             ProposalSessionStore(session_root) if session_root is not None else None
         )
@@ -3764,6 +3775,10 @@ Required constraints:
                             "headless_session_key": session.home_key,
                         }
                     )
+                    if self.headless_shared_cache_root is not None:
+                        llm_kwargs["headless_shared_cache_root"] = str(
+                            self.headless_shared_cache_root
+                        )
                 if (
                     self.evaluation_mode == "secure"
                     and agent_target_worktree is not None

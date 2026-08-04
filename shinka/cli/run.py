@@ -509,7 +509,11 @@ def _resolve_secure_evo_paths(
             (task_dir / path).resolve() if not path.is_absolute() else path.resolve()
         )
     evo_values["agent_auth_profiles"] = profiles
-    for field_name in ("secure_state_root", "headless_session_home_root"):
+    for field_name in (
+        "secure_state_root",
+        "headless_session_home_root",
+        "headless_shared_cache_root",
+    ):
         raw_path = evo_values.get(field_name)
         if not raw_path:
             continue

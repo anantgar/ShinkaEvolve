@@ -39,6 +39,7 @@ from .errors import (
     SnapshotError,
 )
 from .jobs import EvaluationJobStore
+from .session_caches import SharedSessionCacheStore
 
 _AGENT_AUTH_PATHS: dict[str, tuple[str, ...]] = {
     "antigravity": (
@@ -539,6 +540,7 @@ def run_agent_in_workspace(
     timeout_seconds: float,
     session_home: Path | None = None,
     session_name: str | None = None,
+    shared_cache_root: Path | None = None,
 ) -> WorkspaceAgentResult:
     """Run one agent against an already-sanitized synthetic repository."""
 
@@ -571,6 +573,7 @@ def run_agent_in_workspace(
             "Agent auth profile must be outside the mutation workspace"
         )
     resolved_session_home: Path | None = None
+    resolved_shared_cache_root: Path | None = None
     if session_home is not None:
         unresolved_session_home = Path(session_home).expanduser()
         if unresolved_session_home.is_symlink() or not unresolved_session_home.is_dir():
@@ -589,6 +592,25 @@ def run_agent_in_workspace(
             raise SecurityPolicyError(
                 "Headless session home must be outside secure mutation state"
             )
+    if shared_cache_root is not None:
+        unresolved_shared_cache_root = Path(shared_cache_root).expanduser()
+        if unresolved_shared_cache_root.is_symlink():
+            raise SecurityPolicyError("Shared cache root must be a real directory")
+        resolved_shared_cache_root = unresolved_shared_cache_root.resolve()
+        if _overlaps(resolved_shared_cache_root, workspace):
+            raise SecurityPolicyError(
+                "Shared cache root must be outside the mutation workspace"
+            )
+        if _overlaps(resolved_shared_cache_root, auth_source):
+            raise SecurityPolicyError(
+                "Shared cache root must be outside the agent auth profile"
+            )
+        if resolved_session_home is not None and _overlaps(
+            resolved_shared_cache_root, resolved_session_home
+        ):
+            raise SecurityPolicyError(
+                "Shared cache root must be outside the durable session home"
+            )
     permitted_credentials = _AGENT_CREDENTIAL_ENV[agent.agent]
     unexpected = sorted(set(credential_environment) - permitted_credentials)
     if unexpected:
@@ -597,6 +619,15 @@ def run_agent_in_workspace(
         )
     name = f"shinka-mutation-{attempt_id.replace('-', '')[:16]}"
     pinned_image = validate_pinned_image(image)
+    shared_cache_store = (
+        SharedSessionCacheStore(
+            resolved_shared_cache_root,
+            agent=agent.agent,
+            image=pinned_image,
+        )
+        if resolved_shared_cache_root is not None and resolved_session_home is not None
+        else None
+    )
     prompt_digest = sha256_bytes(prompt.encode("utf-8"))
     mutation_store.prepare_mutation(
         attempt_id=attempt_id,
@@ -630,7 +661,20 @@ def run_agent_in_workspace(
                 except SecurityPolicyError:
                     _purge_directory_contents(resolved_session_home)
                     raise
+            shared_cache_mounts = (
+                shared_cache_store.mounts()
+                if shared_cache_store is not None
+                else ()
+            )
+            if shared_cache_store is not None and shared_cache_mounts:
+                # Leave empty mountpoint directories behind so Docker can
+                # attach nested read-only mounts even on the first turn.
+                assert resolved_session_home is not None
+                shared_cache_store.prune_session_home(resolved_session_home)
+            if resolved_session_home is not None:
                 prepare_bind_source(resolved_session_home, writable=True)
+            for cache_mount in shared_cache_mounts:
+                prepare_bind_source(cache_mount.source, writable=False)
             redaction_values = [
                 *credential_environment.values(),
                 *_auth_secret_values(auth),
@@ -665,6 +709,14 @@ def run_agent_in_workspace(
                         read_only=False,
                     )
                 )
+            mounts.extend(
+                ContainerMount(
+                    cache_mount.source,
+                    cache_mount.target,
+                    read_only=True,
+                )
+                for cache_mount in shared_cache_mounts
+            )
             tmpfs = {
                 "/tmp": "rw,nosuid,nodev,noexec,size=256m,mode=1777",
                 "/run": "rw,nosuid,nodev,noexec,size=16m,mode=755",
@@ -749,6 +801,12 @@ def run_agent_in_workspace(
                     leak_error = leak_error or exc
             if leak_error is not None:
                 raise leak_error
+            if shared_cache_store is not None and shared_cache_mounts:
+                # The read-only mount is now the source of truth.  Remove any
+                # pre-existing per-session copies without touching private
+                # transcripts, databases, or provider state.
+                assert resolved_session_home is not None
+                shared_cache_store.prune_session_home(resolved_session_home)
             mutation_store.mark_mutation_output_pending(attempt_id)
             return WorkspaceAgentResult(
                 stdout=_redact(result.stdout, redaction_values),

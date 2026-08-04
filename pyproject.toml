@@ -56,6 +56,7 @@ shinka_headless_docker = "shinka.llm.providers.headless_docker:main"
 shinka_launch = "shinka.cli.launch:main"
 shinka_models = "shinka.cli.models:main"
 shinka_run = "shinka.cli.run:main"
+shinka_session_cache = "shinka.cli.session_cache:main"
 shinka_visualize = "shinka.webui.visualization:main"
 
 [tool.setuptools]

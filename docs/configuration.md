@@ -156,6 +156,18 @@ assistant message; stdout is retained only for diagnostics and usage accounting.
 | `SHINKA_HEADLESS_DOCKER_SESSION_ROOT` | Optional absolute root for durable Headless Docker sessions; must be private and outside proposal worktrees. |
 | `SHINKA_HEADLESS_DOCKER_BASE_COMMAND` | Headless CLI command. Defaults to `npx -y @roberttlange/headless`. |
 
+Secure repo-agent runs also keep proposal-scoped session homes under the secure
+state root.  Set `headless_shared_cache_root` to a private, operator-managed
+directory containing trusted read-only cache namespaces to avoid copying static
+agent assets into every proposal home.  When omitted, secure runs use
+`<secure_state_root>/headless-shared-caches` as the cache root.  The runtime
+never seeds this directory from an untrusted agent home; seed it before a run
+and keep conversation databases, transcripts, brains, logs, and provider
+configuration in their proposal homes.  The current conservative policy shares
+Codex plugin/app-tool caches, Cursor plugin assets, and Antigravity helper
+binaries.  Gemini state remains private because its current tree is dominated
+by account, conversation, and project state.
+
 ### DatabaseConfig (`shinka.database.DatabaseConfig`)
 
 | Parameter | Type | Default | Description |

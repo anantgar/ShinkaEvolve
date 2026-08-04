@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
-from shinka.llm import BanditBase
 from shinka.defaults import (
     DEFAULT_TASK_SYS_MSG,
     default_llm_dynamic_selection_kwargs,
@@ -61,6 +60,9 @@ class EvolutionConfig:
     headless_output_mode: str = "json"
     headless_model_timeouts: Dict[str, float] = field(default_factory=dict)
     headless_session_home_root: Optional[str] = None
+    # Optional trusted read-only cache root for static agent assets.  The
+    # secure runner derives a state-local default when this is unset.
+    headless_shared_cache_root: Optional[str] = None
 
     # Provider controls are independent from the model-quality bandit.
     route_failure_threshold: int = 3
