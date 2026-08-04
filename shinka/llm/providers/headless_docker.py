@@ -83,7 +83,7 @@ CODEX_CONFIG_KEYS = (
     "preferred_auth_method",
     "service_tier",
 )
-CODEX_SERVICE_TIERS = frozenset({"fast", "flex"})
+CODEX_SERVICE_TIERS = frozenset({"default", "fast", "flex"})
 
 MAX_SEED_FILE_BYTES = 4 * 1024 * 1024
 MAX_SEED_TOTAL_BYTES = 16 * 1024 * 1024
@@ -184,9 +184,11 @@ def _minimal_codex_config(source: Path, *, service_tier: str = "fast") -> str:
                 normalized_value = value.strip('"\'')
                 if normalized_value not in CODEX_SERVICE_TIERS:
                     continue
+                if normalized_value == "default":
+                    continue
             seen.add(key)
             lines.append(f"{key} = {value}")
-    defaults = (f'service_tier = "{service_tier}"',)
+    defaults = () if service_tier == "default" else (f'service_tier = "{service_tier}"',)
     for default in defaults:
         key = default.split("=", 1)[0].strip()
         if key not in seen:
@@ -254,8 +256,27 @@ def strip_session_args(args: list[str], *, preserve: bool | None = None) -> list
     return stripped
 
 
-def docker_flags() -> list[str]:
+def _codex_home_tmpfs_spec() -> str:
+    try:
+        uid = os.getuid()
+        gid = os.getgid()
+    except AttributeError:
+        return "/headless-home/.codex:rw,mode=0777"
+    return f"/headless-home/.codex:rw,mode=0700,uid={uid},gid={gid}"
+
+
+def docker_flags(*, agent: str) -> list[str]:
     flags: list[str] = ["--docker"]
+    if agent == "codex":
+        for extra in (
+            "--tmpfs",
+            _codex_home_tmpfs_spec(),
+            "--tmpfs",
+            "/headless-home/.codex/plugins:ro",
+            "--tmpfs",
+            "/headless-home/.codex/skills:ro",
+        ):
+            flags.extend(["--docker-arg", extra])
     image = os.getenv(IMAGE_ENV, "").strip()
     if image:
         flags.extend(["--docker-image", image])
@@ -268,7 +289,12 @@ def docker_flags() -> list[str]:
 
 
 def build_command(*, agent: str, args: list[str]) -> list[str]:
-    return [*base_command(), agent, *docker_flags(), *strip_session_args(args)]
+    return [
+        *base_command(),
+        agent,
+        *docker_flags(agent=agent),
+        *strip_session_args(args),
+    ]
 
 
 def child_env(*, host_home: Path, stage_home: Path) -> dict[str, str]:

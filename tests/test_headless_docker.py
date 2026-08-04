@@ -178,6 +178,19 @@ def test_codex_service_tier_can_use_flex(tmp_path, monkeypatch):
     )
 
 
+def test_codex_service_tier_can_use_default(tmp_path, monkeypatch):
+    host_home = tmp_path / "home"
+    (host_home / ".codex").mkdir(parents=True)
+    (host_home / ".codex" / "auth.json").write_text("{}")
+    stage_home = tmp_path / "stage"
+    stage_home.mkdir()
+    monkeypatch.setenv(hd.CODEX_SERVICE_TIER_ENV, "default")
+
+    hd.stage_auth_home(agent="codex", host_home=host_home, stage_home=stage_home)
+
+    assert (stage_home / ".codex" / "config.toml").read_text() == "\n"
+
+
 def test_extra_seed_paths_can_be_added(tmp_path, monkeypatch):
     host_home = tmp_path / "home"
     (host_home / ".gemini").mkdir(parents=True)
@@ -221,6 +234,18 @@ def test_build_command_requests_docker_and_honours_env(monkeypatch):
         "@roberttlange/headless",
         "codex",
         "--docker",
+        "--docker-arg",
+        "--tmpfs",
+        "--docker-arg",
+        f"/headless-home/.codex:rw,mode=0700,uid={os.getuid()},gid={os.getgid()}",
+        "--docker-arg",
+        "--tmpfs",
+        "--docker-arg",
+        "/headless-home/.codex/plugins:ro",
+        "--docker-arg",
+        "--tmpfs",
+        "--docker-arg",
+        "/headless-home/.codex/skills:ro",
         "--docker-image",
         "example/image:tag",
         "--docker-arg",

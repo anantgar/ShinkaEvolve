@@ -152,7 +152,7 @@ assistant message; stdout is retained only for diagnostics and usage accounting.
 | `SHINKA_HEADLESS_DOCKER_PLATFORM` | Forwarded as `docker run --platform`. |
 | `SHINKA_HEADLESS_DOCKER_ARGS` | Extra `docker run` arguments, parsed as a shell word list. |
 | `SHINKA_HEADLESS_DOCKER_SEED_EXTRA` | Additional home-relative paths to stage, separated by `os.pathsep`. |
-| `SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER` | Codex service tier: `fast` (default) or `flex`. |
+| `SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER` | Codex service tier: `fast` (default), `default` (leave the tier unset), or `flex`. |
 | `SHINKA_HEADLESS_DOCKER_SESSION_ROOT` | Optional absolute root for durable Headless Docker sessions; must be private and outside proposal worktrees. |
 | `SHINKA_HEADLESS_DOCKER_BASE_COMMAND` | Headless CLI command. Defaults to `npx -y @roberttlange/headless`. |
 
@@ -165,6 +165,13 @@ removed from a reused proposal home before launch.  `headless_shared_cache_root`
 is reserved for a future explicitly reviewed harness-owned cache and currently
 has no enabled agent paths.  Conversation databases, transcripts, brains, and
 other private session state remain proposal-scoped.
+
+Codex runs receive a writable `.codex` tmpfs for the staged auth/config files,
+with `.codex/plugins` and `.codex/skills` overlaid as read-only tmpfs mounts.
+This prevents Codex versions that materialize system bundles at startup from
+exposing those skills or plugins; the absent `mcp.json` likewise leaves no MCP
+servers configured.  Terminal execution remains available through Headless's
+explicit `--allow yolo` mode.
 
 ### DatabaseConfig (`shinka.database.DatabaseConfig`)
 
