@@ -56,6 +56,7 @@ def test_project_metadata_targets_pypi_release():
         "shinka_launch": "shinka.cli.launch:main",
         "shinka_models": "shinka.cli.models:main",
         "shinka_run": "shinka.cli.run:main",
+        "shinka_session_cache": "shinka.cli.session_cache:main",
         "shinka_visualize": "shinka.webui.visualization:main",
     }
 

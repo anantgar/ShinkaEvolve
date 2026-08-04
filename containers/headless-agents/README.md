@@ -24,7 +24,7 @@ qualification. A local equivalent is:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag registry.example/shinka/headless-agents:0.4.0 \
+  --tag registry.example/shinka/headless-agents:0.5.0 \
   --push \
   containers/headless-agents
 ```
