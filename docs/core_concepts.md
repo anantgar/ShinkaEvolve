@@ -15,6 +15,13 @@ Every runnable task centers on a seed repository and evaluator:
 | `seed_repo/` | Git repository used as the parent for generated worktrees |
 | `evaluate.py` | Evaluation harness that accepts `--repo_path`, validates outputs, returns metrics |
 
+Seed contents are ordinarily tracked as files by the outer Shinka repository;
+they are not Git submodules. When evolution starts, Shinka initializes a
+runtime Git repository inside a plain `seed_repo/` directory and creates the
+baseline commit automatically. A `src/` directory is optional and has no
+special framework meaning: use it when the evaluator or `mutable_paths` policy
+defines it as the implementation area.
+
 At minimum, the evaluator surfaces a `combined_score` and whether the candidate
 is functionally correct. This creates a stable interface for both the Hydra
 launcher and the task-directory CLI.

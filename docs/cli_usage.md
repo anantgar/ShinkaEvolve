@@ -53,11 +53,17 @@ and commits the Git baseline automatically when needed.
 
 ```bash
 shinka_run \
-  --task-dir examples/inference_pipeline_repo \
+  --task-dir examples/pipeline_tests/euclidean_tsp_repo \
   --config-fname shinka.yaml \
-  --results_dir results/inference_pipeline_repo \
+  --results_dir results/euclidean_tsp_repo \
   --num_generations 2
 ```
+
+This public repo-mode task uses a plain `seed_repo/` directory and keeps its
+implementation under `src/` because its evaluator loads `src/solver.py`.
+Shinka creates the seed's runtime Git baseline automatically. The secure
+`examples/inference_pipeline_repo` task requires `--evaluation-mode secure`
+and its pinned image/auth configuration instead.
 
 ### Namespaced overrides
 

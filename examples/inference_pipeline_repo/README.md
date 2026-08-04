@@ -18,6 +18,7 @@ deployment.
 shinka_run \
   --task-dir examples/inference_pipeline_repo \
   --config-fname shinka.yaml \
+  --evaluation-mode secure \
   --results_dir results/inference_pipeline_repo \
   --num_generations 2
 ```

@@ -206,12 +206,12 @@ db_config = DatabaseConfig(
 evo_config = EvolutionConfig(
     num_generations=50,
     llm_models=["headless/codex@gpt-5.5?effort=high"],
-    seed_repo_path="examples/inference_pipeline_repo/seed_repo",
-    mutable_paths=[],  # whole repository unless the user supplies an allow-list
+    seed_repo_path="examples/pipeline_tests/euclidean_tsp_repo/seed_repo",
+    mutable_paths=["src"],  # implementation path for this repo-mode task
     immutable_paths=[],
     agent_hidden_paths=["notes_for_agent"],  # prompt scope only, not a secret boundary
     language="python",
-    task_sys_msg="You are optimizing an inference pipeline...",
+    task_sys_msg="Improve the deterministic Euclidean TSP solver in src/solver.py.",
 )
 
 runner = ShinkaEvolveRunner(

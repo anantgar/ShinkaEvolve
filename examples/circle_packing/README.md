@@ -7,7 +7,7 @@ Compact Shinka task: pack `n=26` circles in a unit square, maximize sum of radii
 - `initial.py`: seed solution; exposes `run_packing()`.
 - `evaluate.py`: validator + scorer; runs `run_packing`, checks geometry constraints, writes metrics/artifacts.
 - `run_evo.py`: async evolution runner (uses top-level worker keys from YAML).
-- `shinka_small.yaml`, `shinka_medium.yaml`, `shinka_long.yaml`: run profiles.
+- `shinka_small.yaml`, `shinka_medium.yaml`, `shinka_large.yaml`: run profiles.
 - `load_results.ipynb`: post-run analysis plots (incl. 2x3 dashboard).
 - `viz_circles.ipynb`: geometry-focused circle layout visualization.
 
@@ -23,7 +23,7 @@ Notes:
 
 - Top-level `max_evaluation_jobs`, `max_proposal_jobs`, `max_db_workers` are consumed by `run_evo.py`.
 - To emulate old sync proposal behavior, set `max_proposal_jobs: 1`.
-- `shinka_medium.yaml` and `shinka_long.yaml` now enable bounded adaptive
+- `shinka_medium.yaml` and `shinka_large.yaml` now enable bounded adaptive
   oversubscription. This is useful for circle packing because proposal
   generation is often slower than evaluation, so small proposal backlogs help
   keep evaluation workers busy.
@@ -40,7 +40,7 @@ Async evolution:
 
 ```bash
 python run_evo.py --config_path shinka_small.yaml
-# swap config_path to shinka_medium.yaml or shinka_long.yaml as needed
+# swap config_path to shinka_medium.yaml or shinka_large.yaml as needed
 ```
 
 Single-program evaluation (no evolution loop):

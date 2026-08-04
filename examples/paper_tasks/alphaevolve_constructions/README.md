@@ -23,7 +23,8 @@ intersect, and the kissing evaluator preserves its round-to-integer step. These
 are the publicly disclosed improved construction instances, not AlphaEvolve's
 undisclosed full task list.
 
-To run a child after initializing its seed repo:
+To run a child directly (Shinka will initialize the seed repository when an
+evolution run starts):
 
 ```bash
 python circle_square_26/evaluate.py \

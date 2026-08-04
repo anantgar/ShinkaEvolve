@@ -79,24 +79,24 @@ agent, repository representation, or summary-based novelty as the cause.
 
 ### Paper And Open-Problem Tasks
 
-Candidate branch: `codex/example-tasks` at `c061806`.
+Integrated on current `main` and `codex/example-tasks` at `022cfff`.
 
-- [ ] Rebase the four reviewable catalog commits onto current `main`.
+- [x] Integrate the four catalog commits onto current `main`.
 - [ ] Split the large catalog payload into reviewable commits for shared
       indexes/contracts, AlphaEvolve construction tasks, AlphaEvolve
       discrete/matrix tasks, ShinkaEvolve paper tasks, open-problem tasks, and
       evaluator/static tests.
-- [ ] Import the new `examples/paper_tasks/**`,
+- [x] Import the new `examples/paper_tasks/**`,
       `examples/open_problem_tasks/**`, and their focused tests without
       overwriting unrelated current runtime or documentation work.
-- [ ] Review the branch's edits to existing circle-packing and inference
+- [x] Review the branch's edits to existing circle-packing and inference
       examples separately; keep only changes required by the current contracts.
 - [ ] Classify each task as public/cooperative or sealed/private/adversarial.
 - [ ] Move evaluator and holdout assets outside candidate artifacts for every
       secure task.
 - [ ] Require digest-pinned images, bounded public feedback, and explicit
       resource/network policies.
-- [ ] Validate imports, schemas, seed validity, and deterministic evaluator
+- [x] Validate imports, schemas, seed validity, and deterministic evaluator
       tests before merge.
 - [ ] Treat actual reproduction/search runs as separate campaigns; merging a
       catalog makes no benchmark claim.

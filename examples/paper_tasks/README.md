@@ -24,6 +24,11 @@ evaluation remains outside the candidate repository. A seed may be a full
 multi-file repository when the workload needs one. These mathematical seeds use
 one file because additional scaffolding would add no value.
 
+Each `seed_repo/` is stored as ordinary files in the outer repository, not as a
+Git submodule. Manual Git initialization is unnecessary: Shinka creates the
+runtime Git repository and baseline commit automatically. `src/` is optional;
+the evaluator's file path and the mutation policy define the layout.
+
 Family directories are indexes only. No candidate or evaluator dispatches
 between different fixed tasks. Repeated trials of one stochastic constructor,
 or a dataset of examples for one agent objective, remain one evaluation task.

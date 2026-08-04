@@ -22,4 +22,5 @@ For a cheap contract check only (not fitness):
 python evaluate.py --repo_path seed_repo --validate_only --results_dir /tmp/shinka-moe-check
 ```
 
-Initialize `seed_repo/` as its own git repository before launching evolution.
+Shinka initializes the plain `seed_repo/` directory and creates its baseline
+Git commit automatically when evolution starts.

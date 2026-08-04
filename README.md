@@ -109,31 +109,39 @@ For detailed installation instructions and usage examples, see the [Getting Star
 | 🧮 [Wolfram GCD Sum](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/wolfram_gcd_sum) | Optimize a Wolfram Language GCD-sum solver. | `LocalJobConfig` |
 | ✨ [Novelty Generator](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/novelty_generator) | Generate creative, surprising outputs (e.g., ASCII art). | `LocalJobConfig` |
 | ∿ [Sine Approx Headless](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/sine_approx_headless) | Evolve a bounded sine approximation using Headless subscription-backed mutation calls. | `LocalJobConfig` |
-| 🧪 [Inference Pipeline Repo](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/inference_pipeline_repo) | Repo-mode evaluator with fake Headless smoke-test agent. | `LocalJobConfig` |
+| 🧪 [Inference Pipeline Repo](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/inference_pipeline_repo) | Secure repo-mode candidate service with framed I/O and private evaluation. | `SecureJobConfig` |
+| 🧭 [Repo TSP Pipeline](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/pipeline_tests/euclidean_tsp_repo) | Public repo-mode task with a simple `src/solver.py` seed. | `LocalJobConfig` |
+| 📚 [Paper Task Catalog](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/paper_tasks) | 31 independent AlphaEvolve and ShinkaEvolve task artifacts. | Task-local evaluator |
+| 🔭 [Open-Problem Catalog](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/open_problem_tasks) | Four independent construction and optimization tasks. | Task-local evaluator |
 | ⚡ [RTLLM PPA](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/rtllm) | Evolve Verilog RTL for power/performance/area under a fixed spec (RTLLM v2.0). Requires `iverilog` + `yosys` + `OpenSTA`. | `LocalJobConfig` |
 
 
 ## `shinka` Run with Python API 🐍
 
 Repo-mode evolution requires a seed candidate directory, mutation policy, and
-an evaluator that accepts `--repo_path`. Shinka initializes and commits a Git
-baseline automatically when needed:
+an evaluator that accepts `--repo_path`. The seed directory is normally stored
+as ordinary files in the outer repository; it does not need to be a Git
+submodule. Shinka initializes a runtime Git repository inside it and commits a
+baseline automatically when needed. `src/` is optional: the evaluator and
+mutation policy define the candidate's file layout.
 
 ```python
 from shinka.core import ShinkaEvolveRunner, EvolutionConfig
 from shinka.database import DatabaseConfig
 from shinka.launch import LocalJobConfig, SlurmCondaJobConfig, SlurmDockerJobConfig
 
-# Minimal - keep evaluation outside the seed repo
-job_conf = LocalJobConfig(eval_program_path="examples/inference_pipeline_repo/evaluate.py")
+# Public repo-mode example; keep evaluation outside the seed repo
+job_conf = LocalJobConfig(
+    eval_program_path="examples/pipeline_tests/euclidean_tsp_repo/evaluate.py"
+)
 # Or source a uv/venv environment per job:
 # job_conf = LocalJobConfig(
-#     eval_program_path="examples/inference_pipeline_repo/evaluate.py",
+#     eval_program_path="examples/pipeline_tests/euclidean_tsp_repo/evaluate.py",
 #     activate_script=".venv/bin/activate",
 # )
 # Or run evaluations on SLURM:
 # job_conf = SlurmCondaJobConfig(
-#     eval_program_path="examples/inference_pipeline_repo/evaluate.py",
+#     eval_program_path="examples/pipeline_tests/euclidean_tsp_repo/evaluate.py",
 #     partition="gpu",
 #     time="01:00:00",
 #     cpus=1,
@@ -143,7 +151,7 @@ job_conf = LocalJobConfig(eval_program_path="examples/inference_pipeline_repo/ev
 # )
 # Or run evaluations in a Docker container on SLURM:
 # job_conf = SlurmDockerJobConfig(
-#     eval_program_path="examples/inference_pipeline_repo/evaluate.py",
+#     eval_program_path="examples/pipeline_tests/euclidean_tsp_repo/evaluate.py",
 #     image="ubuntu:latest",
 #     partition="gpu",
 #     time="01:00:00",
@@ -153,8 +161,8 @@ job_conf = LocalJobConfig(eval_program_path="examples/inference_pipeline_repo/ev
 # )
 db_conf = DatabaseConfig()
 evo_conf = EvolutionConfig(
-    seed_repo_path="examples/inference_pipeline_repo/seed_repo",
-    mutable_paths=[],  # whole repository except immutable/hidden/protected paths
+    seed_repo_path="examples/pipeline_tests/euclidean_tsp_repo/seed_repo",
+    mutable_paths=["src"],  # this task keeps only the implementation mutable
     immutable_paths=[],
     agent_hidden_paths=["notes_for_agent"],  # prompt scope only, not a secret boundary
     llm_models=["headless/codex@gpt-5.5?effort=high"],
@@ -416,7 +424,7 @@ if __name__ == "__main__":
 **`seed_repo/` - Starting Repository**
 
 ```python
-# seed_repo/src/solution.py
+# seed_repo/solution.py (or seed_repo/src/solution.py when the evaluator expects it)
 def run_experiment(**kwargs):
     return solve_problem(kwargs)
 ```

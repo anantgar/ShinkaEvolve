@@ -17,4 +17,5 @@ python evaluate.py --repo_path seed_repo --results_dir /tmp/shinka-aime
 This is expensive: the paper evaluation makes up to 900 base-model calls for
 one candidate (30 problems × 10 calls × 3 runs).
 
-Initialize `seed_repo/` as its own git repository before launching evolution.
+Shinka initializes the plain `seed_repo/` directory and creates its baseline
+Git commit automatically when evolution starts.

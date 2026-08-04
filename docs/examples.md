@@ -1,8 +1,10 @@
 # Examples
 
-The examples below are legacy single-file benchmarks unless they explicitly
-state repo mode. New runs should use a repo-mode task such as
-`examples/inference_pipeline_repo`, where evaluators accept `--repo_path`.
+The examples below are mostly legacy single-file benchmarks unless they
+explicitly state repo mode. For a public repo-mode run, use
+`examples/pipeline_tests/euclidean_tsp_repo`, where the evaluator accepts
+`--repo_path`. The `examples/inference_pipeline_repo` task is a secure
+persistent-service example and requires secure evaluation setup.
 
 ShinkaEvolve ships with runnable tasks demonstrating different languages,
 evaluation styles, and runtime profiles.
@@ -20,7 +22,7 @@ Recommended first example.
 | **Focus** | Async evolution, config profiles, result notebooks |
 
 Key files: `initial.py`, `evaluate.py`, `run_evo.py`, `shinka_small.yaml`,
-`shinka_medium.yaml`, `shinka_long.yaml`
+`shinka_medium.yaml`, `shinka_large.yaml`
 
 ```bash
 cd examples/circle_packing
@@ -28,6 +30,46 @@ python run_evo.py --config_path shinka_small.yaml
 ```
 
 Best reference for budgeted async runs and notebook inspection after evolution.
+
+---
+
+## Repo-Mode Tasks
+
+### Euclidean TSP Pipeline
+
+[`examples/pipeline_tests/euclidean_tsp_repo`](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/pipeline_tests/euclidean_tsp_repo)
+is the smallest public repo-mode example. Its evaluator loads
+`seed_repo/src/solver.py`, while Shinka keeps the evaluator outside the
+candidate repository and initializes the plain seed directory automatically.
+
+```bash
+shinka_run \
+  --task-dir examples/pipeline_tests/euclidean_tsp_repo \
+  --results_dir results/euclidean_tsp_repo \
+  --num_generations 2
+```
+
+### Secure Inference Service
+
+[`examples/inference_pipeline_repo`](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/inference_pipeline_repo)
+demonstrates a persistent candidate service evaluated through framed stdio.
+It uses `SecureJobConfig`/secure CLI mode, pinned container images, private
+inputs, and a Node candidate service. It is not a drop-in replacement for the
+public local example above.
+
+---
+
+## Benchmark Catalogs
+
+- [`examples/paper_tasks`](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/paper_tasks)
+  contains 31 independent paper-task artifacts. Each child has its own
+  evaluator, configuration, and seed repository.
+- [`examples/open_problem_tasks`](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/open_problem_tasks)
+  contains four independent open-problem task artifacts.
+
+For both catalogs, `seed_repo/` is a normal tracked directory, not a nested
+Git module. A task may put its implementation at the repository root or under
+`src/`; the evaluator's path contract decides which layout is correct.
 
 ---
 
@@ -137,6 +179,10 @@ before moving into full CLI or API workflows.
 | Goal | Example |
 |------|---------|
 | Best default choice | Circle Packing |
+| Public repo-mode evolution | Euclidean TSP Pipeline |
+| Secure candidate service | Inference Pipeline Repo |
+| Paper benchmarks | Paper Task Catalog |
+| Open-problem benchmarks | Open-Problem Catalog |
 | Cross-language evolution | Julia Prime Counting |
 | Compiled numerical stencil | Fortran Heat Diffusion |
 | Program optimization | Wolfram GCD Sum |

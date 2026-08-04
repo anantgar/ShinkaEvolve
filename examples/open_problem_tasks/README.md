@@ -10,9 +10,11 @@ task/
 ```
 
 The current seeds need only one mutable source file. Before launching, copy a
-task if desired, initialize its `seed_repo/` as a git repository, and commit the
-seed. Empty `mutable_paths` means the whole seed repository is mutable except
-for protected, explicitly immutable, or hidden paths. No marker strings inside
+task if desired; Shinka initializes the plain `seed_repo/` directory as a Git
+repository and creates the baseline commit automatically. Seed files are
+ordinary files in the outer repository, not nested Git modules. Empty
+`mutable_paths` means the whole seed repository is mutable except for
+protected, explicitly immutable, or hidden paths. No marker strings inside
 source files define mutability.
 
 Implemented after approval:
@@ -21,4 +23,3 @@ Implemented after approval:
 - `covering_array_5_20_2`
 - `degree_diameter_4_5`
 - `golomb_ruler_29`
-

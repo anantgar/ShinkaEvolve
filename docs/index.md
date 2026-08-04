@@ -122,8 +122,8 @@ from shinka.launch import LocalJobConfig
 
 runner = ShinkaEvolveRunner(
     evo_config=EvolutionConfig(
-        seed_repo_path="examples/inference_pipeline_repo/seed_repo",
-        mutable_paths=[],  # whole repository by default
+        seed_repo_path="examples/pipeline_tests/euclidean_tsp_repo/seed_repo",
+        mutable_paths=["src"],  # implementation path for this repo-mode task
         immutable_paths=[],
         agent_hidden_paths=["notes_for_agent"],  # prompt scope only, not a secret boundary
         llm_models=["headless/codex@gpt-5.5?effort=high"],
@@ -131,7 +131,7 @@ runner = ShinkaEvolveRunner(
     ),
     db_config=DatabaseConfig(),
     job_config=LocalJobConfig(
-        eval_program_path="examples/inference_pipeline_repo/evaluate.py",
+        eval_program_path="examples/pipeline_tests/euclidean_tsp_repo/evaluate.py",
     ),
     max_evaluation_jobs=1,
     max_proposal_jobs=1,
