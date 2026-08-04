@@ -211,10 +211,15 @@ shinka_run --task-dir examples/circle_packing \
 ```
 
 W&B logging is additive: the existing SQLite database and WebUI logging remain
-enabled. Each evaluated individual logs `score/individual` against `generation`,
-along with compact evaluation, cost, and timing metrics. Resuming the same
-results directory reuses its persisted W&B run ID by default. Online mode uses
-the credentials from `wandb login` or `WANDB_API_KEY`; use `wandb_mode=offline`
+enabled. Population and island progress snapshots use the single monotonic
+`population/evaluated_count` axis and include counts, correctness, best/mean
+scores, cumulative costs, and cumulative timing. Raw evaluated candidates remain
+available through `score/individual` and `individual/*` fields for scatter and
+debugging; those events use W&B's normal event step and are not connected by
+generation. Administrative island copies count toward population/table sizes but
+not toward evaluated count or candidate history. Resuming the same results
+directory reuses its persisted W&B run ID by default. Online mode uses the
+credentials from `wandb login` or `WANDB_API_KEY`; use `wandb_mode=offline`
 to record locally without uploading. See
 [Configuration](docs/configuration.md#evolutionconfig-shinkacoreconfigevolutionconfig)
 for all W&B options.

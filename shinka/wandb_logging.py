@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 GENERATION_METRIC = "generation"
 INDIVIDUAL_SCORE_METRIC = "score/individual"
-PROGRAM_TABLE_KEY = "individuals"
+EVALUATED_COUNT_METRIC = "population/evaluated_count"
+PROGRAM_TABLE_KEY = "population/final_table"
 WANDB_RUN_ID_FILENAME = ".wandb_run_id"
 PROGRAM_TABLE_COLUMNS = [
     "id",
@@ -26,6 +27,7 @@ PROGRAM_TABLE_COLUMNS = [
     "correct",
     "parent_id",
     "island_idx",
+    "is_copy",
     "in_archive",
     "patch_type",
     "model_name",
@@ -34,7 +36,7 @@ PROGRAM_TABLE_COLUMNS = [
 
 _COST_KEYS = {
     "api": "api_costs",
-    "embedding": "embed_cost",
+    "embed": "embed_cost",
     "novelty": "novelty_cost",
     "meta": "meta_cost",
 }
@@ -66,7 +68,11 @@ def ensure_wandb_run_id(
 
 
 def build_program_log_payload(program: Program) -> Dict[str, Any]:
-    """Build one compact W&B history event for an evaluated individual."""
+    """Build one raw W&B history event for an evaluated individual.
+
+    These events intentionally use W&B's normal internal history step. They are
+    useful as candidate scatter data, but are not the run's progress axis.
+    """
     metadata = program.metadata or {}
     costs = program_costs(program)
     logged_costs = {
@@ -81,6 +87,7 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
         "individual/id": program.id,
         "individual/parent_id": program.parent_id,
         "individual/island_idx": program.island_idx,
+        "individual/is_copy": is_island_copy(program),
         "individual/correct": bool(program.correct),
         "individual/in_archive": bool(program.in_archive),
         "individual/patch_type": metadata.get("patch_type"),
@@ -91,13 +98,16 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
         "headless/pricing_unknown": metadata.get("headless_pricing_unknown"),
         "headless/cost_basis": metadata.get("headless_cost_basis"),
         "headless/pricing_source": metadata.get("headless_pricing_source"),
-        **{f"cost/{name}": value for name, value in logged_costs.items()},
+        **{
+            f"individual/cost/{name}": value
+            for name, value in logged_costs.items()
+        },
     }
 
     for key in _TIMING_KEYS:
         value = _finite_float(metadata.get(key))
         if value is not None:
-            payload[f"timing/{key}"] = value
+            payload[f"individual/timing/{key}"] = value
 
     for prefix, metrics in (
         ("public_metrics", program.public_metrics),
@@ -109,6 +119,12 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
                 continue
             payload[key] = value
     return {key: value for key, value in payload.items() if value is not None}
+
+
+def is_island_copy(program: Program) -> bool:
+    """Return whether a DB row is an administrative copy, not a new evaluation."""
+    metadata = program.metadata or {}
+    return bool(metadata.get("_is_island_copy") or metadata.get("_spawned_island"))
 
 
 def flatten_numeric_metrics(
@@ -156,6 +172,7 @@ def program_table_row(program: Program) -> List[Any]:
         bool(program.correct),
         program.parent_id,
         program.island_idx,
+        is_island_copy(program),
         bool(program.in_archive),
         metadata.get("patch_type"),
         _program_model_name(program),
@@ -167,13 +184,128 @@ def program_table_row(program: Program) -> List[Any]:
     ]
 
 
+def build_population_progress_payload(
+    programs: Sequence[Program],
+    *,
+    evaluated_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build cumulative population and island metrics for one W&B snapshot.
+
+    ``population/evaluated_count`` counts unique evaluation rows and excludes
+    administrative island copies. Population and island ``count`` values retain
+    those copies because they describe the actual DB population shown by the
+    WebUI.
+    """
+    all_programs = list(programs)
+    evaluated_programs = [program for program in all_programs if not is_island_copy(program)]
+    scores = [
+        score
+        for program in all_programs
+        if (score := _finite_float(program.combined_score)) is not None
+    ]
+    correct_programs = [program for program in all_programs if program.correct]
+    correct_scores = [
+        score
+        for program in correct_programs
+        if (score := _finite_float(program.combined_score)) is not None
+    ]
+    costs = {
+        name: sum(
+            program_costs(program)[name]
+            for program in evaluated_programs
+            if not (
+                name == "api"
+                and (program.metadata or {}).get("headless_pricing_unknown") is True
+            )
+        )
+        for name in _COST_KEYS
+    }
+    unknown_pricing_count = sum(
+        1
+        for program in evaluated_programs
+        if (program.metadata or {}).get("headless_pricing_unknown") is True
+    )
+    payload: Dict[str, Any] = {
+        EVALUATED_COUNT_METRIC: (
+            len(evaluated_programs)
+            if evaluated_count is None
+            else max(0, int(evaluated_count))
+        ),
+        "population/count": len(all_programs),
+        "population/correct_count": len(correct_programs),
+        "population/correct_rate": (
+            len(correct_programs) / len(all_programs) if all_programs else 0.0
+        ),
+        "population/best_score": max(scores) if scores else None,
+        "population/best_correct_score": max(correct_scores)
+        if correct_scores
+        else None,
+        "population/mean_score": sum(scores) / len(scores) if scores else None,
+        "cost/api": costs["api"],
+        "cost/embed": costs["embed"],
+        "cost/novelty": costs["novelty"],
+        "cost/meta": costs["meta"],
+        "cost/total": sum(costs.values()),
+        "cost/pricing_unknown_count": unknown_pricing_count,
+    }
+
+    for key in _TIMING_KEYS:
+        payload[f"timing/{key}_total"] = sum(
+            _finite_float((program.metadata or {}).get(key)) or 0.0
+            for program in evaluated_programs
+        )
+
+    islands: Dict[str, List[Program]] = {}
+    for program in all_programs:
+        island_key = (
+            str(program.island_idx)
+            if program.island_idx is not None
+            else "unknown"
+        )
+        islands.setdefault(island_key, []).append(program)
+
+    for island_key, island_programs in islands.items():
+        island_scores = [
+            score
+            for program in island_programs
+            if (score := _finite_float(program.combined_score)) is not None
+        ]
+        island_correct = sum(1 for program in island_programs if program.correct)
+        metric_prefix = f"island/{_metric_segment(island_key)}"
+        payload.update(
+            {
+                f"{metric_prefix}/count": len(island_programs),
+                f"{metric_prefix}/evaluated_count": sum(
+                    1 for program in island_programs if not is_island_copy(program)
+                ),
+                f"{metric_prefix}/correct_count": island_correct,
+                f"{metric_prefix}/correct_rate": (
+                    island_correct / len(island_programs)
+                    if island_programs
+                    else 0.0
+                ),
+                f"{metric_prefix}/best_score": max(island_scores)
+                if island_scores
+                else None,
+                f"{metric_prefix}/mean_score": (
+                    sum(island_scores) / len(island_scores)
+                    if island_scores
+                    else None
+                ),
+            }
+        )
+
+    return {key: value for key, value in payload.items() if value is not None}
+
+
 def build_run_summary(
     programs: Sequence[Program],
     *,
     total_proposals_generated: Optional[int] = None,
-    total_api_cost: Optional[float] = None,
+    total_cost: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Build concise final values for the W&B run summary."""
+    population = build_population_progress_payload(programs)
     correct_programs = [program for program in programs if program.correct]
     correct_scores = [
         score
@@ -182,15 +314,14 @@ def build_run_summary(
     ]
     summary = {
         "run/program_count": len(programs),
-        "run/correct_rate": (
-            len(correct_programs) / len(programs) if programs else 0.0
-        ),
+        "run/evaluated_count": population[EVALUATED_COUNT_METRIC],
+        "run/correct_rate": population["population/correct_rate"],
         "run/max_generation": max(
             (program.generation for program in programs), default=0
         ),
         "run/best_score": max(correct_scores) if correct_scores else None,
         "run/total_proposals_generated": total_proposals_generated,
-        "run/total_api_cost": _finite_float(total_api_cost),
+        "run/total_cost": _finite_float(total_cost),
     }
     return {key: value for key, value in summary.items() if value is not None}
 
@@ -203,6 +334,7 @@ class ShinkaWandbLogger:
         self._wandb: Optional[Any] = None
         self._run: Optional[Any] = None
         self._logged_program_ids: set[str] = set()
+        self._last_population_evaluated_count: Optional[int] = None
 
     @property
     def active(self) -> bool:
@@ -279,7 +411,11 @@ class ShinkaWandbLogger:
             self.enabled = False
 
     def log_program(self, program: Program) -> None:
-        if not self.active or program.id in self._logged_program_ids:
+        if (
+            not self.active
+            or is_island_copy(program)
+            or program.id in self._logged_program_ids
+        ):
             return
         try:
             self._run.log(build_program_log_payload(program))
@@ -287,24 +423,54 @@ class ShinkaWandbLogger:
         except Exception as exc:
             logger.warning("Failed to log individual %s to W&B: %s", program.id, exc)
 
+    def log_population_progress(
+        self,
+        *,
+        db: Optional[ProgramDatabase],
+        force: bool = False,
+    ) -> None:
+        """Log the current population/island snapshot on the canonical axis."""
+        if not self.active or db is None:
+            return
+        try:
+            programs = db.get_all_programs()
+            evaluated_count = sum(
+                1 for program in programs if not is_island_copy(program)
+            )
+            if (
+                not force
+                and self._last_population_evaluated_count is not None
+                and evaluated_count <= self._last_population_evaluated_count
+            ):
+                return
+            self._run.log(build_population_progress_payload(programs))
+            self._last_population_evaluated_count = evaluated_count
+        except Exception as exc:
+            logger.warning("Failed to log W&B population progress: %s", exc)
+
     def log_final(
         self,
         *,
         db: Optional[ProgramDatabase],
         total_proposals_generated: Optional[int] = None,
-        total_api_cost: Optional[float] = None,
+        total_cost: Optional[float] = None,
     ) -> None:
         if not self.active or db is None:
             return
         try:
             programs = db.get_all_programs()
-            self._run.summary.update(
-                build_run_summary(
-                    programs,
-                    total_proposals_generated=total_proposals_generated,
-                    total_api_cost=total_api_cost,
-                )
+            final_summary = build_run_summary(
+                programs,
+                total_proposals_generated=total_proposals_generated,
+                total_cost=total_cost,
             )
+            final_payload = build_population_progress_payload(programs)
+            final_payload.update(final_summary)
+            self._run.log(final_payload)
+            self._last_population_evaluated_count = sum(
+                1 for program in programs if not is_island_copy(program)
+            )
+            self._run.summary.update(final_summary)
             table = self._wandb.Table(
                 columns=PROGRAM_TABLE_COLUMNS,
                 data=[program_table_row(program) for program in programs],
@@ -327,17 +493,26 @@ class ShinkaWandbLogger:
         if not hasattr(self._run, "define_metric"):
             return
         self._run.define_metric(GENERATION_METRIC)
+        self._run.define_metric(EVALUATED_COUNT_METRIC)
         self._run.define_metric(
             INDIVIDUAL_SCORE_METRIC,
-            step_metric=GENERATION_METRIC,
         )
+        self._run.define_metric("run/*")
         for metric_glob in (
+            "population/count",
+            "population/correct_count",
+            "population/correct_rate",
+            "population/best_score",
+            "population/best_correct_score",
+            "population/mean_score",
+            "island/*",
             "cost/*",
             "timing/*",
-            "public_metrics/*",
-            "private_metrics/*",
         ):
-            self._run.define_metric(metric_glob, step_metric=GENERATION_METRIC)
+            self._run.define_metric(
+                metric_glob,
+                step_metric=EVALUATED_COUNT_METRIC,
+            )
 
 
 def _program_model_name(program: Program) -> Optional[str]:

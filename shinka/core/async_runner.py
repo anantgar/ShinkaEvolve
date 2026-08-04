@@ -1494,6 +1494,9 @@ class ShinkaEvolveRunner:
             # Copy initial repo only if NOT resuming
             await self._setup_initial_repo()
 
+        # Establish a population baseline for both fresh and resumed runs.
+        self._log_wandb_population_progress()
+
     async def _setup_prompt_evolution(self):
         """Setup prompt evolution database and components."""
         # Create prompt database path
@@ -4892,6 +4895,7 @@ Required constraints:
                 self._mark_surplus_completed_jobs_for_discard(completed_jobs)
                 await self._process_completed_jobs_safely(completed_jobs)
                 await self._update_completed_generations()
+                self._log_wandb_population_progress()
                 self.slot_available.set()
         finally:
             self._completed_jobs_pending = max(
@@ -5876,6 +5880,13 @@ Required constraints:
         if wandb_logger is not None:
             wandb_logger.log_program(program=program)
 
+    def _log_wandb_population_progress(self) -> None:
+        wandb_logger = getattr(self, "wandb_logger", None)
+        if wandb_logger is not None and hasattr(
+            wandb_logger, "log_population_progress"
+        ):
+            wandb_logger.log_population_progress(db=self.db)
+
     def _finish_wandb_logging(self) -> None:
         wandb_logger = getattr(self, "wandb_logger", None)
         if wandb_logger is None:
@@ -5883,7 +5894,7 @@ Required constraints:
         wandb_logger.log_final(
             db=self.db,
             total_proposals_generated=self.total_proposals_generated,
-            total_api_cost=self.total_api_cost,
+            total_cost=self.total_api_cost,
         )
         wandb_logger.finish()
 

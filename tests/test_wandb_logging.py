@@ -6,10 +6,12 @@ import pytest
 from shinka.core.config import EvolutionConfig
 from shinka.database import DatabaseConfig, Program, ProgramDatabase
 from shinka.wandb_logging import (
+    EVALUATED_COUNT_METRIC,
     INDIVIDUAL_SCORE_METRIC,
     PROGRAM_TABLE_COLUMNS,
     PROGRAM_TABLE_KEY,
     ShinkaWandbLogger,
+    build_population_progress_payload,
     build_program_log_payload,
     build_run_summary,
     ensure_wandb_run_id,
@@ -97,8 +99,10 @@ def test_program_payload_logs_one_compact_event_per_individual(tmp_path):
     assert payload["generation"] == 1
     assert payload[INDIVIDUAL_SCORE_METRIC] == 0.25
     assert payload["individual/model_name"] == "fallback-model"
+    assert payload["individual/is_copy"] is False
     assert "public_metrics/score" not in payload
-    assert payload["cost/api"] == pytest.approx(0.20)
+    assert payload["individual/cost/api"] == pytest.approx(0.20)
+    assert "cost/api" not in payload
     assert "program/combined_score" not in payload
     assert not any(key.startswith("metadata/") for key in payload)
     assert not any("latest" in key for key in payload)
@@ -112,14 +116,42 @@ def test_program_payload_skips_bulky_values_and_duplicate_timing(tmp_path):
     assert payload["public_metrics/nested/accuracy"] == 0.5
     assert payload["private_metrics/hidden"] == 2.0
     assert "public_metrics/bulky_text" not in payload
-    assert payload["timing/pipeline_seconds"] == 2.0
+    assert payload["individual/timing/pipeline_seconds"] == 2.0
     assert payload["headless/usage_status"] == "reported"
     assert payload["headless/usage_unknown"] is False
     assert payload["headless/pricing_status"] == "missing"
     assert payload["headless/pricing_unknown"] is True
     assert "headless/cost_basis" not in payload
-    assert "cost/api" not in payload
+    assert "individual/cost/api" not in payload
     assert "metadata/pipeline_seconds" not in payload
+
+
+def test_population_progress_uses_one_evaluation_axis_and_keeps_copies_out(
+    tmp_path,
+):
+    db, _, _ = _make_db(tmp_path)
+    copy = Program(
+        id="copy-1",
+        repo_summary="# Copy\n",
+        generation=0,
+        correct=True,
+        combined_score=1.0,
+        island_idx=1,
+        metadata={"_is_island_copy": True, "embed_cost": 9.0},
+    )
+    db.add(copy, defer_maintenance=True)
+
+    payload = build_population_progress_payload(db.get_all_programs())
+
+    assert payload[EVALUATED_COUNT_METRIC] == 2
+    assert payload["population/count"] == 3
+    assert payload["population/correct_count"] == 2
+    assert payload["population/best_score"] == 1.0
+    assert payload["cost/embed"] == pytest.approx(0.03)
+    assert payload["cost/total"] == pytest.approx(0.35)
+    assert payload["island/0/evaluated_count"] == 2
+    assert payload["island/1/evaluated_count"] == 0
+    assert payload["island/1/count"] == 1
 
 
 def test_run_summary_uses_correct_programs_for_best_score(tmp_path):
@@ -128,7 +160,7 @@ def test_run_summary_uses_correct_programs_for_best_score(tmp_path):
     summary = build_run_summary(
         db.get_all_programs(),
         total_proposals_generated=2,
-        total_api_cost=0.5,
+        total_cost=0.5,
     )
 
     assert summary["run/program_count"] == 2
@@ -136,7 +168,7 @@ def test_run_summary_uses_correct_programs_for_best_score(tmp_path):
     assert summary["run/best_score"] == 1.0
     assert summary["run/max_generation"] == 1
     assert summary["run/total_proposals_generated"] == 2
-    assert summary["run/total_api_cost"] == 0.5
+    assert summary["run/total_cost"] == 0.5
 
 
 def test_invalid_wandb_config_is_non_fatal(tmp_path, monkeypatch, caplog):
@@ -207,10 +239,11 @@ def test_wandb_logger_dry_run_and_resume_use_fake_wandb(tmp_path, monkeypatch):
     logger.log_program(first)
     logger.log_program(first)
     logger.log_program(second)
+    logger.log_population_progress(db=db)
     logger.log_final(
         db=db,
         total_proposals_generated=2,
-        total_api_cost=0.5,
+        total_cost=0.5,
     )
     logger.finish()
 
@@ -227,7 +260,12 @@ def test_wandb_logger_dry_run_and_resume_use_fake_wandb(tmp_path, monkeypatch):
         1.0,
         0.25,
     ]
-    assert len(logged_payloads) == 3
+    assert len(logged_payloads) == 5
+    assert logged_payloads[2][EVALUATED_COUNT_METRIC] == 2
+    assert logged_payloads[3]["cost/embed"] == pytest.approx(0.03)
+    assert logged_payloads[3]["cost/total"] == pytest.approx(0.35)
+    assert logged_payloads[3]["run/evaluated_count"] == 2
+    assert logged_payloads[3]["run/total_cost"] == 0.5
     table = logged_payloads[-1][PROGRAM_TABLE_KEY]
     assert isinstance(table, FakeTable)
     assert table.columns == PROGRAM_TABLE_COLUMNS
@@ -235,10 +273,16 @@ def test_wandb_logger_dry_run_and_resume_use_fake_wandb(tmp_path, monkeypatch):
     assert "code" not in table.columns
     assert "embedding" not in table.columns
     assert fake_run.summary["run/best_score"] == 1.0
+    assert fake_run.summary["run/evaluated_count"] == 2
+    assert fake_run.summary["run/total_cost"] == 0.5
     score_definition = next(
         item for item in fake_run.defined if item[0] == (INDIVIDUAL_SCORE_METRIC,)
     )
-    assert score_definition[1] == {"step_metric": "generation"}
+    assert score_definition[1] == {}
+    population_definition = next(
+        item for item in fake_run.defined if item[0] == ("population/count",)
+    )
+    assert population_definition[1] == {"step_metric": EVALUATED_COUNT_METRIC}
 
     first_run_id = init_kwargs["id"]
     resumed_config = EvolutionConfig(
@@ -290,7 +334,7 @@ def test_wandb_online_logging_with_authenticated_sdk(tmp_path, monkeypatch, capl
         logger.log_final(
             db=db,
             total_proposals_generated=2,
-            total_api_cost=0.5,
+            total_cost=0.5,
         )
     finally:
         logger.finish()

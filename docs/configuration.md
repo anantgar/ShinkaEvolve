@@ -92,16 +92,22 @@ pip install 'shinka-evolve[wandb]'
 # Authenticate online runs. In CI, provide this through a secret manager.
 export WANDB_API_KEY=<your-api-key>
 
-# Add W&B metrics and a compact individuals table alongside the WebUI database.
+# Add W&B metrics and a compact population/final_table alongside the WebUI database.
 shinka_run --task-dir examples/circle_packing --results_dir results/circle_wandb --num_generations 20 \
   --set evo.enable_wandb_logging=true \
   --set evo.wandb_project=shinka-evolve
 ```
 
-Each evaluated individual logs `score/individual` against `generation`. When a
-results directory is resumed, its `.wandb_run_id` is reused with
-`wandb_resume='allow'` by default. Online mode uses the credentials from
-`wandb login` or `WANDB_API_KEY`; set `wandb_mode=offline` to record locally
+Population and island snapshots use the single monotonic
+`population/evaluated_count` axis. They include population/island counts,
+correctness, best/mean scores, cumulative `cost/*`, and cumulative
+`timing/*_total` metrics. Raw evaluated candidates remain available through
+`score/individual` and `individual/*` fields for scatter/debugging; they use
+W&B's normal event step rather than generation. Administrative island copies
+are retained in population/table counts but excluded from evaluated count and
+candidate history. When a results directory is resumed, its `.wandb_run_id` is
+reused with `wandb_resume='allow'` by default. Online mode uses the credentials
+from `wandb login` or `WANDB_API_KEY`; set `wandb_mode=offline` to record locally
 without uploading. W&B failures are non-fatal and do not alter the existing
 database or WebUI path.
 
