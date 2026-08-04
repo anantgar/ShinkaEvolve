@@ -42,30 +42,17 @@ from .jobs import EvaluationJobStore
 from .session_caches import SharedSessionCacheStore
 
 _AGENT_AUTH_PATHS: dict[str, tuple[str, ...]] = {
-    "antigravity": (
-        ".gemini/antigravity-cli/antigravity-oauth-token",
-        ".gemini/antigravity-cli/settings.json",
-        ".gemini/antigravity-cli/installation_id",
-        ".gemini/antigravity-cli/jetski_state.pbtxt",
-        ".gemini/antigravity-cli/cache/onboarding.json",
-    ),
+    "antigravity": (".gemini/antigravity-cli/antigravity-oauth-token",),
     "claude": (
         ".claude.json",
-        ".claude/settings.json",
         ".claude/.credentials.json",
         ".claude/auth.json",
     ),
-    "codex": (".codex/auth.json", ".codex/config.toml"),
+    "codex": (".codex/auth.json",),
     "cursor": (".cursor/cli-config.json",),
-    "gemini": (
-        ".gemini/google_accounts.json",
-        ".gemini/settings.json",
-        ".gemini/state.json",
-        ".gemini/trustedFolders.json",
-        ".gemini/installation_id",
-    ),
-    "opencode": (".config/opencode",),
-    "pi": (".pi/agent/auth.json", ".pi/agent/settings.json"),
+    "gemini": (".gemini/google_accounts.json",),
+    "opencode": (),
+    "pi": (".pi/agent/auth.json",),
 }
 
 _AGENT_CREDENTIAL_ENV: dict[str, frozenset[str]] = {
@@ -113,6 +100,54 @@ _AGENT_PERSISTED_CREDENTIAL_PATHS: dict[str, tuple[str, ...]] = {
     "gemini": (".gemini/google_accounts.json",),
     "opencode": (".config/opencode",),
     "pi": (".pi/agent/auth.json",),
+}
+
+# These paths are deliberately removed from a durable proposal home before it
+# is exposed to a native CLI.  The Headless image supplies terminal access and
+# the pinned agent binaries; it must not inherit host plugins, skills, MCP
+# definitions, or application-tool caches from an earlier session.
+_AGENT_EXTERNAL_TOOL_PATHS: dict[str, tuple[str, ...]] = {
+    "antigravity": (
+        ".gemini/antigravity-cli/mcp",
+        ".gemini/antigravity-cli/settings.json",
+    ),
+    "claude": (
+        ".claude/plugins",
+        ".claude/skills",
+        ".claude/mcp.json",
+        ".claude/settings.json",
+    ),
+    "codex": (
+        ".codex/cache",
+        ".codex/config.toml",
+        ".codex/mcp.json",
+        ".codex/plugins",
+        ".codex/skills",
+    ),
+    "cursor": (
+        ".cursor/extensions",
+        ".cursor/mcp.json",
+        ".cursor/plugins",
+        ".cursor/skills",
+    ),
+    "gemini": (
+        ".gemini/extensions",
+        ".gemini/mcp.json",
+        ".gemini/settings.json",
+        ".gemini/skills",
+        ".gemini/trustedFolders.json",
+    ),
+    "opencode": (
+        ".config/opencode/mcp.json",
+        ".config/opencode/plugins",
+        ".config/opencode/skills",
+    ),
+    "pi": (
+        ".pi/agent/extensions",
+        ".pi/agent/mcp.json",
+        ".pi/agent/settings.json",
+        ".pi/agent/skills",
+    ),
 }
 
 _OPAQUE_JSON_AUTH_FILES = frozenset({"antigravity-oauth-token"})
@@ -519,6 +554,34 @@ def _remove_persisted_credentials(home: Path, agent: str | None = None) -> None:
             shutil.rmtree(path)
 
 
+def _remove_external_tool_paths(home: Path, agent: str) -> None:
+    """Remove host-provided plugins, skills, MCPs, and app-tool caches."""
+
+    if home.is_symlink() or not home.is_dir():
+        raise SecurityPolicyError("External-tool cleanup target must be a real directory")
+    for relative in _AGENT_EXTERNAL_TOOL_PATHS.get(agent, ()):
+        current = home
+        parts = Path(relative).parts
+        for index, part in enumerate(parts):
+            current = current / part
+            if current.is_symlink():
+                if index == len(parts) - 1:
+                    current.unlink()
+                    break
+                raise SecurityPolicyError(
+                    "Durable session external-tool path cannot contain symlinks"
+                )
+        else:
+            if current.is_file():
+                current.unlink()
+            elif current.is_dir():
+                shutil.rmtree(current)
+            elif current.exists():
+                raise SecurityPolicyError(
+                    "Durable session external-tool path contains a special entry"
+                )
+
+
 def run_agent_in_workspace(
     *,
     engine: DockerEngine,
@@ -661,6 +724,7 @@ def run_agent_in_workspace(
                 except SecurityPolicyError:
                     _purge_directory_contents(resolved_session_home)
                     raise
+                _remove_external_tool_paths(resolved_session_home, agent.agent)
             shared_cache_mounts = (
                 shared_cache_store.mounts()
                 if shared_cache_store is not None

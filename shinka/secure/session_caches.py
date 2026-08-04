@@ -1,11 +1,10 @@
-"""Trusted read-only caches for durable Headless agent sessions.
+"""Fail-closed cache extension point for durable Headless agent sessions.
 
-Durable proposal homes must keep provider conversation state private, but some
-agent assets are static and expensive to copy into every home.  This module
-describes only caches that are safe to share read-only.  It never promotes
-files from an agent session automatically: the shared root must be seeded by
-an operator from a trusted source before it is mounted into an untrusted
-agent container.
+Durable proposal homes keep provider conversation state private.  The current
+secure policy shares none of the native agents' home trees.  This module never
+promotes files from an agent session automatically: any future shared root must
+be seeded by an operator from a trusted source before it is mounted into an
+untrusted agent container.
 """
 
 from __future__ import annotations
@@ -23,25 +22,16 @@ from typing import Iterator
 
 from .errors import SecurityPolicyError
 
-# These paths contain static assets in the current secure Headless images and
-# results.  Conversation databases, transcripts, brains, logs, and provider
-# configuration remain in each proposal home.
+# Secure Shinka runs use the binaries and terminal tools baked into the pinned
+# Headless image.  No user agent-home cache is trusted here: plugin catalogs,
+# skills, MCP definitions, and app-tool caches can expose capabilities outside
+# the harness contract.  Keep this policy explicit and fail-closed; a future
+# harness-owned cache may be added only with an accompanying security review.
 AGENT_SHARED_CACHE_PATHS: dict[str, tuple[str, ...]] = {
-    "codex": (
-        ".codex/plugins/cache",
-        ".codex/cache/codex_apps_tools",
-        ".codex/cache/codex_apps_server_info",
-    ),
-    # Cursor's plugin cache contains versioned, immutable plugin assets; keep
-    # project transcripts, snapshots, extensions, and application databases
-    # private.
-    "cursor": (".cursor/plugins/cache",),
-    # Gemini state is currently account/session/conversation state.  Do not
-    # share the .gemini tree by default.
+    "codex": (),
+    "cursor": (),
     "gemini": (),
-    # Antigravity's installed helper binaries are static; its brain,
-    # conversations, logs, and settings remain private.
-    "antigravity": (".gemini/antigravity-cli/bin",),
+    "antigravity": (),
 }
 
 

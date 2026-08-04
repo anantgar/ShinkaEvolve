@@ -213,6 +213,30 @@ def test_durable_session_home_does_not_retain_credentials(tmp_path: Path) -> Non
     assert config.exists()
 
 
+def test_auth_snapshot_omits_external_codex_tool_configuration(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    codex = source / ".codex"
+    codex.mkdir(parents=True)
+    (codex / "auth.json").write_text('{"token":"private"}', encoding="utf-8")
+    (codex / "config.toml").write_text(
+        "[mcp_servers.cloudflare]\ncommand = 'cloudflare-mcp'\n",
+        encoding="utf-8",
+    )
+    (codex / "skills" / "github" / "SKILL.md").parent.mkdir(parents=True)
+    (codex / "skills" / "github" / "SKILL.md").write_text(
+        "external skill", encoding="utf-8"
+    )
+    destination = tmp_path / "destination"
+
+    _copy_minimal_auth_profile(source, destination, "codex")
+
+    assert (destination / ".codex" / "auth.json").exists()
+    assert not (destination / ".codex" / "config.toml").exists()
+    assert not (destination / ".codex" / "skills").exists()
+
+
 def test_durable_session_home_secret_copy_is_detected_and_purged(
     tmp_path: Path,
 ) -> None:
@@ -368,7 +392,7 @@ def test_agent_purges_durable_session_after_credential_copy(
     assert not any(session_home.iterdir())
 
 
-def test_agent_mounts_trusted_static_cache_and_prunes_session_copy(
+def test_agent_hides_external_tooling_and_keeps_terminal_harness_mounts(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "workspace"
@@ -377,16 +401,23 @@ def test_agent_mounts_trusted_static_cache_and_prunes_session_copy(
     auth.mkdir(parents=True)
     (auth / "auth.json").write_text('{"token":"auth-secret"}', encoding="utf-8")
     session_home = tmp_path / "session-home"
-    cache = session_home / ".codex" / "plugins" / "cache"
-    cache.mkdir(parents=True)
-    (cache / "plugin.js").write_text("static", encoding="utf-8")
+    plugin_cache = session_home / ".codex" / "plugins" / "cache"
+    plugin_cache.mkdir(parents=True)
+    (plugin_cache / "cloudflare.mcp.json").write_text(
+        '{"command":"cloudflare-mcp"}', encoding="utf-8"
+    )
+    skills = session_home / ".codex" / "skills" / "github"
+    skills.mkdir(parents=True)
+    (skills / "SKILL.md").write_text("external skill", encoding="utf-8")
+    (session_home / ".codex" / "cache" / "codex_apps_tools").mkdir(parents=True)
+    (session_home / ".codex" / "config.toml").write_text(
+        "[mcp_servers.github]\ncommand = 'github-mcp'\n", encoding="utf-8"
+    )
     private_state = session_home / ".codex" / "state.sqlite"
     private_state.parent.mkdir(parents=True, exist_ok=True)
     private_state.write_text("private", encoding="utf-8")
     shared_root = tmp_path / "shared-caches"
-    SharedSessionCacheStore(shared_root, agent="codex", image=IMAGE).seed_from_trusted_home(
-        session_home
-    )
+    SharedSessionCacheStore(shared_root, agent="codex", image=IMAGE)
     store = EvaluationJobStore(tmp_path / "state" / "jobs.sqlite")
 
     class _Engine:
@@ -434,14 +465,16 @@ def test_agent_mounts_trusted_static_cache_and_prunes_session_copy(
     )
 
     assert engine.plan is not None
-    mount = next(
-        mount
-        for mount in engine.plan.mounts
-        if mount.target == "/headless-home/.codex/plugins/cache"
-    )
-    assert mount.read_only is True
-    assert cache.is_dir()
-    assert not any(cache.iterdir())
+    assert {mount.target for mount in engine.plan.mounts} == {
+        "/workspace",
+        "/auth-seed",
+        "/headless-home",
+    }
+    assert "--allow yolo" in " ".join(engine.plan.command)
+    assert not plugin_cache.exists()
+    assert not skills.exists()
+    assert not (session_home / ".codex" / "cache").exists()
+    assert not (session_home / ".codex" / "config.toml").exists()
     assert private_state.exists()
 
 

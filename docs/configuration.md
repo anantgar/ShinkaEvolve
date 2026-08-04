@@ -157,16 +157,14 @@ assistant message; stdout is retained only for diagnostics and usage accounting.
 | `SHINKA_HEADLESS_DOCKER_BASE_COMMAND` | Headless CLI command. Defaults to `npx -y @roberttlange/headless`. |
 
 Secure repo-agent runs also keep proposal-scoped session homes under the secure
-state root.  Set `headless_shared_cache_root` to a private, operator-managed
-directory containing trusted read-only cache namespaces to avoid copying static
-agent assets into every proposal home.  When omitted, secure runs use
-`<secure_state_root>/headless-shared-caches` as the cache root.  The runtime
-never seeds this directory from an untrusted agent home; seed it before a run
-and keep conversation databases, transcripts, brains, logs, and provider
-configuration in their proposal homes.  The current conservative policy shares
-Codex plugin/app-tool caches, Cursor plugin assets, and Antigravity helper
-binaries.  Gemini state remains private because its current tree is dominated
-by account, conversation, and project state.
+state root.  The pinned Headless image supplies the native agent binaries and
+terminal tools; secure runs do not mount host agent caches, plugins, skills,
+MCP definitions, or app-tool catalogs.  Auth snapshots likewise contain only
+the selected provider credential files, and known external-tool paths are
+removed from a reused proposal home before launch.  `headless_shared_cache_root`
+is reserved for a future explicitly reviewed harness-owned cache and currently
+has no enabled agent paths.  Conversation databases, transcripts, brains, and
+other private session state remain proposal-scoped.
 
 ### DatabaseConfig (`shinka.database.DatabaseConfig`)
 

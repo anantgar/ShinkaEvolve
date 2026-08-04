@@ -62,6 +62,12 @@ API-key authentication is also supported only through each agent's explicit
 An API-auth route still needs a dedicated profile directory, which may be empty.
 Never use a normal home directory.
 
+Secure Shinka mutation runs narrow these profiles further at runtime: they copy
+only credential material, never mount host agent caches, and remove known
+plugins, skills, MCP definitions, and app-tool caches from reused session homes.
+The image's pinned native CLIs retain their normal terminal/shell tools; host
+Codex, Cursor, Gemini, or Antigravity extensions are not part of the harness.
+
 Provider egress is independent of the image. Configure the proxy with only the
 DNS suffixes needed by the selected routes. If one run selects several agents,
 the proxy allowlist is the union of those reviewed provider endpoints. Add
