@@ -15,6 +15,7 @@ from shinka.wandb_logging import (
     build_program_log_payload,
     build_run_summary,
     ensure_wandb_run_id,
+    program_table_row,
 )
 
 
@@ -40,7 +41,7 @@ def _make_db(tmp_path):
             "patch_type": "init",
             "pipeline_seconds": 2.0,
             "evaluation_seconds": 1.5,
-            "model_name": "test-model",
+            "model_name": "headless/test-agent",
             "headless_usage_status": "reported",
             "headless_usage_unknown": False,
             "headless_pricing_status": "missing",
@@ -62,8 +63,10 @@ def _make_db(tmp_path):
             "embed_cost": 0.02,
             "novelty_cost": 0.03,
             "meta_cost": 0.04,
-            "patch_type": "full",
+            "patch_type": "diff",
             "llm_result": {"model": "fallback-model"},
+            "headless_usage_status": "should-not-log",
+            "headless_pricing_unknown": True,
         },
     )
     db.add(first, defer_maintenance=True)
@@ -102,6 +105,7 @@ def test_program_payload_logs_one_compact_event_per_individual(tmp_path):
     assert payload["individual/is_copy"] is False
     assert "public_metrics/score" not in payload
     assert payload["individual/cost/api"] == pytest.approx(0.20)
+    assert not any(key.startswith("headless/") for key in payload)
     assert "cost/api" not in payload
     assert "program/combined_score" not in payload
     assert not any(key.startswith("metadata/") for key in payload)
@@ -149,6 +153,22 @@ def test_population_progress_uses_one_evaluation_axis_and_keeps_copies_out(
     assert payload["population/best_score"] == 1.0
     assert payload["cost/embed"] == pytest.approx(0.03)
     assert payload["cost/total"] == pytest.approx(0.35)
+    assert payload["cost/pricing_unknown_count"] == 1
+    assert program_table_row(db.get_all_programs()[0])[-1] is None
+    second_row = program_table_row(db.get_all_programs()[1])
+    assert second_row[:-1] == [
+        "p1",
+        1,
+        0.25,
+        False,
+        "p0",
+        0,
+        False,
+        False,
+        "diff",
+        "fallback-model",
+    ]
+    assert second_row[-1] == pytest.approx(0.29)
     assert payload["island/0/evaluated_count"] == 2
     assert payload["island/1/evaluated_count"] == 0
     assert payload["island/1/count"] == 1

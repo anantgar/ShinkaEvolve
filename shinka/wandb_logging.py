@@ -40,6 +40,7 @@ _COST_KEYS = {
     "novelty": "novelty_cost",
     "meta": "meta_cost",
 }
+_HEADLESS_MODEL_PREFIX = "headless/"
 _TIMING_KEYS = (
     "sampling_seconds",
     "evaluation_seconds",
@@ -74,11 +75,16 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
     useful as candidate scatter data, but are not the run's progress axis.
     """
     metadata = program.metadata or {}
+    headless_used = _is_headless_program(program)
     costs = program_costs(program)
     logged_costs = {
         name: value
         for name, value in costs.items()
-        if not (name == "api" and metadata.get("headless_pricing_unknown") is True)
+        if not (
+            headless_used
+            and name == "api"
+            and metadata.get("headless_pricing_unknown") is True
+        )
     }
     individual_score = _finite_float(program.combined_score)
     payload: Dict[str, Any] = {
@@ -92,17 +98,22 @@ def build_program_log_payload(program: Program) -> Dict[str, Any]:
         "individual/in_archive": bool(program.in_archive),
         "individual/patch_type": metadata.get("patch_type"),
         "individual/model_name": _program_model_name(program),
-        "headless/usage_status": metadata.get("headless_usage_status"),
-        "headless/usage_unknown": metadata.get("headless_usage_unknown"),
-        "headless/pricing_status": metadata.get("headless_pricing_status"),
-        "headless/pricing_unknown": metadata.get("headless_pricing_unknown"),
-        "headless/cost_basis": metadata.get("headless_cost_basis"),
-        "headless/pricing_source": metadata.get("headless_pricing_source"),
         **{
             f"individual/cost/{name}": value
             for name, value in logged_costs.items()
         },
     }
+    if headless_used:
+        payload.update(
+            {
+                "headless/usage_status": metadata.get("headless_usage_status"),
+                "headless/usage_unknown": metadata.get("headless_usage_unknown"),
+                "headless/pricing_status": metadata.get("headless_pricing_status"),
+                "headless/pricing_unknown": metadata.get("headless_pricing_unknown"),
+                "headless/cost_basis": metadata.get("headless_cost_basis"),
+                "headless/pricing_source": metadata.get("headless_pricing_source"),
+            }
+        )
 
     for key in _TIMING_KEYS:
         value = _finite_float(metadata.get(key))
@@ -178,7 +189,8 @@ def program_table_row(program: Program) -> List[Any]:
         _program_model_name(program),
         (
             None
-            if metadata.get("headless_pricing_unknown") is True
+            if _is_headless_program(program)
+            and metadata.get("headless_pricing_unknown") is True
             else sum(program_costs(program).values())
         ),
     ]
@@ -214,7 +226,8 @@ def build_population_progress_payload(
             program_costs(program)[name]
             for program in evaluated_programs
             if not (
-                name == "api"
+                _is_headless_program(program)
+                and name == "api"
                 and (program.metadata or {}).get("headless_pricing_unknown") is True
             )
         )
@@ -223,7 +236,8 @@ def build_population_progress_payload(
     unknown_pricing_count = sum(
         1
         for program in evaluated_programs
-        if (program.metadata or {}).get("headless_pricing_unknown") is True
+        if _is_headless_program(program)
+        and (program.metadata or {}).get("headless_pricing_unknown") is True
     )
     payload: Dict[str, Any] = {
         EVALUATED_COUNT_METRIC: (
@@ -518,9 +532,19 @@ class ShinkaWandbLogger:
 def _program_model_name(program: Program) -> Optional[str]:
     metadata = program.metadata or {}
     llm_result = metadata.get("llm_result")
-    nested_model = llm_result.get("model") if isinstance(llm_result, dict) else None
+    nested_model = None
+    if isinstance(llm_result, dict):
+        nested_model = llm_result.get("model_name") or llm_result.get("model")
     value = metadata.get("model_name") or metadata.get("model") or nested_model
     return str(value) if value is not None else None
+
+
+def _is_headless_program(program: Program) -> bool:
+    """Return whether a program was produced through the headless backend."""
+    model_name = _program_model_name(program)
+    if model_name is not None and model_name.startswith(_HEADLESS_MODEL_PREFIX):
+        return True
+    return bool((program.metadata or {}).get("headless_prompt_path"))
 
 
 def _finite_float(value: Any) -> Optional[float]:

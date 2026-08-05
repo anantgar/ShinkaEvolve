@@ -5,6 +5,7 @@ import json
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 
 def test_inference_example_uses_runner_api_and_trusted_timings(
@@ -36,7 +37,7 @@ def test_inference_example_uses_runner_api_and_trusted_timings(
             )
 
     class Writer:
-        result = None
+        result: dict[str, Any] | None = None
 
         @contextmanager
         def phase(self, _name):
@@ -52,5 +53,7 @@ def test_inference_example_uses_runner_api_and_trusted_timings(
         SimpleNamespace(path=lambda _name: cases),
         writer,
     )
-    assert writer.result["correct"] is True
-    assert writer.result["public_metrics"]["latency_p50_seconds"] == 0.001
+    result = writer.result
+    assert result is not None
+    assert result["correct"] is True
+    assert result["public_metrics"]["latency_p50_seconds"] == 0.001
