@@ -286,11 +286,23 @@ Mutation, build, and runtime images must be pinned as
 operator profiles and environment-name allow-lists; credential values are not
 persisted in proposal metadata.
 
-The current published and locally qualified universal Headless image is:
+The secure mutation image provides Python 3 as `python` and `python3`, plus
+`pip3` and `venv`. User-defined dependencies are prepared from the task's
+hash-pinned `dependency_manifest_path` before execution and mounted read-only
+at `/dependencies`; `SHINKA_DEPENDENCY_ROOT`, `PIP_NO_INDEX=1`, and
+`PIP_FIND_LINKS=/dependencies/files` make package installation explicitly
+offline. OS-level requirements belong in the separately pinned mutation image.
+
+The last published and locally qualified universal Headless image is:
 
 ```text
 ghcr.io/anantgar/shinka-headless-agents@sha256:7624da6fd6e8138d15b9553732e683d30832d3f090dfb00ad426e528c3dcfc7f
 ```
+
+That recorded digest predates the Python-runtime change above. Rebuild and
+publish `containers/headless-agents/Dockerfile`, then use the workflow's newly
+reported immutable digest before starting a secure run; do not reuse the
+recorded digest for this contract.
 
 The container boundary, read-only candidate handling, network and Docker-socket
 denial, resource limits, cleanup, and a two-turn durable Antigravity session

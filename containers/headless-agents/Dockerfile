@@ -16,6 +16,7 @@ ARG AGY_SHA512_AMD64=e64d4e58ede0f8440f2b3dc021f9d6d36b05f5c2f74d5a9215c1f11b20d
 ARG AGY_SHA512_ARM64=2d64c4e09eb22c824bc298ca61e48cb0e62688353db4122996b2e4bba8c9a1570d2cbf6e6452ed7ef30df0940bf8f058789e466aed5264c1ae2e4613eca5b573
 
 LABEL io.shinka.headless.version="${HEADLESS_VERSION}" \
+      io.shinka.headless.reasoning-efforts="low,medium,high,xhigh,max" \
       io.shinka.headless.agents="antigravity,claude,codex,cursor,gemini,opencode,pi" \
       io.shinka.antigravity.release="${AGY_RELEASE}" \
       io.shinka.claude.version="${CLAUDE_VERSION}" \
@@ -32,6 +33,12 @@ RUN apt-get update \
         ca-certificates \
         curl \
         git \
+        python-is-python3 \
+        python3 \
+        python3-numpy \
+        python3-pip \
+        python3-scipy \
+        python3-venv \
         ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
@@ -42,6 +49,35 @@ RUN npm install -g \
         "${PI_PACKAGE}@${PI_VERSION}" \
         "@openai/codex@${CODEX_VERSION}" \
         "opencode-ai@${OPENCODE_VERSION}"
+
+# Headless 0.5.0 predates GPT-5.6's native `max` reasoning level even though
+# the bundled Codex CLI accepts and forwards it. Extend only Headless's
+# normalized validation; the Codex adapter already passes the selected value
+# through as model_reasoning_effort="max".
+RUN node --input-type=module - <<'NODE'
+import { readFileSync, writeFileSync } from "node:fs";
+
+const replacements = [
+  [
+    "/usr/local/lib/node_modules/@roberttlange/headless/dist/cli.js",
+    'value === "low" || value === "medium" || value === "high" || value === "xhigh"',
+    'value === "low" || value === "medium" || value === "high" || value === "xhigh" || value === "max"',
+  ],
+  [
+    "/usr/local/lib/node_modules/@roberttlange/headless/dist/config.js",
+    'value === "low" || value === "medium" || value === "high" || value === "xhigh"',
+    'value === "low" || value === "medium" || value === "high" || value === "xhigh" || value === "max"',
+  ],
+];
+
+for (const [path, before, after] of replacements) {
+  const source = readFileSync(path, "utf8");
+  if (!source.includes(before)) {
+    throw new Error(`Headless max-effort patch target not found: ${path}`);
+  }
+  writeFileSync(path, source.replace(before, after));
+}
+NODE
 
 RUN set -eu; \
     case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
@@ -83,7 +119,15 @@ RUN groupadd --gid 65532 shinka \
     && command -v agent \
     && command -v gemini \
     && command -v opencode \
-    && command -v pi
+    && command -v pi \
+    && command -v python \
+    && command -v python3 \
+    && command -v pip3 \
+    && python --version \
+    && python3 --version \
+    && python -m pip --version \
+    && python3 -m pip --version \
+    && python3 -m venv --help >/dev/null
 
 ENV AGY_CLI_DISABLE_AUTO_UPDATE=true \
     DISABLE_AUTOUPDATER=1 \

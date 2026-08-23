@@ -444,7 +444,8 @@ narrow `mutable_paths` policy.
 - Eval name matches `experiment_fn_name`
 - Use `EVOLVE-BLOCK-START` and `EVOLVE-BLOCK-END` to mark evolution sections
 - Return format matches validation expectations
-- Dependencies must be available in env
+- Trusted-local dependencies must be available in the environment; secure runs
+  use the hash-pinned dependency bundle described below
 - Results can be unpacked for metrics
 - Auto-stores several results in `results_dir`
 - Can add text feedback in `shinka` loop
@@ -562,6 +563,30 @@ Headless seeds an agent's credentials by mounting its auth seed paths read-only 
 | `SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER` | Codex service tier: `fast` (default) or `flex`. |
 | `SHINKA_HEADLESS_DOCKER_SESSION_ROOT` | Optional absolute root for durable Headless Docker sessions; must be private and outside proposal worktrees. |
 | `SHINKA_HEADLESS_DOCKER_BASE_COMMAND` | Headless CLI command. Defaults to `npx -y @roberttlange/headless`. |
+
+#### Secure mutation runtime and dependencies
+
+Secure evaluation uses the universal image built from
+[`containers/headless-agents`](containers/headless-agents). It includes the
+native Headless CLIs plus Python 3 (`python`, `python3`, `pip3`, and `venv`).
+Node remains present because the provider CLIs require it.
+
+Set `SecureJobConfig.dependency_manifest_path` to a YAML/JSON manifest when a
+candidate needs additional Python packages. Shinka fetches and verifies the
+declared artifacts during trusted preparation, then mounts the resulting bundle
+read-only at `/dependencies` for the mutation agent. The mutation container has
+no package-download network path; use the offline bundle from a writable venv:
+
+```bash
+python3 -m venv /tmp/task-venv
+/tmp/task-venv/bin/python -m pip install --no-index \
+  --find-links "$SHINKA_DEPENDENCY_ROOT/files" package-name
+```
+
+Declare wheels or other files with lowercase SHA-256 hashes. Include build
+dependencies in the manifest, or use a custom digest-pinned mutation image for
+OS-level requirements. See [`docs/configuration.md`](docs/configuration.md) for
+the manifest contract.
 
 ## Interactive WebUI 🎨
 

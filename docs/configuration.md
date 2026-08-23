@@ -170,12 +170,55 @@ is reserved for a future explicitly reviewed harness-owned cache and currently
 has no enabled agent paths.  Conversation databases, transcripts, brains, and
 other private session state remain proposal-scoped.
 
+For subscription-backed Codex runs, no API key is required. Authenticate Codex on
+the host with `codex login` and point `agent_auth_profiles["codex"]` at either the
+host home directory (for example, `~`) or its `.codex` directory (for example,
+`~/.codex`). The secure runner copies only `.codex/auth.json` and sets
+`CODEX_HOME=/headless-home/.codex` inside the mutation container. When using
+`agent_network="provider_only"`, the reviewed egress proxy must be attached to
+both the labeled internal provider network and an egress-capable network.
+
 Codex runs receive a writable `.codex` tmpfs for the staged auth/config files,
 with `.codex/plugins` and `.codex/skills` overlaid as read-only tmpfs mounts.
 This prevents Codex versions that materialize system bundles at startup from
 exposing those skills or plugins; the absent `mcp.json` likewise leaves no MCP
 servers configured.  Terminal execution remains available through Headless's
 explicit `--allow yolo` mode.
+
+### Secure mutation dependencies
+
+The secure mutation image includes Python 3, with both `python` and `python3`
+commands, `pip3`, and `venv`. It also retains Node because the native Headless
+CLIs require Node. The mutation container has no general package-download path.
+
+Use `SecureJobConfig.dependency_manifest_path` to provide user-defined Python
+dependencies. During trusted preparation Shinka accepts only `https://` (from
+the configured `dependency_https_hosts`) or local `file://` artifacts, verifies
+their declared SHA-256, and stores a content-addressed bundle. The complete
+bundle is then mounted read-only at `/dependencies` for secure mutation, with:
+
+| Variable | Value |
+| --- | --- |
+| `SHINKA_DEPENDENCY_ROOT` | `/dependencies` |
+| `PIP_NO_INDEX` | `1` |
+| `PIP_FIND_LINKS` | `/dependencies/files` |
+
+Example manifest:
+
+```yaml
+schema_version: shinka-dependencies-v1
+artifacts:
+  - name: package.whl
+    url: file:///trusted/prepared/package.whl
+    sha256: <64 lowercase hexadecimal SHA-256>
+    runtime: true
+```
+
+The agent may create a venv in writable `/tmp` and install from the bundle with
+`python3 -m pip install --no-index --find-links "$SHINKA_DEPENDENCY_ROOT/files"`.
+All transitive wheels and build requirements must be declared. Use a custom
+digest-pinned mutation image for OS-level packages or tools that cannot be
+provided as bundle artifacts.
 
 ### DatabaseConfig (`shinka.database.DatabaseConfig`)
 

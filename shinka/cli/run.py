@@ -5,19 +5,44 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any, Dict, Optional, Union, get_args, get_origin, get_type_hints
 
-from shinka.core import ShinkaEvolveRunner, EvolutionConfig
-from shinka.database import DatabaseConfig
-from shinka.launch import (
+
+def _limit_host_numeric_threads() -> None:
+    """Keep fork-based Docker orchestration safe around NumPy/OpenBLAS.
+
+    The runner launches Docker subprocesses from worker threads while repository
+    analysis may have initialized a native BLAS thread pool.  On macOS, forking
+    that process can deadlock in the BLAS at-fork handler.  Candidate containers
+    still receive their own CPU limits; this only keeps the orchestration host
+    single-threaded for common native numerical runtimes.
+    """
+
+    for name in (
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "BLIS_NUM_THREADS",
+    ):
+        os.environ.setdefault(name, "1")
+
+
+_limit_host_numeric_threads()
+
+from shinka.core import ShinkaEvolveRunner, EvolutionConfig  # noqa: E402
+from shinka.database import DatabaseConfig  # noqa: E402
+from shinka.launch import (  # noqa: E402
     JobConfig,
     LocalJobConfig,
     SecureJobConfig,
     validate_secure_job_config,
 )
-from shinka.cli.run_config import load_optional_yaml_config
+from shinka.cli.run_config import load_optional_yaml_config  # noqa: E402
 
 SUPPORTED_INITIAL_EXTENSIONS: dict[str, str] = {
     ".py": "python",

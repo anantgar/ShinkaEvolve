@@ -16,6 +16,29 @@ from .constants import MAX_RETRIES
 logger = logging.getLogger(__name__)
 
 
+def _redact_log_value(value):
+    """Redact credential-like fields before including kwargs in diagnostics."""
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if any(
+                marker in key_text
+                for marker in ("credential", "api_key", "token", "secret", "password")
+            ):
+                redacted[key] = "<redacted>"
+            else:
+                redacted[key] = _redact_log_value(item)
+        return redacted
+    if isinstance(value, (list, tuple)):
+        return [_redact_log_value(item) for item in value]
+    return value
+
+
+def _safe_log_values(values):
+    return [str(_redact_log_value(value)) for value in values]
+
+
 class LLMClient:
     def __init__(
         self,
@@ -331,7 +354,7 @@ class LLMClient:
         else:
             llm_kwargs = self._attach_headless_work_dir(llm_kwargs)
         if self.verbose:
-            kwargs_str = [str(v) for v in llm_kwargs.values()]
+            kwargs_str = _safe_log_values(llm_kwargs.values())
             logger.info(f"==> QUERYING: {kwargs_str}")
 
         # Create model_posteriors dict from full posterior (not one-hot)
@@ -358,7 +381,7 @@ class LLMClient:
                 model_name = llm_kwargs.get("model_name", "<unknown>")
                 logger.error(
                     f"{try_count + 1}/{MAX_RETRIES} Error in query "
-                    f"for model={model_name} kwargs={llm_kwargs}: {str(e)}"
+                    f"for model={model_name} kwargs={_redact_log_value(llm_kwargs)}: {str(e)}"
                 )
                 try_count += 1
         return None
@@ -671,7 +694,7 @@ class AsyncLLMClient:
         else:
             llm_kwargs = self._attach_headless_work_dir(llm_kwargs)
         if self.verbose:
-            kwargs_str = [str(v) for v in llm_kwargs.values()]
+            kwargs_str = _safe_log_values(llm_kwargs.values())
             logger.info(f"==> QUERYING: {kwargs_str}")
 
         # Create model_posteriors dict from full posterior (not one-hot)
@@ -714,7 +737,7 @@ class AsyncLLMClient:
     ) -> tuple[int, Optional[QueryResult]]:
         kwargs = self._attach_headless_work_dir(kwargs)
         if self.verbose:
-            kwargs_str = [str(v) for v in kwargs.values()]
+            kwargs_str = _safe_log_values(kwargs.values())
             logger.info(f"==> SAMPLING: {idx + 1}/{total_samples} {kwargs_str}")
 
         try_count = 0
@@ -764,7 +787,7 @@ class AsyncLLMClient:
             model_posteriors = {k: float(v) for k, v in model_posteriors.items()}
 
         if self.verbose:
-            kwargs_str = [str(v) for v in kwargs.values()]
+            kwargs_str = _safe_log_values(kwargs.values())
             logger.info(f"==> SAMPLING: {idx + 1}/{total_samples} {kwargs_str}")
 
         try_count = 0
@@ -803,7 +826,7 @@ def query_fn(
     verbose: bool = False,
 ) -> tuple[int, Optional[QueryResult]]:
     if verbose:
-        kwargs_str = [str(v) for v in kwargs.values()]
+        kwargs_str = _safe_log_values(kwargs.values())
         logger.info(f"==> SAMPLING: {idx + 1}/{total_samples} {kwargs_str}")
     try_count = 0
     while try_count < MAX_RETRIES:
@@ -863,7 +886,7 @@ def sample_kwargs_query_fn(
         model_posteriors = dict(zip(model_names, model_sample_probs))
         model_posteriors = {k: float(v) for k, v in model_posteriors.items()}
     if verbose:
-        kwargs_str = [str(v) for v in kwargs.values()]
+        kwargs_str = _safe_log_values(kwargs.values())
         logger.info(f"==> SAMPLING: {idx + 1}/{total_samples} {kwargs_str}")
     try_count = 0
     while try_count < MAX_RETRIES:

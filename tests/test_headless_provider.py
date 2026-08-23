@@ -201,6 +201,14 @@ def test_parse_headless_model_with_model_and_effort():
     assert parsed.effort == "high"
 
 
+def test_parse_headless_model_accepts_max_effort():
+    parsed = parse_headless_model("headless/codex@gpt-5.6-sol?effort=max")
+
+    assert parsed.agent == "codex"
+    assert parsed.agent_model == "gpt-5.6-sol"
+    assert parsed.effort == "max"
+
+
 def test_resolve_headless_model_backend():
     resolved = resolve_model_backend("headless/codex@gpt-5.5?effort=high")
 

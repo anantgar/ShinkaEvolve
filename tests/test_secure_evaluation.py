@@ -49,6 +49,7 @@ from shinka.secure.mutation import (
     _agent_command,
     _copy_minimal_auth_profile,
     _auth_secret_values,
+    _is_codex_destructive_cleanup_rejection,
     _purge_directory_contents,
     _reject_exact_secret_copies,
     _remove_persisted_credentials,
@@ -65,6 +66,19 @@ IMAGE = "example.invalid/runtime@sha256:" + "a" * 64
 
 def _limits() -> ResourceLimits:
     return ResourceLimits(cpus=1, memory_bytes=128 * 1024 * 1024, pids=16)
+
+
+def test_codex_cleanup_rejection_is_narrowly_recognized():
+    stderr = (
+        b"codex_core::tools::router: error=exec_command failed for command: "
+        b"Rejected(\"rm -rf ... rm -f style ... are not permitted. "
+        b"Use a safer approach\")"
+    )
+
+    assert _is_codex_destructive_cleanup_rejection(stderr)
+    assert not _is_codex_destructive_cleanup_rejection(
+        b"codex_core::tools::router: authentication failed"
+    )
 
 
 def test_list_managed_ignores_container_removed_during_scan(
@@ -274,6 +288,17 @@ def test_auth_snapshot_omits_external_codex_tool_configuration(
     assert not (destination / ".codex" / "skills").exists()
 
 
+def test_codex_auth_directory_is_accepted_as_profile(tmp_path: Path) -> None:
+    source = tmp_path / ".codex"
+    source.mkdir()
+    (source / "auth.json").write_text('{"token":"private"}', encoding="utf-8")
+    destination = tmp_path / "destination"
+
+    _copy_minimal_auth_profile(source, destination, "codex")
+
+    assert (destination / ".codex" / "auth.json").exists()
+
+
 def test_durable_session_home_secret_copy_is_detected_and_purged(
     tmp_path: Path,
 ) -> None:
@@ -425,7 +450,7 @@ def test_agent_purges_durable_session_after_credential_copy(
 
     assert engine.removed is True
     assert engine.plan is not None
-    assert "--no-same-permissions" in " ".join(engine.plan.command)
+    assert "python3 - <<'PY'" in " ".join(engine.plan.command)
     assert not any(session_home.iterdir())
 
 
@@ -508,11 +533,82 @@ def test_agent_hides_external_tooling_and_keeps_terminal_harness_mounts(
         "/headless-home",
     }
     assert "--allow yolo" in " ".join(engine.plan.command)
+    assert engine.plan.environment["CODEX_HOME"] == "/headless-home/.codex"
     assert not plugin_cache.exists()
     assert not skills.exists()
     assert not (session_home / ".codex" / "cache").exists()
     assert not (session_home / ".codex" / "config.toml").exists()
     assert private_state.exists()
+
+
+def test_agent_mounts_prepared_dependencies_read_only_and_offline(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / ".git").mkdir(parents=True)
+    auth = tmp_path / "auth" / ".codex"
+    auth.mkdir(parents=True)
+    (auth / "auth.json").write_text("{}", encoding="utf-8")
+    session_home = tmp_path / "session-home"
+    session_home.mkdir()
+    dependency_root = tmp_path / "dependencies"
+    (dependency_root / "files").mkdir(parents=True)
+    (dependency_root / "files" / "tool.whl").write_bytes(b"wheel")
+    store = EvaluationJobStore(tmp_path / "state" / "jobs.sqlite")
+
+    class _Engine:
+        def __init__(self) -> None:
+            self.plan = None
+
+        def create(self, plan):
+            self.plan = plan
+            return SimpleNamespace(container_id="fake-container")
+
+        def run_capture(self, _handle, **_kwargs):
+            return SimpleNamespace(
+                exit_code=0,
+                stdout=b"",
+                stderr=b"",
+                timed_out=False,
+                output_limited=False,
+            )
+
+        def remove(self, _handle, *, force: bool):
+            assert force is True
+
+    engine = _Engine()
+    run_agent_in_workspace(
+        engine=engine,
+        workspace=workspace,
+        image=IMAGE,
+        limits=_limits(),
+        network=NetworkMode.DISABLED,
+        provider_network=None,
+        provider_proxy=None,
+        sandbox_user="65532:65532",
+        prompt="prompt",
+        agent=AgentSpec(agent="codex"),
+        auth_profile=auth.parent,
+        credential_environment={},
+        job_id="job",
+        attempt_id="dependency-attempt",
+        parent_digest=DIGEST,
+        mutation_store=store,
+        timeout_seconds=10,
+        session_home=session_home,
+        session_name="session",
+        dependency_root=dependency_root,
+    )
+
+    assert engine.plan is not None
+    dependency_mount = next(
+        mount for mount in engine.plan.mounts if mount.target == "/dependencies"
+    )
+    assert dependency_mount.source == dependency_root.resolve()
+    assert dependency_mount.read_only is True
+    assert engine.plan.environment["SHINKA_DEPENDENCY_ROOT"] == "/dependencies"
+    assert engine.plan.environment["PIP_NO_INDEX"] == "1"
+    assert engine.plan.environment["PIP_FIND_LINKS"] == "/dependencies/files"
 
 
 def test_container_plan_has_hardened_exact_policy(tmp_path: Path) -> None:
@@ -601,6 +697,17 @@ def test_secure_mutation_supports_every_pinned_native_headless_agent(
         "yolo",
         "--usage",
     )
+    assert stdin_data == b"prompt"
+
+
+def test_secure_mutation_accepts_max_reasoning_effort() -> None:
+    command, stdin_data = _agent_command(
+        AgentSpec(agent="codex", model="gpt-5.6-sol", effort="max"),
+        "prompt",
+    )
+
+    assert "--reasoning-effort" in command
+    assert "max" in command
     assert stdin_data == b"prompt"
 
 

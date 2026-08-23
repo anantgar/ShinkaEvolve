@@ -80,7 +80,20 @@ const server = http.createServer((_request, response) => {
   response.end();
 });
 
+server.on("clientError", (_error, socket) => {
+  // A client can disappear while DNS resolution or the upstream CONNECT is
+  // still in flight. Treat that as a closed tunnel instead of allowing an
+  // unhandled socket error to terminate the proxy process.
+  socket.destroy();
+});
+
 server.on("connect", async (request, client, head) => {
+  let upstream;
+  client.on("error", () => {
+    if (upstream && !upstream.destroyed) upstream.destroy();
+  });
+  client.on("timeout", () => client.destroy());
+
   try {
     const target = new URL(`http://${request.url}`);
     const host = target.hostname;
@@ -90,7 +103,7 @@ server.on("connect", async (request, client, head) => {
       return;
     }
     const { address, family } = await resolvePublic(host);
-    const upstream = net.connect({ host: address, port, family });
+    upstream = net.connect({ host: address, port, family });
     upstream.setTimeout(300_000);
     client.setTimeout(300_000);
     upstream.once("connect", () => {
@@ -99,10 +112,8 @@ server.on("connect", async (request, client, head) => {
       upstream.pipe(client);
       client.pipe(upstream);
     });
-    upstream.once("error", () => client.destroy());
-    upstream.once("timeout", () => upstream.destroy());
-    client.once("error", () => upstream.destroy());
-    client.once("timeout", () => client.destroy());
+    upstream.on("error", () => client.destroy());
+    upstream.on("timeout", () => upstream.destroy());
   } catch {
     client.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
   }

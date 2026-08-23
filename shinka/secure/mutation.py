@@ -55,6 +55,16 @@ _AGENT_AUTH_PATHS: dict[str, tuple[str, ...]] = {
     "pi": (".pi/agent/auth.json",),
 }
 
+# Optional harness-owned runtime files copied into the isolated proposal home.
+# These are not credentials or agent plugins; the Gemini fallback uses them to
+# call the configured API model and apply an allowlisted source-file update.
+_AGENT_RUNTIME_PATHS: dict[str, tuple[str, ...]] = {
+    "gemini": (
+        ".local/bin/headless",
+        ".local/lib/gemini_api_mutation.js",
+    ),
+}
+
 _AGENT_CREDENTIAL_ENV: dict[str, frozenset[str]] = {
     "antigravity": frozenset(),
     "claude": frozenset({"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}),
@@ -152,6 +162,39 @@ _AGENT_EXTERNAL_TOOL_PATHS: dict[str, tuple[str, ...]] = {
 
 _OPAQUE_JSON_AUTH_FILES = frozenset({"antigravity-oauth-token"})
 _SESSION_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+_CODEX_SERVICE_TIER_ENV = "SHINKA_HEADLESS_DOCKER_CODEX_SERVICE_TIER"
+_CODEX_SERVICE_TIERS = frozenset({"default", "fast", "flex"})
+_SECURE_MUTATION_SAFETY_NOTE = (
+    "\n\nSecure mutation harness note: do not invoke rm, rm -rf, git clean, "
+    "find -delete, or other destructive shell cleanup commands. The native "
+    "Codex CLI rejects them. Leave ignored caches such as __pycache__ alone; "
+    "if bounded cleanup is essential, use a small Python script inside the "
+    "workspace instead."
+)
+
+
+def _is_codex_destructive_cleanup_rejection(stderr: bytes) -> bool:
+    """Recognize Codex's safe, pre-execution rejection of destructive cleanup.
+
+    Codex rejects the whole ``exec_command`` before spawning the shell.  Sol
+    sometimes puts an otherwise valid candidate's final inspection and cache
+    cleanup in the same command, so the candidate can be usable even though
+    the CLI exits nonzero.  Keep this recovery deliberately narrow: all of the
+    native router markers and the exact refusal text must be present.  The
+    candidate still goes through the normal artifact and mutation-contract
+    validation after this function returns.
+    """
+
+    text = stderr.decode("utf-8", errors="replace")
+    return all(
+        marker in text
+        for marker in (
+            "codex_core::tools::router",
+            "exec_command failed for",
+            "rm -f style",
+            "are not permitted. Use a safer approach",
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -170,6 +213,7 @@ class AgentSpec:
             "medium",
             "high",
             "xhigh",
+            "max",
         }:
             raise SecurityPolicyError("Unsupported agent reasoning effort")
 
@@ -357,6 +401,18 @@ def _copy_minimal_auth_profile(source: Path, destination: Path, agent: str) -> N
     source = unresolved.resolve()
     if not source.is_dir():
         raise SecurityPolicyError("Agent auth profile must be a real directory")
+    # Operators commonly point Codex at ``~/.codex`` because that is the
+    # directory containing its credentials.  The archive paths below are
+    # relative to the user's home, so normalize that shorthand back to the
+    # home root before selecting ``.codex/auth.json``.  Keep accepting a home
+    # root as the canonical form.
+    if (
+        agent == "codex"
+        and source.name == ".codex"
+        and (source / "auth.json").is_file()
+        and not (source / "auth.json").is_symlink()
+    ):
+        source = source.parent
     destination.mkdir(mode=0o700)
     with tempfile.TemporaryDirectory(prefix="shinka-auth-snapshot-") as temporary:
         archive = Path(temporary) / "auth.tar"
@@ -374,12 +430,51 @@ def _copy_minimal_auth_profile(source: Path, destination: Path, agent: str) -> N
         from .archive import extract_normalized_archive
 
         extract_normalized_archive(archive, destination)
+    for relative in _AGENT_RUNTIME_PATHS.get(agent, ()):
+        source_runtime = source / relative
+        if not source_runtime.exists():
+            continue
+        if source_runtime.is_symlink() or not source_runtime.is_file():
+            raise SecurityPolicyError(
+                f"Agent runtime path must be a regular file: {relative}"
+            )
+        target_runtime = destination / relative
+        target_runtime.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        shutil.copyfile(source_runtime, target_runtime)
+        target_runtime.chmod(
+            0o755 if relative.endswith("/bin/headless") else 0o644
+        )
     for relative in _AGENT_REQUIRED_AUTH_PATHS.get(agent, ()):
         required = destination / relative
         if required.is_symlink() or not required.is_file():
             raise SecurityPolicyError(
                 f"Minimal {agent} auth profile is missing {relative}"
             )
+
+
+def _apply_codex_service_tier(auth_root: Path) -> None:
+    """Apply the operator-selected Codex service tier to the staged profile."""
+
+    requested = os.getenv(_CODEX_SERVICE_TIER_ENV, "").strip().lower()
+    if not requested:
+        return
+    if requested not in _CODEX_SERVICE_TIERS:
+        raise SecurityPolicyError(
+            f"{_CODEX_SERVICE_TIER_ENV} must be one of "
+            f"{sorted(_CODEX_SERVICE_TIERS)}"
+        )
+    config_path = auth_root / ".codex" / "config.toml"
+    config_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    existing = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
+    lines = [
+        line
+        for line in existing.splitlines()
+        if not re.match(r"^\s*service_tier\s*=", line)
+    ]
+    if requested != "default":
+        lines.append(f'service_tier = "{requested}"')
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    config_path.chmod(0o600)
 
 
 def _redact(data: bytes, secrets: Sequence[str]) -> bytes:
@@ -607,6 +702,7 @@ def run_agent_in_workspace(
     session_home: Path | None = None,
     session_name: str | None = None,
     shared_cache_root: Path | None = None,
+    dependency_root: Path | None = None,
 ) -> WorkspaceAgentResult:
     """Run one agent against an already-sanitized synthetic repository."""
 
@@ -638,6 +734,27 @@ def run_agent_in_workspace(
         raise SecurityPolicyError(
             "Agent auth profile must be outside the mutation workspace"
         )
+    mutation_state_root = Path(mutation_store.path).expanduser().resolve().parent
+    resolved_dependency_root: Path | None = None
+    if dependency_root is not None:
+        unresolved_dependency_root = Path(dependency_root).expanduser()
+        if (
+            unresolved_dependency_root.is_symlink()
+            or not unresolved_dependency_root.is_dir()
+        ):
+            raise SecurityPolicyError(
+                "Dependency bundle must be an existing, non-symlink directory"
+            )
+        resolved_dependency_root = unresolved_dependency_root.resolve()
+        for protected_root, label in (
+            (workspace, "mutation workspace"),
+            (auth_source, "agent auth profile"),
+            (mutation_state_root, "secure mutation state"),
+        ):
+            if _overlaps(resolved_dependency_root, protected_root):
+                raise SecurityPolicyError(
+                    f"Dependency bundle must be outside the {label}"
+                )
     resolved_session_home: Path | None = None
     resolved_shared_cache_root: Path | None = None
     if session_home is not None:
@@ -653,7 +770,6 @@ def run_agent_in_workspace(
             raise SecurityPolicyError(
                 "Agent auth profile must be outside the Headless session home"
             )
-        mutation_state_root = Path(mutation_store.path).expanduser().resolve().parent
         if _overlaps(mutation_state_root, resolved_session_home):
             raise SecurityPolicyError(
                 "Headless session home must be outside secure mutation state"
@@ -677,13 +793,29 @@ def run_agent_in_workspace(
             raise SecurityPolicyError(
                 "Shared cache root must be outside the durable session home"
             )
+        if resolved_dependency_root is not None and _overlaps(
+            resolved_shared_cache_root, resolved_dependency_root
+        ):
+            raise SecurityPolicyError(
+                "Shared cache root must be outside the dependency bundle"
+            )
+    if resolved_dependency_root is not None and resolved_session_home is not None:
+        if _overlaps(resolved_dependency_root, resolved_session_home):
+            raise SecurityPolicyError(
+                "Dependency bundle must be outside the durable session home"
+            )
     permitted_credentials = _AGENT_CREDENTIAL_ENV[agent.agent]
     unexpected = sorted(set(credential_environment) - permitted_credentials)
     if unexpected:
         raise SecurityPolicyError(
             f"Credential environment contains variables unrelated to {agent.agent}: {unexpected}"
         )
-    name = f"shinka-mutation-{attempt_id.replace('-', '')[:16]}"
+    # Retry attempt IDs can share the same UUID prefix (for example, a
+    # runner-suffixed ``-1``/``-2`` retry). Hash the complete ID so the
+    # immutable launch record's UNIQUE container_name constraint remains
+    # valid across retries.
+    attempt_name = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()[:24]
+    name = f"shinka-mutation-{attempt_name}"
     pinned_image = validate_pinned_image(image)
     shared_cache_store = (
         SharedSessionCacheStore(
@@ -710,8 +842,12 @@ def run_agent_in_workspace(
         with tempfile.TemporaryDirectory(prefix="shinka-agent-auth-") as auth_temp:
             auth = Path(auth_temp) / "profile"
             _copy_minimal_auth_profile(auth_profile, auth, agent.agent)
+            if agent.agent == "codex":
+                _apply_codex_service_tier(auth)
             prepare_bind_source(workspace, writable=True)
             prepare_bind_source(auth, writable=False)
+            if resolved_dependency_root is not None:
+                prepare_bind_source(resolved_dependency_root, writable=False)
             if resolved_session_home is not None:
                 # Remove known auth files and reject exact copies left by an
                 # earlier turn before the durable home is exposed to the agent.
@@ -728,6 +864,22 @@ def run_agent_in_workspace(
                     _purge_directory_contents(resolved_session_home)
                     raise
                 _remove_external_tool_paths(resolved_session_home, agent.agent)
+                for relative in _AGENT_RUNTIME_PATHS.get(agent.agent, ()):
+                    source_runtime = auth_source / relative
+                    if not source_runtime.exists():
+                        continue
+                    if source_runtime.is_symlink() or not source_runtime.is_file():
+                        raise SecurityPolicyError(
+                            f"Agent runtime path must be a regular file: {relative}"
+                        )
+                    target_runtime = resolved_session_home / relative
+                    target_runtime.parent.mkdir(
+                        mode=0o700, parents=True, exist_ok=True
+                    )
+                    shutil.copyfile(source_runtime, target_runtime)
+                    target_runtime.chmod(
+                        0o755 if relative.endswith("/bin/headless") else 0o644
+                    )
             shared_cache_mounts = (
                 shared_cache_store.mounts()
                 if shared_cache_store is not None
@@ -748,26 +900,79 @@ def run_agent_in_workspace(
             ]
             agent_argv, stdin_data = _agent_command(
                 agent,
-                prompt,
+                prompt.rstrip() + _SECURE_MUTATION_SAFETY_NOTE,
                 session_name=session_name,
                 timeout_seconds=timeout_seconds,
             )
             bootstrap = (
                 'set -eu; mkdir -p "$HOME"; '
                 "if [ -d /auth-seed ]; then "
-                "tar -C /auth-seed -cf - . | "
-                'tar -C "$HOME" --no-same-owner --no-same-permissions -xf -; '
-                'find "$HOME" -mindepth 1 -exec chmod u+rwX {} +; fi; '
+                "python3 - <<'PY'\n"
+                "import os\n"
+                "import shutil\n"
+                "source = '/auth-seed'\n"
+                "destination = os.environ['HOME']\n"
+                "for root, directories, files in os.walk(source):\n"
+                "    relative = os.path.relpath(root, source)\n"
+                "    target = destination if relative == '.' else os.path.join(destination, relative)\n"
+                "    os.makedirs(target, exist_ok=True, mode=0o700)\n"
+                "    os.chmod(target, 0o700)\n"
+                "    for name in files:\n"
+                "        source_file = os.path.join(root, name)\n"
+                "        target_file = os.path.join(target, name)\n"
+                "        shutil.copyfile(source_file, target_file)\n"
+                "        os.chmod(target_file, 0o600)\n"
+                "PY\n"
+                'fi; '
                 'exec "$@"'
             )
+            if agent.agent == "gemini":
+                # The seed copy normalizes files to 0600. Restore execution
+                # only for the harness-owned API fallback wrapper; otherwise
+                # the shell skips it and resolves the image's native CLI.
+                bootstrap = bootstrap.replace(
+                    'exec "$@"',
+                    'if [ -f "$HOME/.local/bin/headless" ]; then '
+                    'chmod 755 "$HOME/.local/bin/headless"; fi; '
+                    'exec "$@"',
+                )
             command = ("sh", "-c", bootstrap, "sh", *agent_argv)
             environment = {"HOME": "/headless-home", **credential_environment}
+            if agent.agent == "gemini":
+                # The API fallback is installed in the isolated session home.
+                # Set PATH explicitly because Docker/Headless launchers may
+                # otherwise replace the image PATH with their own environment.
+                environment["PATH"] = (
+                    "/headless-home/.local/bin:/headless-home/.cursor/bin:"
+                    "/headless-home/.cursor/cli/bin:/usr/local/sbin:/usr/local/bin:"
+                    "/usr/sbin:/usr/bin:/sbin:/bin"
+                )
+            if agent.agent == "codex":
+                # Keep Codex auth discovery deterministic even if the image's
+                # launcher changes HOME before spawning the CLI.
+                environment["CODEX_HOME"] = "/headless-home/.codex"
+            if resolved_dependency_root is not None:
+                environment.update(
+                    {
+                        "SHINKA_DEPENDENCY_ROOT": "/dependencies",
+                        "PIP_NO_INDEX": "1",
+                        "PIP_FIND_LINKS": "/dependencies/files",
+                    }
+                )
             if agent.agent == "antigravity":
                 environment["AGY_CLI_DISABLE_AUTO_UPDATE"] = "true"
             mounts = [
                 ContainerMount(workspace, "/workspace", read_only=False),
                 ContainerMount(auth, "/auth-seed", read_only=True),
             ]
+            if resolved_dependency_root is not None:
+                mounts.append(
+                    ContainerMount(
+                        resolved_dependency_root,
+                        "/dependencies",
+                        read_only=True,
+                    )
+                )
             if resolved_session_home is not None:
                 mounts.append(
                     ContainerMount(
@@ -824,6 +1029,26 @@ def run_agent_in_workspace(
                 max_output_bytes=limits.output_bytes,
                 stdin_data=stdin_data,
             )
+            # Preserve bounded, redacted diagnostics before classifying a
+            # failed agent process. This is especially useful for secure
+            # fallback shims whose API/model errors only exist in container
+            # stdout or stderr.
+            try:
+                failure_root = (
+                    mutation_state_root
+                    / "headless-failures"
+                    / hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()[:32]
+                )
+                failure_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+                (failure_root / "stdout.log").write_bytes(
+                    _redact(result.stdout[-8 * 1024 * 1024 :], redaction_values)
+                )
+                (failure_root / "stderr.log").write_bytes(
+                    _redact(result.stderr[-8 * 1024 * 1024 :], redaction_values)
+                )
+                os.chmod(failure_root, 0o700)
+            except OSError:
+                pass
             if result.timed_out:
                 raise SecureExecutionError(
                     FailureClass.WALL_TIMEOUT,
@@ -834,7 +1059,9 @@ def run_agent_in_workspace(
                     FailureClass.MUTATION_FAILED,
                     "Mutation exceeded its output limit",
                 )
-            if result.exit_code != 0:
+            if result.exit_code != 0 and not _is_codex_destructive_cleanup_rejection(
+                result.stderr
+            ):
                 raise SecureExecutionError(
                     FailureClass.MUTATION_FAILED,
                     "Mutation agent did not complete successfully",

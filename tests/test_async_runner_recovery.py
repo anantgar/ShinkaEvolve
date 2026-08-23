@@ -316,6 +316,30 @@ def test_restore_resume_progress_uses_actual_program_count():
     asyncio.run(_run())
 
 
+def test_restore_resume_progress_ignores_failed_attempt_log_in_evaluated_mode():
+    class _PersistedAsyncDB(_FakeAsyncDB):
+        async def get_persisted_generation_ids_async(self):
+            return list(range(20))
+
+    async def _run():
+        runner = _build_runner(
+            async_db=_PersistedAsyncDB(total_programs=21),
+            db=SimpleNamespace(last_iteration=19),
+            db_config=SimpleNamespace(num_islands=1),
+            evo_config=SimpleNamespace(
+                num_generations=100,
+                generation_target_mode="evaluated_candidates",
+            ),
+        )
+
+        await runner._restore_resume_progress()
+
+        assert runner.completed_generations == 21
+        assert runner.next_generation_to_submit == 20
+
+    asyncio.run(_run())
+
+
 def test_get_remaining_completed_work_accounts_for_inflight_jobs():
     runner = _build_runner(
         evo_config=SimpleNamespace(num_generations=5),

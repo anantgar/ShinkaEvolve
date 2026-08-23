@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +9,11 @@ import pytest
 
 from shinka.llm.providers import headless
 from shinka.secure.artifacts import ContentAddressedStore
+from shinka.secure.dependencies import (
+    DependencyArtifact,
+    DependencyManifest,
+    DependencyPreparer,
+)
 
 IMAGE = "example.invalid/headless@sha256:" + "b" * 64
 
@@ -41,15 +47,35 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
     session_home.mkdir()
     state_root = tmp_path / "state"
     artifact_store = ContentAddressedStore(state_root / "artifacts")
+    dependency_file = tmp_path / "dependency.whl"
+    dependency_file.write_bytes(b"offline dependency")
+    dependency_bundle = DependencyPreparer(artifact_store).prepare(
+        DependencyManifest(
+            artifacts=(
+                DependencyArtifact(
+                    name="dependency.whl",
+                    url=dependency_file.as_uri(),
+                    sha256=hashlib.sha256(dependency_file.read_bytes()).hexdigest(),
+                    size=dependency_file.stat().st_size,
+                ),
+            )
+        )
+    )
     parent, _metadata = artifact_store.put_tree(
         worktree,
         kind="candidate",
         excludes=headless.DEFAULT_EXCLUDES,
     )
     calls: list[dict] = []
+    dependency_contents: list[bytes] = []
 
     def fake_agent(**kwargs):
         calls.append(kwargs)
+        dependency_root = kwargs["dependency_root"]
+        assert dependency_root is not None
+        dependency_contents.append(
+            (dependency_root / "files" / "dependency.whl").read_bytes()
+        )
         attempt_id = kwargs["attempt_id"]
         store = kwargs["mutation_store"]
         store.prepare_mutation(
@@ -104,6 +130,12 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
         "headless_session_key": "public-home-key",
         "headless_shared_cache_root": str(tmp_path / "shared-caches"),
         "headless_timeout_seconds": 10,
+        "headless_mutation_dependency_artifact": {
+            "digest": dependency_bundle.artifact.digest,
+            "size": dependency_bundle.artifact.size,
+            "kind": dependency_bundle.artifact.kind,
+            "media_type": dependency_bundle.artifact.media_type,
+        },
     }
 
     overlapping_home = state_root / "session-home"
@@ -167,6 +199,7 @@ def test_secure_headless_reuses_session_home_without_persisting_auth(
     assert all(
         "The proposal repository is `/workspace`" in call["prompt"] for call in calls
     )
+    assert dependency_contents == [b"offline dependency", b"offline dependency"]
     assert all(
         call["shared_cache_root"] == tmp_path / "shared-caches" for call in calls
     )

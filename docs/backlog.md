@@ -143,6 +143,120 @@ controlled experiment.
 - [ ] Retain detailed file logs while keeping interactive console verbosity
       bounded.
 
+## P1: Qualify And Reopen Upstream Crossover-Distance PR #176
+
+The upstream [contribution guide](../CONTRIBUTING.md#core-program-evolution-pipeline-changes)
+and [pull-request template](../.github/pull_request_template.md#core-evolution-pipeline-evidence)
+do not prescribe a minimum generation count. They require a core evolution
+change to include results on a representative runnable example, a baseline
+comparison, exact commands or configuration, compared metrics, and a short
+interpretation. The maintainer made that evidence the explicit reopen gate for
+[SakanaAI/ShinkaEvolve#176](https://github.com/SakanaAI/ShinkaEvolve/pull/176#issuecomment-5307991222).
+
+Use direct provider APIs for the qualification run, not Headless or a
+subscription-backed agent. Freeze one model and its parameters across both
+arms so agent sessions, hidden routing, subscription quotas, and dynamic model
+selection cannot confound the selector comparison. The proposed shared config
+is below; only the selector implementation/mode, results directory, and repeat
+identifier may differ between baseline and treatment.
+
+```yaml
+max_evaluation_jobs: 5
+max_proposal_jobs: 5
+max_db_workers: 4
+
+db_config:
+  num_islands: 2
+  archive_size: 40
+  elite_selection_ratio: 0.3
+  num_archive_inspirations: 4
+  num_top_k_inspirations: 2
+  migration_interval: 10
+  migration_rate: 0.0
+  island_elitism: true
+  enforce_island_separation: true
+  parent_selection_strategy: weighted
+  parent_selection_lambda: 10
+  archive_selection_strategy: crowding
+
+evo_config:
+  num_generations: 150
+  job_type: secure_docker
+  language: python
+  init_program_path: initial.py
+  patch_types: [diff, full, cross]
+  patch_type_probs: [0.45, 0.45, 0.10]
+  max_patch_resamples: 3
+  max_patch_attempts: 1
+  max_novelty_attempts: 1
+  llm_models: [gpt-5.4-nano]
+  llm_dynamic_selection: null
+  llm_kwargs:
+    temperatures: [1.0]
+    reasoning_efforts: [low]
+    max_tokens: 16384
+  embedding_model: text-embedding-3-small
+  code_embed_sim_threshold: 0.95
+  novelty_llm_models: [gpt-5.4-nano]
+  novelty_llm_kwargs:
+    temperatures: [1.0]
+    reasoning_efforts: [low]
+    max_tokens: 4096
+  meta_rec_interval: null
+  evolve_prompts: false
+  max_api_costs: 5.0
+
+job_config:
+  eval_program_path: examples/circle_packing/evaluate.py
+  evaluator_root: examples/circle_packing
+  image: ghcr.io/<owner>/shinka-circle-packing@sha256:<digest>
+  time: "00:05:00"
+  memory_bytes: 2147483648
+  cpus: 1.0
+  pids_limit: 256
+  open_files_limit: 1024
+  require_rootless: true
+  allow_rootful_dedicated_vm: false
+```
+
+`secure_docker` refers to the local single-file evaluator backend from
+[SakanaAI/ShinkaEvolve#174](https://github.com/SakanaAI/ShinkaEvolve/pull/174),
+which is not in upstream `main`. Rebase only that backend onto the frozen
+benchmark commit as a common harness beneath both arms; do not include it in
+the reopened #176 diff. Provider calls, selection, and persistence remain in
+the trusted host orchestrator. Every generated candidate and `evaluate.py`
+execution must occur in the digest-pinned, networkless container with no API
+credentials, host Docker socket, or writable host mount. Record the harness
+commit, image digest, Docker engine version, host/platform, and resource limits
+with the results.
+
+- [ ] Rebase or transplant only the crossover-distance change onto one frozen
+      upstream commit; exclude unrelated lint or framework changes from both
+      comparison arms.
+- [ ] Freeze and validate the common Docker harness and Circle Packing image.
+      Prove the evaluation container has no provider credentials or network,
+      and that both arms use the same harness commit and image digest.
+- [ ] Persist the selected inspiration ID, selection mode, cosine distance,
+      usable-candidate count, and fallback reason so the experiment proves the
+      changed policy was exercised.
+- [ ] Treat a short forced-crossover run only as a preflight. It does not meet
+      the documented reopen gate by itself.
+- [ ] Use the representative 26-circle packing task for the baseline/treatment
+      comparison. Default to the paper-aligned 150 persisted evaluated
+      candidates per arm, two islands, archive size 40, four archive plus two
+      top-k inspirations, and a 10% crossover rate.
+- [ ] Require at least one completed 150-versus-150 comparison for the minimum
+      reopen evidence package. Prefer three independent repeats per arm before
+      making an efficacy claim; the framework does not provide a complete
+      run-level random seed.
+- [ ] Pre-register the selector-exposure denominator and report chosen
+      distance, best verified score, best-so-far trajectory, correctness and
+      novelty acceptance, failures, cost, and runtime. Extend both arms equally
+      if too few crossover decisions have at least two usable embeddings.
+- [ ] Reopen the PR only with exact commits, commands, configuration, artifacts,
+      metric tables, and a scoped interpretation of whether diversity improved
+      without a material search-quality regression.
+
 ## P1: Artifact Retention And Operations
 
 - [ ] Define retention periods for candidate artifacts, workspaces, agent

@@ -425,7 +425,11 @@ class ShinkaEvolveRunner:
         if configured_session_root:
             session_root: Optional[Path] = Path(configured_session_root)
         elif self.secure_runtime_settings is not None:
-            session_root = self.secure_runtime_settings.state_root / "headless-sessions"
+            # Secure mutation state is mounted into the evaluator container and
+            # must not contain durable headless session data.  Keep the default
+            # session store beside (rather than below) the per-run state root.
+            secure_state_root = self.secure_runtime_settings.state_root
+            session_root = secure_state_root.parent / "headless-sessions"
         else:
             session_root = None
         configured_shared_cache_root = evo_config.headless_shared_cache_root
@@ -435,7 +439,8 @@ class ShinkaEvolveRunner:
             )
         elif self.secure_runtime_settings is not None:
             self.headless_shared_cache_root = (
-                self.secure_runtime_settings.state_root / "headless-shared-caches"
+                self.secure_runtime_settings.state_root.parent
+                / "headless-shared-caches"
             )
         else:
             self.headless_shared_cache_root = None
@@ -643,9 +648,19 @@ class ShinkaEvolveRunner:
                 agent_omitted_paths=list(evo_config.agent_hidden_paths),
                 verbose=verbose,
             )
+            dependency_ref = self.scheduler.prepared.dependencies.artifact
+            self.llm.headless_query_defaults[
+                "headless_mutation_dependency_artifact"
+            ] = {
+                "digest": dependency_ref.digest,
+                "size": dependency_ref.size,
+                "kind": dependency_ref.kind,
+                "media_type": dependency_ref.media_type,
+            }
             logger.info(
                 "Secure evaluation mode enabled: candidate artifacts and "
-                "container boundaries are mandatory"
+                "container boundaries are mandatory; the prepared dependency "
+                "bundle is available read-only to secure mutation agents"
             )
         else:
             self.scheduler = JobScheduler(
@@ -5251,6 +5266,50 @@ Required constraints:
     async def _restore_resume_progress(self) -> None:
         """Restore progress counters from persisted database state."""
         self.completed_generations = await self._count_completed_generations_from_db()
+
+        # Failed proposal attempts are intentionally recorded in attempt_log,
+        # but they are not budget-consuming candidates in evaluated-candidates
+        # mode.  Do not let those diagnostics advance the next proposal past a
+        # missing persisted candidate after a restart.
+        persisted_generation_ids = None
+        get_persisted_generation_ids = getattr(
+            self.async_db, "get_persisted_generation_ids_async", None
+        )
+        if get_persisted_generation_ids is not None:
+            try:
+                persisted_generation_ids = {
+                    int(generation)
+                    for generation in await get_persisted_generation_ids()
+                }
+            except Exception as exc:
+                logger.debug(
+                    "Could not restore persisted generation IDs: %s", exc
+                )
+
+        if persisted_generation_ids is not None:
+            if self._generation_target_mode() == "evaluated_candidates":
+                # In this mode the generation label is an attempt identifier;
+                # the budget is the number of successfully persisted rows.
+                # last_iteration is the durable label of the last candidate.
+                self.next_generation_to_submit = max(
+                    self.db.last_iteration + 1,
+                    1,
+                )
+                return
+
+            missing_generations = sorted(
+                set(range(self.evo_config.num_generations))
+                - persisted_generation_ids
+            )
+            self.next_generation_to_submit = (
+                missing_generations[0]
+                if missing_generations
+                else self.evo_config.num_generations
+            )
+            return
+
+        # Compatibility fallback for older/fake databases that do not expose
+        # persisted generation IDs.
         max_attempt_generation = -1
         try:
             self.db.cursor.execute("SELECT MAX(generation) FROM attempt_log")

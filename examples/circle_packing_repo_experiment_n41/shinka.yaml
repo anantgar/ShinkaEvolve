@@ -1,0 +1,166 @@
+evo:
+  seed_repo_path: seed_repo
+  mutable_paths:
+    - src
+  immutable_paths: []
+  agent_hidden_paths: []
+  ignore_paths:
+    - .git
+    - .shinka
+    - "__pycache__"
+    - "src/__pycache__"
+    - "*.pyc"
+  evaluation_mode: secure
+  mutation_image: shinka-headless-agents@sha256:972ef72d57cf297fdcb565ced6547da397a78d67d3368019a627ecbf65233cac
+  agent_auth_profiles:
+    gemini: "/Users/anantgarg/.shinka/gemini-api-n41"
+  agent_credential_env_names:
+    gemini: [GEMINI_API_KEY]
+  agent_network: provider_only
+  agent_provider_network: shinka-provider-circle-20260731
+  agent_provider_proxy: http://shinka-egress-proxy:8080
+  sandbox_cpus: 2.0
+  sandbox_memory_bytes: 2147483648
+  sandbox_pids: 256
+  sandbox_open_files: 2048
+  sandbox_output_bytes: 67108864
+  headless_proposal_timeout_seconds: 14400
+  headless_cleanup_grace_seconds: 120
+  headless_output_mode: usage
+  llm_rate_limits:
+    google:
+      requests_per_minute: 4
+      max_concurrency: 1
+  llm_models:
+    # GPT-5.6, Antigravity, and Gemini 3.6 Flash mutation quotas were exhausted.
+    # The secure session-home shim calls the Gemini API directly for this exact
+    # available fallback model and applies only validated src/ diffs inside the
+    # mutation container.
+    - "headless/gemini@gemini-3.1-flash-lite"
+  llm_dynamic_selection: null
+  llm_kwargs:
+    temperatures: [0.0]
+    max_tokens: 32768
+    reasoning_efforts: [high]
+  patch_types: [full, cross]
+  patch_type_probs: [0.9, 0.1]
+  max_patch_resamples: 3
+  max_patch_attempts: 3
+  generation_target_mode: evaluated_candidates
+  max_novelty_attempts: 2
+  code_embed_sim_threshold: 0.95
+  embedding_model: gemini-embedding-2-preview
+  novelty_llm_models: [gemini-3.1-flash-lite]
+  novelty_llm_kwargs:
+    temperatures: [0.0]
+    max_tokens: 8192
+    reasoning_efforts: [high]
+  meta_rec_interval: 10
+  meta_max_recommendations: 5
+  meta_llm_models: [gemini-3.1-flash-lite]
+  meta_llm_kwargs:
+    temperatures: [0.0]
+    max_tokens: 8192
+    reasoning_efforts: [high]
+  evolve_prompts: true
+  prompt_evolution_interval: 10
+  prompt_archive_size: 10
+  prompt_llm_models: [gemini-3.1-flash-lite]
+  prompt_llm_kwargs:
+    temperatures: [0.0]
+    max_tokens: 8192
+    reasoning_efforts: [high]
+  prompt_ucb_exploration_constant: 2.0
+  prompt_epsilon: 0.25
+  prompt_evo_top_k_programs: 3
+  prompt_percentile_recompute_interval: 10
+  use_text_feedback: true
+  enable_wandb_logging: true
+  wandb_project: shinka-evolve
+  wandb_group: circle-packing-n41
+  wandb_name: circle-packing-n41-gpt56-luna-terra-sol-xhigh-max-default-100gen-fallback-gemini-api
+  wandb_tags:
+    - circle-packing
+    - n41
+    - secure
+    - docker
+    - codex-gpt-5.6-luna-terra-sol
+    - effort-xhigh-max
+    - service-tier-default-nonfast
+    - host-blas-thread-guard
+    - gemini-3.6-flash-high-novelty
+    - gemini-api-headless-mutation-fallback
+  wandb_notes: "100-generation n=41 secure circle packing; first 60 candidates used Codex GPT-5.6 Luna/Terra/Sol at xhigh and max, then GPT quota was exhausted, followed by Antigravity quota exhaustion; continuation switches to the validated Gemini API-backed Headless agent, with direct Gemini API prompt/meta and embeddings."
+  task_sys_msg: |
+    Improve the deterministic Python implementation in src/packing.py for packing
+    exactly 41 non-overlapping circles inside the unit square and maximizing the
+    sum of radii. The secure evaluator is outside the repository; it recomputes
+    the geometry and score, so never trust a self-reported score. Keep the public
+    run_packing() -> (centers, radii, reported_sum) contract and return shapes
+    (41, 2), (41,), and a matching float sum. NumPy and SciPy are available in the
+    mutation/runtime containers. You may write and execute bounded Python tests
+    and deterministic numerical optimization locally, but do not use network
+    access or depend on files outside the repository. Keep the candidate
+    deterministic and do not modify service.py or add dependencies that require
+    downloading. Complete .shinka/individual.md and replace every
+    TODO_AGENT_SUMMARY placeholder. Do not use rm, rm -rf, git clean,
+    find -delete, or other destructive shell cleanup commands; leave ignored
+    caches such as __pycache__ alone, because the native Codex CLI rejects
+    those cleanup commands. Every proposal must make a substantive, tracked
+    change under src/ before finishing, including when the current best score
+    appears to be reached: use a deterministic semantics-preserving alternate
+    implementation or numerical representation, not only comments, tests,
+    summaries, formatting, or cache files. Never finish a proposal as a no-op
+    after inspecting the current solution.
+
+db:
+  num_islands: 2
+  archive_size: 80
+  elite_selection_ratio: 0.3
+  num_archive_inspirations: 4
+  num_top_k_inspirations: 2
+  migration_interval: 10
+  migration_rate: 0.1
+  island_elitism: true
+  enforce_island_separation: true
+  parent_selection_strategy: weighted
+  parent_selection_lambda: 10.0
+  archive_selection_strategy: crowding
+  island_selection_strategy: equal
+
+job:
+  evaluator_repo_path: .
+  evaluator_entrypoint: evaluate.py
+  evaluator_callable: evaluate
+  build_image: shinka-headless-agents@sha256:972ef72d57cf297fdcb565ced6547da397a78d67d3368019a627ecbf65233cac
+  runtime_image: shinka-headless-agents@sha256:972ef72d57cf297fdcb565ced6547da397a78d67d3368019a627ecbf65233cac
+  candidate_command: [python3, /candidate/service.py]
+  required_paths: [service.py, src/packing.py]
+  public_metric_allowlist:
+    - num_circles
+    - valid
+    - sum_radii
+    - min_radius
+    - max_radius
+    - max_boundary_violation
+    - max_overlap_violation
+  public_feedback_enabled: true
+  public_feedback_max_chars: 2000
+  cpus: 2.0
+  memory_bytes: 2147483648
+  pids: 256
+  open_files: 2048
+  output_bytes: 67108864
+  queue_timeout_seconds: 600
+  startup_timeout_seconds: 300
+  heartbeat_timeout_seconds: 1800
+  request_timeout_seconds: 900
+  wall_timeout_seconds: 1800
+  collection_timeout_seconds: 300
+  cleanup_timeout_seconds: 120
+
+max_evaluation_jobs: 2
+max_proposal_jobs: 2
+max_db_workers: 2
+verbose: true
+debug: true

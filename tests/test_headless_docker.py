@@ -10,6 +10,21 @@ import pytest
 from shinka.llm.providers import headless_docker as hd
 
 
+def test_universal_headless_image_contract_includes_python_runtime() -> None:
+    dockerfile = (
+        Path(__file__).resolve().parents[1]
+        / "containers"
+        / "headless-agents"
+        / "Dockerfile"
+    ).read_text(encoding="utf-8")
+
+    assert "python-is-python3" in dockerfile
+    assert "python3-pip" in dockerfile
+    assert "python3-venv" in dockerfile
+    assert "command -v python" in dockerfile
+    assert "command -v python3" in dockerfile
+
+
 def _staged_files(stage_home: Path) -> dict[str, int]:
     return {
         str(path.relative_to(stage_home)): path.stat().st_size

@@ -7,6 +7,33 @@ downloads are architecture-specific and checksum-verified for AMD64/ARM64.
 There is deliberately no separate Antigravity image: it has the same image,
 runtime identity, and preflight contract as every other route.
 
+The image is Node-based because the native Headless provider CLIs are Node
+packages, but Python is a first-class mutation runtime: both `python` and
+`python3` resolve to Python 3, and `pip3` plus `venv` are installed. The build
+asserts those commands before publishing the image. Node remains an image
+implementation dependency for the provider CLIs; it is not a substitute for
+the Python task runtime.
+
+The base image also includes the Debian-packaged `numpy` and `scipy` runtimes.
+Task-specific packages still belong in the read-only dependency bundle below;
+the built-ins keep common numerical mutations usable without network access.
+
+Secure mutation runs can receive the task's prepared dependency bundle as a
+read-only `/dependencies` mount. Shinka sets
+`SHINKA_DEPENDENCY_ROOT=/dependencies`, `PIP_NO_INDEX=1`, and
+`PIP_FIND_LINKS=/dependencies/files`, so an agent can create a writable venv
+under `/tmp` and install only from the operator-approved, hash-verified files:
+
+```bash
+python3 -m venv /tmp/task-venv
+/tmp/task-venv/bin/python -m pip install --no-index \
+  --find-links "$SHINKA_DEPENDENCY_ROOT/files" package-name
+```
+
+Pip is forced not to download packages during mutation. Include all required
+wheels and their build dependencies in the dependency manifest, or publish a
+custom digest-pinned mutation image when an OS-level dependency is required.
+
 Build in a trusted preparation step, push to the operator registry, and configure
 the resulting immutable `repository@sha256:<manifest-digest>` reference. Runtime
 uses the dedicated non-root `65532:65532` identity. Shinka invokes the selected
@@ -15,6 +42,9 @@ route as:
 ```text
 headless <agent> [--model <model>] [--reasoning-effort <effort>] --allow yolo --json
 ```
+
+The pinned image extends Headless's normalized effort list with `max`, which
+the bundled Codex CLI forwards as GPT-5.6's native maximum reasoning effort.
 
 The manual `Publish Headless agents image` GitHub workflow builds AMD64 and
 ARM64, publishes `ghcr.io/<owner>/shinka-headless-agents`, reports the

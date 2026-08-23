@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import ExitStack
 import json
 import math
 import os
@@ -23,8 +24,13 @@ from shinka.llm.constants import TIMEOUT
 from shinka.secure.archive import DEFAULT_EXCLUDES, create_normalized_archive
 from shinka.secure.artifacts import ContentAddressedStore
 from shinka.secure.containers import DockerEngine
-from shinka.secure.contracts import NetworkMode, ResourceLimits
-from shinka.secure.errors import FailureClass, SecureExecutionError, SecurityPolicyError
+from shinka.secure.contracts import ArtifactRef, NetworkMode, ResourceLimits
+from shinka.secure.errors import (
+    ConfigurationError,
+    FailureClass,
+    SecureExecutionError,
+    SecurityPolicyError,
+)
 from shinka.secure.jobs import EvaluationJobStore
 from shinka.secure.mutation import (
     AgentSpec,
@@ -54,7 +60,7 @@ DEFAULT_HEADLESS_TEXT_TIMEOUT = 900.0
 DEFAULT_HEADLESS_CLEANUP_GRACE = 60.0
 HeadlessResponseMode = Literal["worktree", "text"]
 
-_VALID_EFFORTS = {"low", "medium", "high", "xhigh"}
+_VALID_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 _THREAD_LOCK = threading.Lock()
 _CLAUDE_TRANSIENT_RETRIES = 2
 _CLAUDE_TRANSIENT_BACKOFF_SECONDS = 3.0
@@ -1063,6 +1069,21 @@ def _secure_query(
         if shared_cache_root_raw is not None
         else None
     )
+    dependency_artifact_raw = kwargs.pop(
+        "headless_mutation_dependency_artifact", None
+    )
+    dependency_artifact: ArtifactRef | None = None
+    if dependency_artifact_raw is not None:
+        if not isinstance(dependency_artifact_raw, dict):
+            raise LLMProcessError(
+                "Secure Headless dependency artifact must be an explicit mapping"
+            )
+        try:
+            dependency_artifact = ArtifactRef(**dependency_artifact_raw)
+        except (ConfigurationError, TypeError) as exc:
+            raise LLMProcessError(
+                "Secure Headless dependency artifact is invalid"
+            ) from exc
     # The durable home key is an internal handle, not agent/evolution result
     # data. It must not survive in QueryResult.kwargs or persisted metadata.
     kwargs.pop("headless_session_key", None)
@@ -1187,34 +1208,48 @@ def _secure_query(
             ),
             required_agents=[parsed.agent],
         )
-        result = run_agent_in_workspace(
-            engine=engine,
-            workspace=work_dir,
-            image=str(image),
-            limits=limits,
-            network=network,
-            provider_network=provider_network,
-            provider_proxy=provider_proxy,
-            sandbox_user=sandbox_user or "65532:65532",
-            prompt=prompt,
-            agent=AgentSpec(
-                agent=parsed.agent,
-                model=parsed.agent_model,
-                effort=parsed.effort,
-            ),
-            auth_profile=auth_profile,
-            credential_environment={
-                str(key): str(value) for key, value in credentials.items()
-            },
-            job_id=str(job_id),
-            attempt_id=str(attempt_id),
-            parent_digest=str(parent_digest),
-            mutation_store=mutation_store,
-            timeout_seconds=headless_timeout(parsed, configured_timeout),
-            session_home=session_home,
-            session_name=str(session_name),
-            shared_cache_root=shared_cache_root,
-        )
+        with ExitStack() as dependency_stack:
+            dependency_root: Path | None = None
+            if dependency_artifact is not None:
+                dependency_temp = dependency_stack.enter_context(
+                    tempfile.TemporaryDirectory(
+                        prefix="shinka-headless-dependencies-"
+                    )
+                )
+                dependency_root = Path(dependency_temp) / "bundle"
+                artifact_store.materialize_archive(
+                    dependency_artifact,
+                    dependency_root,
+                )
+            result = run_agent_in_workspace(
+                engine=engine,
+                workspace=work_dir,
+                image=str(image),
+                limits=limits,
+                network=network,
+                provider_network=provider_network,
+                provider_proxy=provider_proxy,
+                sandbox_user=sandbox_user or "65532:65532",
+                prompt=prompt,
+                agent=AgentSpec(
+                    agent=parsed.agent,
+                    model=parsed.agent_model,
+                    effort=parsed.effort,
+                ),
+                auth_profile=auth_profile,
+                credential_environment={
+                    str(key): str(value) for key, value in credentials.items()
+                },
+                job_id=str(job_id),
+                attempt_id=str(attempt_id),
+                parent_digest=str(parent_digest),
+                mutation_store=mutation_store,
+                timeout_seconds=headless_timeout(parsed, configured_timeout),
+                session_home=session_home,
+                session_name=str(session_name),
+                shared_cache_root=shared_cache_root,
+                dependency_root=dependency_root,
+            )
         candidate, _metadata = artifact_store.put_tree(
             work_dir,
             kind="candidate",
