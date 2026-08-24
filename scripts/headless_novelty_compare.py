@@ -19,8 +19,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shinka.repo.summary import strip_commit_metadata
+
 
 DECISION_RE = re.compile(r"^\s*(NOT_NOVEL|NOVEL|UNCERTAIN)\b", re.IGNORECASE)
+COMMIT_HASH_RE = re.compile(r"(?i)sha256:[0-9a-f]{7,64}")
 IGNORED_NAMES = {".git", "__pycache__", ".mypy_cache", ".pytest_cache"}
 
 
@@ -38,6 +42,13 @@ def _copy_snapshot(source: Path, destination: Path) -> None:
         ignore=_ignore,
         symlinks=False,
     )
+    summary_path = destination / ".shinka" / "individual.md"
+    if summary_path.is_file():
+        summary = strip_commit_metadata(summary_path.read_text(encoding="utf-8"))
+        summary_path.write_text(
+            COMMIT_HASH_RE.sub("", summary),
+            encoding="utf-8",
+        )
 
 
 def _make_read_only(root: Path) -> None:
@@ -75,8 +86,10 @@ snapshots:
 Read both snapshots directly. In particular, inspect the implementation files
 and each snapshot's .shinka/individual.md. The snapshots intentionally contain
 no .git directory, commit history, or commit hashes. Do not use Git, infer
-history, execute source code, run tests, install dependencies, or create,
-modify, or delete any files. You may use read-only terminal commands such as
+history, run `diff`/`git diff`, generate a diff, invoke a plan/CreatePlan tool,
+execute source code, run tests, install dependencies, or create, modify, or
+delete any files. Inspect the files individually instead. You may use
+read-only terminal commands such as
 pwd, find, rg, sed, and head if useful.
 
 Judge implementation-level novelty, not merely whether the prose differs. A
@@ -137,6 +150,7 @@ def main() -> int:
             str(work_dir),
             "--timeout",
             str(args.timeout),
+            "--debug",
             "--usage",
         ]
 
