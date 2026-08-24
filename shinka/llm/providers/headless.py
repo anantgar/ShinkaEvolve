@@ -59,6 +59,7 @@ DEFAULT_HEADLESS_PROPOSAL_TIMEOUT = 7200.0
 DEFAULT_HEADLESS_TEXT_TIMEOUT = 900.0
 DEFAULT_HEADLESS_CLEANUP_GRACE = 60.0
 HeadlessResponseMode = Literal["worktree", "text"]
+HeadlessAllowMode = Literal["yolo", "read-only"]
 
 _VALID_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 _THREAD_LOCK = threading.Lock()
@@ -221,6 +222,16 @@ def _normalize_response_mode(response_mode: str | None) -> HeadlessResponseMode:
     return mode  # type: ignore[return-value]
 
 
+def _normalize_allow_mode(allow_mode: str | None) -> HeadlessAllowMode:
+    mode = (allow_mode or "yolo").lower()
+    if mode not in {"yolo", "read-only"}:
+        raise ValueError(
+            "headless_allow_mode must be 'yolo' or 'read-only', "
+            f"got {allow_mode!r}"
+        )
+    return mode  # type: ignore[return-value]
+
+
 def _render_prompt(
     *,
     work_dir: Path,
@@ -330,6 +341,7 @@ def _build_headless_command(
     session_name: str | None = None,
     proposal_timeout: float | None = None,
     output_mode: str | None = None,
+    allow_mode: HeadlessAllowMode = "yolo",
 ) -> list[str]:
     resolved_work_dir = str(Path(work_dir or os.getcwd()).absolute())
     cmd = [
@@ -340,7 +352,7 @@ def _build_headless_command(
         "--work-dir",
         resolved_work_dir,
         "--allow",
-        "yolo",
+        _normalize_allow_mode(allow_mode),
         "--timeout",
         str(max(1, math.ceil(headless_timeout(model, proposal_timeout)))),
     ]
@@ -1059,6 +1071,14 @@ def _secure_query(
     configured_timeout = kwargs.pop("headless_timeout_seconds", None)
     kwargs.pop("headless_cleanup_grace_seconds", None)
     configured_output_mode = kwargs.pop("headless_output_mode", None)
+    configured_allow_mode = _normalize_allow_mode(
+        kwargs.pop("headless_allow_mode", None)
+    )
+    if configured_allow_mode != "yolo":
+        raise SecurityPolicyError(
+            "Secure Headless mutation does not support read-only mode; "
+            "use the non-secure provider path for read-only comparisons."
+        )
     session_name = kwargs.pop("headless_session", None) or kwargs.pop(
         "headless_session_name", None
     )
@@ -1347,6 +1367,9 @@ def query_headless(
     configured_timeout = kwargs.pop("headless_timeout_seconds", None)
     configured_grace = kwargs.pop("headless_cleanup_grace_seconds", None)
     configured_output_mode = kwargs.pop("headless_output_mode", None)
+    configured_allow_mode = _normalize_allow_mode(
+        kwargs.pop("headless_allow_mode", None)
+    )
     response_mode = _normalize_response_mode(kwargs.pop("headless_response_mode", None))
     keep_scratch = bool(kwargs.pop("headless_keep_scratch", False))
     parsed_model = parse_headless_model(model)
@@ -1374,6 +1397,7 @@ def query_headless(
         session_name=headless_session_name,
         proposal_timeout=proposal_timeout,
         output_mode=configured_output_mode,
+        allow_mode=configured_allow_mode,
     )
     stdout_path, stderr_path = _headless_log_paths(work_dir=resolved_work_dir)
 
@@ -1432,6 +1456,7 @@ def query_headless(
             "headless_cleanup_grace_seconds": cleanup_grace,
             "headless_output_mode": headless_output_mode(configured_output_mode),
             "headless_response_mode": response_mode,
+            "headless_allow_mode": configured_allow_mode,
         }
         return _query_result(
             content=content,
@@ -1492,6 +1517,9 @@ async def query_headless_async(
     configured_timeout = kwargs.pop("headless_timeout_seconds", None)
     configured_grace = kwargs.pop("headless_cleanup_grace_seconds", None)
     configured_output_mode = kwargs.pop("headless_output_mode", None)
+    configured_allow_mode = _normalize_allow_mode(
+        kwargs.pop("headless_allow_mode", None)
+    )
     response_mode = _normalize_response_mode(kwargs.pop("headless_response_mode", None))
     keep_scratch = bool(kwargs.pop("headless_keep_scratch", False))
     parsed_model = parse_headless_model(model)
@@ -1519,6 +1547,7 @@ async def query_headless_async(
         session_name=headless_session_name,
         proposal_timeout=proposal_timeout,
         output_mode=configured_output_mode,
+        allow_mode=configured_allow_mode,
     )
     stdout_path, stderr_path = _headless_log_paths(work_dir=resolved_work_dir)
 
@@ -1587,6 +1616,7 @@ async def query_headless_async(
             "headless_cleanup_grace_seconds": cleanup_grace,
             "headless_output_mode": headless_output_mode(configured_output_mode),
             "headless_response_mode": response_mode,
+            "headless_allow_mode": configured_allow_mode,
         }
         return _query_result(
             content=content,

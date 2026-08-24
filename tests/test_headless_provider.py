@@ -16,6 +16,7 @@ from shinka.llm.client import get_async_client_llm, get_client_llm
 from shinka.llm.kwargs import sample_model_kwargs
 from shinka.llm.llm import AsyncLLMClient
 from shinka.llm.providers.headless import (
+    _build_headless_command,
     _headless_usage_metadata,
     _query_result,
     _query_usage_from_headless,
@@ -206,6 +207,30 @@ def test_parse_headless_model_accepts_max_effort():
     assert parsed.agent == "codex"
     assert parsed.agent_model == "gpt-5.6-sol"
     assert parsed.effort == "max"
+
+
+def test_build_headless_command_supports_read_only_permission_mode(tmp_path: Path):
+    command = _build_headless_command(
+        model=parse_headless_model("headless/cursor@composer-2.5"),
+        prompt_path=tmp_path / "prompt.md",
+        work_dir=str(tmp_path),
+        proposal_timeout=10,
+        allow_mode="read-only",
+    )
+
+    allow_index = command.index("--allow")
+    assert command[allow_index + 1] == "read-only"
+
+
+def test_build_headless_command_rejects_unknown_permission_mode(tmp_path: Path):
+    with pytest.raises(ValueError, match="headless_allow_mode"):
+        _build_headless_command(
+            model=parse_headless_model("headless/cursor@composer-2.5"),
+            prompt_path=tmp_path / "prompt.md",
+            work_dir=str(tmp_path),
+            proposal_timeout=10,
+            allow_mode="write-only",  # type: ignore[arg-type]
+        )
 
 
 def test_resolve_headless_model_backend():

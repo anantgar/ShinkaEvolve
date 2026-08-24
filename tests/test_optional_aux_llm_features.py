@@ -233,6 +233,9 @@ def test_aux_llm_kwargs_support_api_or_headless(tmp_path: Path):
     assert headless_kwargs["headless_response_mode"] == "text"
     assert headless_kwargs["headless_output_mode"] == "usage"
     assert headless_kwargs["headless_cleanup_grace_seconds"] == 15.0
+    assert headless_kwargs["headless_query_defaults"]["headless_allow_mode"] == (
+        "read-only"
+    )
     assert Path(headless_kwargs["headless_work_dir"]).name == "novelty"
 
 
@@ -280,5 +283,11 @@ def test_runner_enables_api_or_headless_aux_clients(
     )
     assert (
         headless_runner.novelty_judge.async_llm_client.headless_response_mode == "text"
+    )
+    assert (
+        headless_runner.novelty_judge.async_llm_client.headless_query_defaults[
+            "headless_allow_mode"
+        ]
+        == "read-only"
     )
     assert headless_runner.prompt_llm.headless_response_mode == "text"

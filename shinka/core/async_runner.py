@@ -263,12 +263,15 @@ def _llm_client_kwargs_for_text_requests(
     scratch_parent = results_dir / "headless_scratch" / request_class
     scratch_parent.mkdir(parents=True, exist_ok=True)
     timeout = kwargs.pop("headless_timeout_seconds", DEFAULT_HEADLESS_TEXT_TIMEOUT)
+    headless_query_defaults = dict(kwargs.pop("headless_query_defaults", {}) or {})
+    headless_query_defaults.setdefault("headless_allow_mode", "read-only")
     return {
         "headless_work_dir": str(scratch_parent),
         "headless_response_mode": "text",
         "headless_output_mode": "usage",
         "headless_timeout_seconds": timeout,
         "headless_cleanup_grace_seconds": evo_config.headless_cleanup_grace_seconds,
+        "headless_query_defaults": headless_query_defaults,
         **kwargs,
     }
 
