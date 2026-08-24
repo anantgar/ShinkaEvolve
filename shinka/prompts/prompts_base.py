@@ -4,6 +4,7 @@ import json
 from typing import Iterable
 
 from shinka.database import Program
+from shinka.repo.summary import strip_commit_metadata
 
 
 BASE_SYSTEM_MSG = """You are an expert programmer.
@@ -35,7 +36,7 @@ def construct_individual_program_msg(
     include_text_feedback: bool = False,
 ) -> str:
     """Render one Program as prompt context."""
-    summary = program.repo_summary or "No summary recorded."
+    summary = strip_commit_metadata(program.repo_summary or "No summary recorded.")
     sections = [
         f"Repository individual ID: {program.id}",
         f"Generation: {program.generation}",

@@ -4,6 +4,7 @@ from pathlib import Path
 from shinka.database import Program
 from shinka.llm import LLMClient
 from shinka.prompts import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
+from shinka.repo.summary import strip_commit_metadata
 
 logger = logging.getLogger(__name__)
 DEFAULT_SUMMARY_FILENAME = ".shinka/individual.md"
@@ -27,7 +28,7 @@ class NoveltyJudge:
         self.summary_filename = summary_filename
 
     def _format_summary_for_prompt(self, label: str, summary_text: str) -> str:
-        text = summary_text.strip() or "No repository summary recorded."
+        text = strip_commit_metadata(summary_text) or "No repository summary recorded."
         return f"{label} repository summary:\n\n{text}"
 
     def _summary_candidates(self, exec_path: Path) -> List[Path]:
@@ -257,7 +258,7 @@ class NoveltyJudge:
 
             if response is None or response.content is None:
                 logger.warning("Novelty LLM returned empty response")
-                return True, "LLM response was empty", 0.0
+                return False, "LLM response was empty", 0.0
 
             content = response.content.strip()
             api_cost = response.cost or 0.0
@@ -271,7 +272,7 @@ class NoveltyJudge:
 
         except Exception as e:
             logger.error(f"Error in novelty LLM check: {e}")
-            return True, f"Error in novelty check: {e}", 0.0
+            return False, f"Error in novelty check: {e}", 0.0
 
     def log_novelty_skip_message(self, reason: str) -> None:
         """Log a message about skipping novelty check."""

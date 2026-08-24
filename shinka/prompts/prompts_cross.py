@@ -2,6 +2,7 @@ import random
 from typing import List
 
 from shinka.database import Program
+from shinka.repo.summary import strip_commit_metadata
 from .prompts_base import perf_str
 
 
@@ -45,7 +46,9 @@ def get_cross_component(
     # Sample a random inspiration
     inspiration = random.choice(all_inspirations)
 
-    inspiration_summary = inspiration.repo_summary or "No summary recorded."
+    inspiration_summary = strip_commit_metadata(
+        inspiration.repo_summary or "No summary recorded."
+    )
     crossover_inspiration = "# Crossover Inspiration Repository Individual\n"
     crossover_inspiration += f"{inspiration_summary}\n\n"
     crossover_inspiration += f"Performance metrics: {perf_str(inspiration.combined_score, inspiration.public_metrics)}\n\n"

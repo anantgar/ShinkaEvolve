@@ -81,7 +81,7 @@ evo_config = EvolutionConfig(
     meta_llm_models=["gpt-5-nano"],
     meta_llm_kwargs=dict(temperatures=[0.0], max_tokens=16384),
     embedding_model="text-embedding-3-small",
-    code_embed_sim_threshold=0.995,
+    code_embed_sim_threshold=0.8,
     novelty_llm_models=["gpt-5-nano"],
     novelty_llm_kwargs=dict(temperatures=[0.0], max_tokens=16384),
     llm_dynamic_selection="ucb1",

@@ -4,6 +4,7 @@ from .summary import (
     SummaryValidationResult,
     build_initial_summary,
     build_summary_template,
+    strip_commit_metadata,
     validate_summary,
 )
 from .complexity import (
@@ -23,6 +24,7 @@ __all__ = [
     "SummaryValidationResult",
     "build_initial_summary",
     "build_summary_template",
+    "strip_commit_metadata",
     "validate_summary",
     "REPO_COMPLEXITY_SCHEMA_VERSION",
     "analyze_repository_complexity",

@@ -70,6 +70,8 @@ def test_summary_schema_validates():
 
     assert result.valid
     assert result.schema_version == "repo-individual-v1"
+    assert "Commit:" not in summary
+    assert "abc" not in summary
 
 
 def test_summary_template_requires_agent_rewrite():
@@ -87,6 +89,8 @@ def test_summary_template_requires_agent_rewrite():
 
     assert not result.valid
     assert any("unresolved placeholder" in error for error in result.errors)
+    assert "parent commit" not in summary.lower()
+    assert "abc" not in summary
 
 
 def test_worktree_manager_preserves_seed_and_excludes_summary_from_children(tmp_path):

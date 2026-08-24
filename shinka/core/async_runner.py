@@ -1889,7 +1889,6 @@ class ShinkaEvolveRunner:
             summary_text = build_initial_summary(
                 individual_id="initial_program",
                 generation=0,
-                commit_sha=parent_commit,
             )
             summary_version = "repo-individual-v1"
             summary_path.parent.mkdir(
@@ -2947,9 +2946,9 @@ class ShinkaEvolveRunner:
                 last_failure_reason = str(e)
                 continue
 
-            # Get code embedding (only once per successful patch)
+            # Get summary embedding (only once per successful patch)
             if self.verbose:
-                logger.info(f"Getting code embedding for generation {generation}...")
+                logger.info(f"Getting summary embedding for generation {generation}...")
 
             snapshot = self.repo_worktree_manager.commit_child(worktree)
             child_commit = snapshot.commit_sha or parent_commit
@@ -3741,7 +3740,6 @@ Required constraints:
                     individual_id=agent_target_worktree.individual_id,
                     generation=generation,
                     parent_id=parent_program.id,
-                    parent_commit=self._worktree_parent_identity(agent_target_worktree),
                 )
                 summary_written = await write_text_async(
                     required_summary_path,

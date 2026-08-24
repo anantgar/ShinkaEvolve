@@ -184,7 +184,7 @@ def test_check_llm_novelty_handles_empty_response_and_exception():
         most_similar_program=similar_program,
     )
 
-    assert is_novel
+    assert not is_novel
     assert "empty" in explanation.lower()
     assert cost == 0.0
 
@@ -196,6 +196,6 @@ def test_check_llm_novelty_handles_empty_response_and_exception():
         most_similar_program=similar_program,
     )
 
-    assert is_novel
+    assert not is_novel
     assert "network down" in explanation
     assert cost == 0.0

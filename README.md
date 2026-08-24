@@ -269,7 +269,7 @@ Class defaults below come from `shinka/core/config.py` (`EvolutionConfig`). Hydr
 | `wandb_resume` | `"allow"` | `str` | W&B resume policy used with the persisted run ID |
 | `wandb_config` | `{}` | `Dict[str, Any]` | Extra values merged into the W&B run config |
 | `max_novelty_attempts` | `3` | `int` | Max attempts for novelty generation |
-| `code_embed_sim_threshold` | `0.99` | `float` | Similarity threshold for code embeddings |
+| `code_embed_sim_threshold` | `0.8` | `float` | Similarity threshold for summary embeddings used by novelty checks |
 | `novelty_llm_models` | `None` | `Optional[List[str]]` | LLM models for novelty judgment |
 | `novelty_llm_kwargs` | `{}` | `dict` | Kwargs for novelty LLMs |
 | `use_text_feedback` | `False` | `bool` | Whether to use text feedback in evolution |

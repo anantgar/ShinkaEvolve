@@ -133,7 +133,7 @@ def test_shinka_run_happy_path_with_authoritative_overrides(tmp_path, monkeypatc
     }
     assert evo_config.meta_rec_interval == 10
     assert evo_config.embedding_model == "text-embedding-3-small"
-    assert evo_config.code_embed_sim_threshold == pytest.approx(0.99)
+    assert evo_config.code_embed_sim_threshold == pytest.approx(0.8)
     assert db_config.num_islands == 2
     assert db_config.archive_size == 40
     assert db_config.num_archive_inspirations == 1
@@ -586,7 +586,7 @@ def test_dataclass_defaults_match_shared_baseline():
     }
     assert evo_config.meta_rec_interval == 10
     assert evo_config.embedding_model == "text-embedding-3-small"
-    assert evo_config.code_embed_sim_threshold == pytest.approx(0.99)
+    assert evo_config.code_embed_sim_threshold == pytest.approx(0.8)
     assert evo_config.enable_controlled_oversubscription is False
 
     assert db_config.num_islands == 2

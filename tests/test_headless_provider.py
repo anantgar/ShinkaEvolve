@@ -88,7 +88,6 @@ def _make_fake_headless(tmp_path: Path) -> Path:
                 "- Schema-Version: repo-individual-v1",
                 "- Individual: fake",
                 "- Generation: 1",
-                "- Commit: pending",
                 "",
                 "## Parent",
                 "",

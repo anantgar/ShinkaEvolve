@@ -123,7 +123,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "  quality controls: --set evo.max_patch_resamples=3 "
         "--set evo.max_patch_attempts=1 --set evo.max_novelty_attempts=3\n"
         "  embeddings: --set evo.embedding_model=text-embedding-3-small "
-        "--set evo.code_embed_sim_threshold=0.99\n"
+        "--set evo.code_embed_sim_threshold=0.8\n"
         "              --set "
         "evo.embedding_model=local/text-embeddings-inference@http://localhost:8080/v1\n\n"
         "Common db settings via --set:\n"

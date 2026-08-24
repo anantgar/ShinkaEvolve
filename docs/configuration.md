@@ -60,7 +60,7 @@ Concurrency is configured on `ShinkaEvolveRunner`, not on `EvolutionConfig`.
 | `wandb_resume` | `str` | `'allow'` | W&B resume policy used with the persisted run ID. |
 | `wandb_config` | `Dict[str, Any]` | `{}` | Extra W&B config values merged into the run config. |
 | `max_novelty_attempts` | `int` | `3` | Max novelty loops per generation. |
-| `code_embed_sim_threshold` | `float` | `0.99` | Similarity threshold used by novelty checks. |
+| `code_embed_sim_threshold` | `float` | `0.8` | Similarity threshold for summary embeddings used by novelty checks. |
 | `novelty_llm_models` | `Optional[List[str]]` | `None` | Optional novelty-judge model pool. |
 | `novelty_llm_kwargs` | `dict` | `{}` | kwargs for novelty-judge LLM calls. |
 | `use_text_feedback` | `bool` | `False` | Include text feedback in mutation prompts. |
@@ -345,7 +345,7 @@ evo_config:
     max_tokens: 16384
   meta_rec_interval: 10
   embedding_model: "text-embedding-3-small"
-  code_embed_sim_threshold: 0.99
+  code_embed_sim_threshold: 0.8
   enable_controlled_oversubscription: false
   proposal_target_mode: adaptive
   proposal_target_min_samples: 5

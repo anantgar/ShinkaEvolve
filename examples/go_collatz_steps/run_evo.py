@@ -52,7 +52,7 @@ evo_config = EvolutionConfig(
         max_tokens=16384,
     ),
     embedding_model="text-embedding-3-small",
-    code_embed_sim_threshold=0.995,
+    code_embed_sim_threshold=0.8,
     init_program_path="initial.go",
     results_dir="results_go_collatz_steps_async_small",
     max_novelty_attempts=1,

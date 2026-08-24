@@ -184,7 +184,11 @@ class AsyncNoveltyJudge:
 
         except Exception as e:
             logger.error(f"Error in async novelty assessment: {e}")
-            return True, {"novelty_checks_performed": 0, "novelty_total_cost": 0.0}
+            return False, {
+                "novelty_checks_performed": 0,
+                "novelty_total_cost": 0.0,
+                "novelty_explanation": f"Error in novelty assessment: {e}",
+            }
 
     async def _check_llm_novelty_async(
         self, proposed_summary: str, most_similar_program: Program
@@ -218,7 +222,7 @@ class AsyncNoveltyJudge:
 
             if response is None or response.content is None:
                 logger.warning("Novelty LLM returned empty response")
-                return True, "LLM response was empty", 0.0
+                return False, "LLM response was empty", 0.0
 
             content = response.content.strip()
             api_cost = response.cost or 0.0
@@ -232,7 +236,7 @@ class AsyncNoveltyJudge:
 
         except Exception as e:
             logger.error(f"Error in novelty LLM check: {e}")
-            return True, f"Error in novelty check: {e}", 0.0
+            return False, f"Error in novelty check: {e}", 0.0
 
     def log_novelty_skip_message(self, reason: str):
         """Log novelty skip message."""

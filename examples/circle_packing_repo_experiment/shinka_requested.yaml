@@ -56,7 +56,7 @@ evo:
     max_tokens: 16384
     reasoning_efforts: [high]
   embedding_model: gemini-embedding-2-preview
-  code_embed_sim_threshold: 0.95
+  code_embed_sim_threshold: 0.8
   enable_wandb_logging: true
   wandb_project: shinka-evolve
   wandb_group: circle-packing-repo

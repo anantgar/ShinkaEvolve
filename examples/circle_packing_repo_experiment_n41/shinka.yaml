@@ -48,7 +48,7 @@ evo:
   max_patch_attempts: 3
   generation_target_mode: evaluated_candidates
   max_novelty_attempts: 2
-  code_embed_sim_threshold: 0.95
+  code_embed_sim_threshold: 0.8
   embedding_model: gemini-embedding-2-preview
   novelty_llm_models: [gemini-3.1-flash-lite]
   novelty_llm_kwargs:

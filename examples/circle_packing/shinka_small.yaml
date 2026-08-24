@@ -124,7 +124,7 @@ evo_config:
   # Embedding model used for code similarity filtering.
   embedding_model: text-embedding-3-small
   # Similarity threshold above which code is treated as near-duplicate.
-  code_embed_sim_threshold: 0.99
+  code_embed_sim_threshold: 0.8
 
   # LLMs used for novelty checking/judgment.
   novelty_llm_models:

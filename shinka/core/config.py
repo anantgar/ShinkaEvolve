@@ -109,7 +109,7 @@ class EvolutionConfig:
     wandb_config: Dict[str, Any] = field(default_factory=dict)
 
     max_novelty_attempts: int = 3
-    code_embed_sim_threshold: float = 0.99
+    code_embed_sim_threshold: float = 0.8
     novelty_llm_models: Optional[List[str]] = None
     novelty_llm_kwargs: dict = field(default_factory=lambda: {})
     use_text_feedback: bool = False

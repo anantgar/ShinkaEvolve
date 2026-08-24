@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple, Literal
 import numpy as np
 from shinka.database import Program
 from shinka.database.inspirations import InspirationContextBuilder
+from shinka.repo.summary import strip_commit_metadata
 from shinka.prompts import (
     construct_eval_history_msg,
     perf_str,
@@ -170,7 +171,9 @@ class PromptSampler:
             text_feedback_section = "\n" + format_text_feedback_section(
                 parent.text_feedback
             )
-        parent_content = parent.repo_summary or "No summary recorded."
+        parent_content = strip_commit_metadata(
+            parent.repo_summary or "No summary recorded."
+        )
 
         if patch_type == "full":
             iter_msg = FULL_ITER_MSG.format(

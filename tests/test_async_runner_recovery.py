@@ -153,7 +153,6 @@ _VALID_SUMMARY = """# Individual Summary
 - Schema-Version: repo-individual-v1
 - Individual: test
 - Generation: 1
-- Commit: pending
 
 ## Parent
 

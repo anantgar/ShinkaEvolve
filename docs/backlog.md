@@ -106,6 +106,9 @@ Integrated on current `main` and `codex/example-tasks` at `022cfff`.
 Candidate branch: `codex/assess-shinkaevolve-for-nnue` at `2f0b627`, based on an
 old fork point.
 
+The scoped evaluator and campaign design is documented in
+[`stockfish_nnue_forward_path_plan.md`](stockfish_nnue_forward_path_plan.md).
+
 - [ ] Rebase or transplant only `examples/stockfish_nnue/**`, its focused test,
       and a current README catalog link.
 - [ ] Split the old bundle into task/evaluator/replay, pinned preparation
@@ -196,7 +199,7 @@ evo_config:
     reasoning_efforts: [low]
     max_tokens: 16384
   embedding_model: text-embedding-3-small
-  code_embed_sim_threshold: 0.95
+  code_embed_sim_threshold: 0.8
   novelty_llm_models: [gpt-5.4-nano]
   novelty_llm_kwargs:
     temperatures: [1.0]
@@ -304,6 +307,12 @@ Source: `shinka/repo/summary.py:11`
       than silently changing `repo-individual-v1`.
 - [ ] Update templates, validators, prompts, tests, and persisted-summary
       readers together.
+
+### Decide How To Carry Inspiration Snippets
+
+- [ ] Decide whether compact snippets from non-parent inspirations belong in
+      agent context, how they should be attributed, and how to keep them
+      separate from the authoritative parent repository state.
 
 ### Make Model Environment Validation Harness-Aware
 

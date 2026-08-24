@@ -8,6 +8,17 @@ from typing import Iterable, Optional
 SUMMARY_SCHEMA_VERSION = "repo-individual-v1"
 SUMMARY_TEMPLATE_PLACEHOLDER = "TODO_AGENT_SUMMARY"
 
+# Commit identifiers are useful to the trusted runner, but they are not useful
+# mutation context. Keep this scrubber at the prompt boundary so older
+# persisted summaries cannot reintroduce them into agent prompts.
+_COMMIT_METADATA_LINE_RE = re.compile(
+    r"(?im)^[ \t]*(?:[-*][ \t]*)?(?:parent[ \t]+)?commit"
+    r"(?:[ \t]+(?:sha|hash))?[ \t]*:[^\r\n]*(?:\r?\n|$)"
+)
+_PARENT_COMMIT_PHRASE_RE = re.compile(
+    r"(?i)\bparent[ \t]+commit[ \t]+(?:sha256:)?[0-9a-f]{7,64}\b"
+)
+
 # TODO: Simplify the summary schema
 REQUIRED_HEADINGS = [
     "# Individual Summary",
@@ -28,6 +39,12 @@ class SummaryValidationResult:
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     schema_version: Optional[str] = None
+
+
+def strip_commit_metadata(content: str) -> str:
+    """Remove repository commit identifiers from agent-facing summary text."""
+    cleaned = _COMMIT_METADATA_LINE_RE.sub("", content or "")
+    return _PARENT_COMMIT_PHRASE_RE.sub("parent artifact", cleaned).strip()
 
 
 
@@ -98,11 +115,12 @@ def build_summary_template(
     replaces every placeholder.
     """
 
+    # `parent_commit` remains accepted for compatibility with callers that
+    # still have the trusted artifact identity, but it is deliberately not
+    # rendered into the agent-facing summary.
     parent_bits = []
     if parent_id:
         parent_bits.append(f"parent id {parent_id}")
-    if parent_commit:
-        parent_bits.append(f"parent commit {parent_commit}")
     parent_hint = f" ({', '.join(parent_bits)})" if parent_bits else ""
 
     return textwrap.dedent(
@@ -112,7 +130,6 @@ def build_summary_template(
         - Schema-Version: {SUMMARY_SCHEMA_VERSION}
         - Individual: {individual_id}
         - Generation: {generation}
-        - Commit: pending
 
         Replace every {SUMMARY_TEMPLATE_PLACEHOLDER} entry before finishing.
 
@@ -155,7 +172,7 @@ def build_initial_summary(
     *,
     individual_id: str,
     generation: int,
-    commit_sha: str,
+    commit_sha: Optional[str] = None,
     changed_files: Iterable[str] = (),
     parent_id: Optional[str] = None,
     parent_commit: Optional[str] = None,
@@ -165,6 +182,9 @@ def build_initial_summary(
 ) -> str:
     """Build a schema-valid fallback summary for seed or degraded candidates."""
 
+    # `commit_sha` is retained as a compatibility argument for trusted
+    # artifact callers. It must never appear in the summary shown to agents.
+
     return textwrap.dedent(
         f"""\
         # Individual Summary
@@ -172,7 +192,6 @@ def build_initial_summary(
         - Schema-Version: {SUMMARY_SCHEMA_VERSION}
         - Individual: {individual_id}
         - Generation: {generation}
-        - Commit: {commit_sha}
 
         ## Parent
 
