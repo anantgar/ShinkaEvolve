@@ -35,6 +35,13 @@ def _ignore(_directory: str, names: list[str]) -> set[str]:
 def _copy_snapshot(source: Path, destination: Path) -> None:
     if not source.is_dir():
         raise ValueError(f"Repository snapshot is not a directory: {source}")
+    symlinks = [path for path in source.rglob("*") if path.is_symlink()]
+    if symlinks:
+        relative = symlinks[0].relative_to(source)
+        raise ValueError(
+            "Repository snapshots must not contain symlinks; "
+            f"found: {relative}"
+        )
     shutil.copytree(
         source,
         destination,
@@ -98,6 +105,15 @@ NOVEL. A parameter tweak, numerical continuation, formatting change, or
 reworded summary with the same substantive implementation is NOT_NOVEL. Use
 UNCERTAIN only when the available source is genuinely insufficient to decide.
 
+Be conservative about numerical-solution repositories. Two implementations are
+NOT_NOVEL when they store different frozen numeric catalogs produced by the same
+optimizer or relaxation family and materialize/certify them in substantively the
+same way. In particular, additive versus multiplicative clearance adjustment,
+radius clipping versus scaling, a different safety margin, or helper extraction
+does not make a fixed-layout approach novel. Require a different construction or
+optimization strategy, representation family, packing topology, or meaningful
+evaluator-time behavior.
+
 Your first line must be exactly one of: NOVEL, NOT_NOVEL, or UNCERTAIN. Follow
 it with a concise explanation naming the decisive files and implementation
 details. Do not stop after describing your inspection or emit progress-only
@@ -109,7 +125,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("existing", type=Path)
     parser.add_argument("proposed", type=Path)
+    parser.add_argument("--agent", default="cursor")
     parser.add_argument("--model", default="composer-2.5")
+    parser.add_argument("--reasoning-effort")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument(
         "--headless-cli",
@@ -137,22 +155,23 @@ def main() -> int:
 
         prompt_path = root / "prompt.md"
         prompt_path.write_text(_prompt(), encoding="utf-8")
-        command = [
-            *shlex.split(args.headless_cli),
-            "cursor",
-            "--model",
-            args.model,
-            "--allow",
-            "read-only",
-            "--prompt-file",
-            str(prompt_path),
-            "--work-dir",
-            str(work_dir),
-            "--timeout",
-            str(args.timeout),
-            "--debug",
-            "--usage",
-        ]
+        command = [*shlex.split(args.headless_cli), args.agent, "--model", args.model]
+        if args.reasoning_effort:
+            command.extend(["--reasoning-effort", args.reasoning_effort])
+        command.extend(
+            [
+                "--allow",
+                "read-only",
+                "--prompt-file",
+                str(prompt_path),
+                "--work-dir",
+                str(work_dir),
+                "--timeout",
+                str(args.timeout),
+                "--debug",
+                "--usage",
+            ]
+        )
 
         completed = subprocess.run(
             command,

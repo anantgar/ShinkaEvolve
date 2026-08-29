@@ -732,6 +732,54 @@ def test_extract_headless_text_content_strips_usage_json():
     )
 
 
+def test_extract_headless_text_content_reads_codex_jsonl_agent_message():
+    from shinka.llm.providers.headless import _extract_headless_text_content
+
+    stdout = "\n".join(
+        [
+            json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
+            json.dumps({"type": "turn.started"}),
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "reasoning",
+                        "text": "This trace text is not the answer.",
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "agent_message",
+                        "text": "NOVEL\n\nDifferent construction family.",
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "turn.completed",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                }
+            ),
+            json.dumps(
+                {
+                    "usage": {
+                        "inputTokens": 10,
+                        "outputTokens": 5,
+                        "totalTokens": 15,
+                    }
+                }
+            ),
+        ]
+    )
+
+    assert _extract_headless_text_content(stdout) == (
+        "NOVEL\n\nDifferent construction family."
+    )
+
+
 def test_query_headless_text_mode_uses_scratch_dir_and_returns_message(
     tmp_path, monkeypatch
 ):
@@ -753,7 +801,11 @@ def test_query_headless_text_mode_uses_scratch_dir_and_returns_message(
                 "prompt = prompt_path.read_text(encoding='utf-8')",
                 "assert 'Response Contract' in prompt",
                 "assert 'Active Repository' not in prompt",
-                "print('NOVEL: scratch-mode response')",
+                "print(json.dumps({'type': 'item.completed', 'item': "
+                "{'type': 'agent_message', 'text': "
+                "'NOVEL: scratch-mode response'}}))",
+                "print(json.dumps({'type': 'turn.completed', 'usage': "
+                "{'input_tokens': 3, 'output_tokens': 4}}))",
                 "print(json.dumps({'usage': {'inputTokens': 3, 'outputTokens': 4, "
                 "'totalTokens': 7, 'cost': {'total': 0.01}}}))",
             ]

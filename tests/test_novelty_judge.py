@@ -2,8 +2,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from shinka.core.novelty_judge import NoveltyJudge
+from shinka.core.novelty_judge import NoveltyJudge, parse_novelty_decision
 from shinka.database import Program
+from shinka.prompts import NOVELTY_SYSTEM_MSG
 
 
 @dataclass
@@ -199,3 +200,29 @@ def test_check_llm_novelty_handles_empty_response_and_exception():
     assert not is_novel
     assert "network down" in explanation
     assert cost == 0.0
+
+
+def test_novelty_prompt_rejects_parameter_tweaks_and_insufficient_evidence():
+    assert "Parameters, constants, coordinates" in NOVELTY_SYSTEM_MSG
+    assert "Numerical continuation" in NOVELTY_SYSTEM_MSG
+    assert "different frozen numeric catalog" in NOVELTY_SYSTEM_MSG
+    assert "Additive versus multiplicative safety margins" in NOVELTY_SYSTEM_MSG
+    assert "fail closed and return **NOT_NOVEL**" in NOVELTY_SYSTEM_MSG
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ("NOVEL\n\nDifferent construction family.", True),
+        ("**NOVEL**: different construction family", True),
+        ("NOT_NOVEL\n\nOnly constants changed.", False),
+        ("**NOT_NOVEL**: only constants changed", False),
+        ("NOVEL**: malformed markdown", False),
+        ("**NOVEL: malformed markdown", False),
+        ("NOVELTY is unclear", False),
+        ('{"type":"item.completed"}', False),
+        ("", False),
+    ],
+)
+def test_parse_novelty_decision_is_explicit_and_fail_closed(content, expected):
+    assert parse_novelty_decision(content) is expected

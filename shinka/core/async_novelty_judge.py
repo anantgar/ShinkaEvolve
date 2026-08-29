@@ -6,7 +6,7 @@ Provides non-blocking novelty checking with concurrent LLM calls.
 import asyncio
 import logging
 from typing import List, Optional, Dict, Any, Tuple
-from .novelty_judge import NoveltyJudge
+from .novelty_judge import NoveltyJudge, parse_novelty_decision
 from ..llm import AsyncLLMClient
 from ..database import Program
 
@@ -227,10 +227,9 @@ class AsyncNoveltyJudge:
             content = response.content.strip()
             api_cost = response.cost or 0.0
 
-            # Parse the response (same as sync version)
-            is_novel = content.upper().startswith(
-                "NOVEL"
-            ) or content.upper().startswith("**NOVEL**")
+            # Parse the response (same as sync version); malformed output
+            # fails closed rather than being mistaken for a decision.
+            is_novel = parse_novelty_decision(content)
             explanation = content
             return is_novel, explanation, api_cost
 

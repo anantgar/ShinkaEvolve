@@ -50,14 +50,14 @@ evo:
   max_novelty_attempts: 2
   code_embed_sim_threshold: 0.8
   embedding_model: gemini-embedding-2-preview
-  novelty_llm_models: [gemini-3.1-flash-lite]
+  novelty_llm_models: [gemini-3.1-flash-lite-preview]
   novelty_llm_kwargs:
     temperatures: [0.0]
     max_tokens: 8192
     reasoning_efforts: [high]
   meta_rec_interval: 10
   meta_max_recommendations: 5
-  meta_llm_models: [gemini-3.1-flash-lite]
+  meta_llm_models: [gemini-3.1-flash-lite-preview]
   meta_llm_kwargs:
     temperatures: [0.0]
     max_tokens: 8192
@@ -65,7 +65,7 @@ evo:
   evolve_prompts: true
   prompt_evolution_interval: 10
   prompt_archive_size: 10
-  prompt_llm_models: [gemini-3.1-flash-lite]
+  prompt_llm_models: [gemini-3.1-flash-lite-preview]
   prompt_llm_kwargs:
     temperatures: [0.0]
     max_tokens: 8192

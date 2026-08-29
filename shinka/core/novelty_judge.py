@@ -1,6 +1,8 @@
-from typing import Optional, Tuple, List
 import logging
+import re
 from pathlib import Path
+from typing import List, Optional, Tuple
+
 from shinka.database import Program
 from shinka.llm import LLMClient
 from shinka.prompts import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
@@ -8,6 +10,19 @@ from shinka.repo.summary import strip_commit_metadata
 
 logger = logging.getLogger(__name__)
 DEFAULT_SUMMARY_FILENAME = ".shinka/individual.md"
+_NOVELTY_DECISION_PATTERN = re.compile(
+    r"^\s*(?:\*\*(NOT_NOVEL|NOVEL)\*\*|(NOT_NOVEL|NOVEL))(?=\s|:|-|$)",
+    re.IGNORECASE,
+)
+
+
+def parse_novelty_decision(content: str) -> bool:
+    """Return True only for an explicit leading ``NOVEL`` decision."""
+    match = _NOVELTY_DECISION_PATTERN.match(content or "")
+    if not match:
+        return False
+    decision = match.group(1) or match.group(2)
+    return decision.upper() == "NOVEL"
 
 
 class NoveltyJudge:
@@ -263,10 +278,8 @@ class NoveltyJudge:
             content = response.content.strip()
             api_cost = response.cost or 0.0
 
-            # Parse the response
-            is_novel = content.upper().startswith(
-                "NOVEL"
-            ) or content.upper().startswith("**NOVEL**")
+            # Unknown or malformed decisions fail closed.
+            is_novel = parse_novelty_decision(content)
             explanation = content
             return is_novel, explanation, api_cost
 

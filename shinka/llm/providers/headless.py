@@ -870,6 +870,26 @@ def _extract_message_from_json_payload(payload: Any) -> str | None:
     if not isinstance(payload, dict):
         return None
 
+    # Codex emits the final response as a JSONL item event.  Do not recurse
+    # through arbitrary trace items: reasoning and command events can also
+    # contain a ``text`` field, but only an agent message is a user-facing
+    # completion.
+    payload_type = payload.get("type")
+    item = payload.get("item")
+    if payload_type in {"item.started", "item.completed"} and isinstance(
+        item, dict
+    ):
+        if item.get("type") == "agent_message":
+            for key in ("text", "content", "message"):
+                extracted = _extract_message_from_json_payload(item.get(key))
+                if extracted:
+                    return extracted
+    if payload_type == "agent_message":
+        for key in ("text", "content", "message"):
+            extracted = _extract_message_from_json_payload(payload.get(key))
+            if extracted:
+                return extracted
+
     for key in (
         "final_message",
         "finalMessage",
@@ -917,6 +937,12 @@ def _extract_headless_text_content(stdout: str) -> str:
         extracted = _extract_message_from_json_payload(parsed)
         if extracted:
             return extracted
+        # Native agent JSONL contains trailing lifecycle, reasoning, and tool
+        # events around the final agent_message.  Keep scanning backward over
+        # known event envelopes instead of returning the raw trace as content.
+        if isinstance(parsed, dict) and isinstance(parsed.get("type"), str):
+            content_end = index
+            continue
         break
 
     content = "\n".join(lines[:content_end]).strip()
