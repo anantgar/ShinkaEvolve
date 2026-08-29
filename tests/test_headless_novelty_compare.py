@@ -26,12 +26,20 @@ def test_copy_snapshot_scrubs_metadata_and_ignores_control_directories(tmp_path:
         "Commit: sha256:0123456789abcdef\nCore idea: catalog layout\n",
         encoding="utf-8",
     )
+    (source / ".shinka" / "goal.md").write_text(
+        "Agent-only instructions\n", encoding="utf-8"
+    )
+    (source / ".shinka" / "headless.stdout.log").write_text(
+        "Agent trace\n", encoding="utf-8"
+    )
 
     MODULE._copy_snapshot(source, destination)
 
     assert (destination / "solution.py").read_text(encoding="utf-8") == "VALUE = 1\n"
     assert not (destination / ".git").exists()
     assert not (destination / "__pycache__").exists()
+    assert not (destination / ".shinka" / "goal.md").exists()
+    assert not (destination / ".shinka" / "headless.stdout.log").exists()
     summary = (destination / ".shinka" / "individual.md").read_text(
         encoding="utf-8"
     )

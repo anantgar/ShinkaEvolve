@@ -28,8 +28,11 @@ COMMIT_HASH_RE = re.compile(r"(?i)sha256:[0-9a-f]{7,64}")
 IGNORED_NAMES = {".git", "__pycache__", ".mypy_cache", ".pytest_cache"}
 
 
-def _ignore(_directory: str, names: list[str]) -> set[str]:
-    return {name for name in names if name in IGNORED_NAMES}
+def _ignore(directory: str, names: list[str]) -> set[str]:
+    ignored = {name for name in names if name in IGNORED_NAMES}
+    if Path(directory).name == ".shinka":
+        ignored.update(name for name in names if name != "individual.md")
+    return ignored
 
 
 def _copy_snapshot(source: Path, destination: Path) -> None:
