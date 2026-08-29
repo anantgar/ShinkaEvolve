@@ -63,7 +63,11 @@ evo:
   evolve_prompts: false
   enable_controlled_oversubscription: false
   max_api_costs: 10.0
-  enable_wandb_logging: false
+  enable_wandb_logging: true
+  wandb_project: shinka-pr176-benchmark
+  wandb_group: null
+  wandb_tags: [pr176, circle-packing, inspiration-selection]
+  wandb_notes: Paired benchmark of random versus embedding-distance crossover inspiration selection.
 
 job:
   # The campaign driver always overrides this sentinel with a built image ID.

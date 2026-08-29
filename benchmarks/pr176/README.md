@@ -33,7 +33,9 @@ rerun the entire campaign—not just one arm—with an Azure deployment of
 ## Run
 
 Prerequisites: Docker Desktop (or rootless Docker on Linux), this checkout's
-Python environment, and `GEMINI_API_KEY`.
+Python environment with the `wandb` extra installed, and `GEMINI_API_KEY` plus
+`WANDB_API_KEY` in the checkout's ignored `.env`. Online W&B logging uses the
+`shinka-pr176-benchmark` project and a separate group for each campaign root.
 
 Inspect the exact commands without building an image or making API calls:
 
@@ -42,21 +44,21 @@ python benchmarks/pr176/run_campaign.py --dry-run
 ```
 
 `--dry-run` is implicit; the flag is shown only for readability and is not
-required. To perform a cheap model-quality canary (10 total persisted programs,
-including generation zero):
+required. To perform a minimal end-to-end canary (three total persisted
+programs, including generation zero):
 
 ```bash
 python benchmarks/pr176/run_campaign.py \
   --execute \
-  --generations 10 \
+  --generations 3 \
   --repeats 1 \
   --policies random \
   --results-root results/pr176-canary-gemini-3-1-flash-lite
 ```
 
-Promote the model only if most proposals parse/apply, correctness is usable, and
-at least one proposal improves the seed. Otherwise delete neither result nor
-history; choose a fresh results root and canary the fallback model for both arms.
+Start the full campaign only if both proposals parse/apply, evaluation and
+embeddings complete, and the W&B run initializes and finishes cleanly. The
+canary is an infrastructure check, not evidence about selector performance.
 
 For the Azure fallback, deploy the model under the exact deployment name
 `gpt-5.4-nano`, set `AZURE_OPENAI_API_KEY` and `AZURE_API_ENDPOINT` in addition

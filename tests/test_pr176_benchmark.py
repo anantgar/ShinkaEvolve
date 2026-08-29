@@ -28,6 +28,9 @@ def test_pr176_config_is_a_controlled_cheap_model_comparison():
     assert config["evo"]["llm_kwargs"]["reasoning_efforts"] == ["medium"]
     assert config["evo"]["llm_kwargs"]["temperatures"] == [1.0]
     assert config["evo"]["novelty_llm_models"] is None
+    assert config["evo"]["enable_wandb_logging"] is True
+    assert config["evo"]["wandb_project"] == "shinka-pr176-benchmark"
+    assert config["evo"]["wandb_group"] is None
     assert config["evo"]["crossover_inspiration_selection"] == "random"
     assert config["evo"]["patch_type_probs"] == [0.45, 0.45, 0.10]
     assert config["db"]["num_archive_inspirations"] == 4
@@ -43,6 +46,14 @@ def test_azure_fallback_keeps_gemini_embeddings_and_requires_azure_credentials()
         "GEMINI_API_KEY",
         "AZURE_OPENAI_API_KEY",
         "AZURE_API_ENDPOINT",
+        "WANDB_API_KEY",
+    ]
+
+
+def test_primary_model_requires_gemini_and_wandb_credentials():
+    assert _required_keys("gemini-3.1-flash-lite") == [
+        "GEMINI_API_KEY",
+        "WANDB_API_KEY",
     ]
 
 

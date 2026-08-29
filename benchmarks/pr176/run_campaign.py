@@ -14,6 +14,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_DIR = ROOT / "benchmarks" / "pr176" / "circle_packing"
@@ -21,6 +23,7 @@ CONFIG_PATH = TASK_DIR / "benchmark.yaml"
 UPSTREAM_BASE = "9912af12d423504b8d580f4179fd15f5f88b8c50"
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 EMBEDDING_MODEL = "gemini-embedding-2"
+WANDB_PROJECT = "shinka-pr176-benchmark"
 DEFAULT_SEEDS = (1729, 2718, 3141)
 POLICY_TO_ARM = {
     "random": "baseline",
@@ -109,6 +112,8 @@ def _command(
         f"evo.llm_models={json.dumps([model])}",
         "--set",
         f"job.image={image}",
+        "--set",
+        f"evo.wandb_group={results_root.name}",
     ]
     return results_dir, argv
 
@@ -123,6 +128,7 @@ def _required_keys(model: str) -> list[str]:
         keys.append("OPENROUTER_API_KEY")
     elif model.startswith("deepseek-"):
         keys.append("DEEPSEEK_API_KEY")
+    keys.append("WANDB_API_KEY")
     return keys
 
 
@@ -165,6 +171,9 @@ def main() -> int:
     if args.execute and tracked_changes:
         parser.error("Refusing to execute from a dirty tracked working tree")
     if args.execute:
+        # The campaign is normally launched from this checkout with secrets in
+        # its ignored .env. Existing process variables retain precedence.
+        load_dotenv(dotenv_path=ROOT / ".env", override=False)
         missing = [
             key for key in _required_keys(args.proposal_model) if not os.getenv(key)
         ]
@@ -212,6 +221,13 @@ def main() -> int:
         "embedding_model": EMBEDDING_MODEL,
         "embedding_input_prefix": "task: sentence similarity | query:",
         "novelty_llm_enabled": False,
+        "proposal_reasoning_effort": "medium",
+        "proposal_temperature": 1.0,
+        "wandb": {
+            "enabled": True,
+            "project": WANDB_PROJECT,
+            "group": results_root.name,
+        },
         "image": image,
         "generations_per_run": args.generations,
         "schedule": schedule,
