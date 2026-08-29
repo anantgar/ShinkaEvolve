@@ -49,7 +49,7 @@ evo:
   llm_dynamic_selection: null
   llm_kwargs:
     temperatures: [1.0]
-    reasoning_efforts: [low]
+    reasoning_efforts: [medium]
     max_tokens: 16384
   embedding_model: gemini-embedding-2
   code_embed_sim_threshold: 0.95

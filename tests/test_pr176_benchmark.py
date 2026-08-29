@@ -25,6 +25,8 @@ def test_pr176_config_is_a_controlled_cheap_model_comparison():
 
     assert config["evo"]["llm_models"] == ["gemini-3.1-flash-lite"]
     assert config["evo"]["embedding_model"] == "gemini-embedding-2"
+    assert config["evo"]["llm_kwargs"]["reasoning_efforts"] == ["medium"]
+    assert config["evo"]["llm_kwargs"]["temperatures"] == [1.0]
     assert config["evo"]["novelty_llm_models"] is None
     assert config["evo"]["crossover_inspiration_selection"] == "random"
     assert config["evo"]["patch_type_probs"] == [0.45, 0.45, 0.10]

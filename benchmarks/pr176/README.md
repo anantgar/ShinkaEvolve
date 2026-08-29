@@ -17,9 +17,11 @@ common benchmark infrastructure and should not be included in the selector PR.
 ## Model policy
 
 The primary proposal model is `gemini-3.1-flash-lite`; embeddings use
-`gemini-embedding-2`. The novelty LLM, meta LLM, prompt evolution, dynamic
-model selection, and proposal oversubscription are disabled. This isolates the
-inspiration-selection effect and avoids paying a second LLM to reject proposals.
+`gemini-embedding-2`. Proposal reasoning is fixed at `medium`; Gemini's default
+temperature of `1.0` is retained. The novelty LLM, meta LLM, prompt evolution,
+dynamic model selection, and proposal oversubscription are disabled. This
+isolates the inspiration-selection effect and avoids paying a second LLM to
+reject proposals.
 
 As of 2026-08-29, Google lists Gemini 3.1 Flash-Lite at $0.25/M text input
 tokens and $1.50/M output tokens, and Gemini Embedding 2 at $0.20/M text input
