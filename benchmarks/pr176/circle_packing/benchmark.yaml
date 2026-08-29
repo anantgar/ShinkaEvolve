@@ -45,13 +45,13 @@ evo:
   max_novelty_attempts: 1
   job_type: secure_docker
   language: python
-  llm_models: [gemini-2.5-flash-lite]
+  llm_models: [gemini-3.1-flash-lite]
   llm_dynamic_selection: null
   llm_kwargs:
     temperatures: [1.0]
     reasoning_efforts: [low]
     max_tokens: 16384
-  embedding_model: gemini-embedding-001
+  embedding_model: gemini-embedding-2
   code_embed_sim_threshold: 0.95
   novelty_llm_models: null
   novelty_llm_kwargs: {}

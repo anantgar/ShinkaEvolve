@@ -48,7 +48,10 @@ def test_gpt5_mini_pricing_metadata_enables_reasoning_kwargs_without_temperature
     assert kwargs["reasoning"] == {"effort": "minimal", "summary": "auto"}
 
 
-@pytest.mark.parametrize("model_name", ["gemini-3.6-flash", "gemini-3.7-flash"])
+@pytest.mark.parametrize(
+    "model_name",
+    ["gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.7-flash"],
+)
 @pytest.mark.parametrize(
     ("reasoning_effort", "expected_level"),
     [
@@ -78,7 +81,10 @@ def test_latest_gemini_flash_maps_reasoning_effort_to_thinking_level(
     }
 
 
-@pytest.mark.parametrize("model_name", ["gemini-3.6-flash", "gemini-3.7-flash"])
+@pytest.mark.parametrize(
+    "model_name",
+    ["gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.7-flash"],
+)
 def test_latest_gemini_flash_disabled_reasoning_omits_thinking_controls(
     model_name: str,
 ):
@@ -113,6 +119,21 @@ def test_legacy_gemini_keeps_token_budget_reasoning():
         "temperature": 0.25,
         "max_tokens": 4096,
         "thinking_budget": 1024,
+    }
+
+
+def test_azure_gpt_uses_base_model_reasoning_metadata():
+    kwargs = sample_model_kwargs(
+        model_names=["azure-gpt-5.4-nano"],
+        temperatures=[0.25],
+        max_tokens=[4096],
+        reasoning_efforts=["low"],
+    )
+
+    assert kwargs == {
+        "model_name": "azure-gpt-5.4-nano",
+        "max_output_tokens": 4096,
+        "reasoning": {"effort": "low"},
     }
 
 

@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TASK_DIR = ROOT / "benchmarks" / "pr176" / "circle_packing"
 CONFIG_PATH = TASK_DIR / "benchmark.yaml"
 UPSTREAM_BASE = "9912af12d423504b8d580f4179fd15f5f88b8c50"
-DEFAULT_MODEL = "gemini-2.5-flash-lite"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
+EMBEDDING_MODEL = "gemini-embedding-2"
 DEFAULT_SEEDS = (1729, 2718, 3141)
 POLICY_TO_ARM = {
     "random": "baseline",
@@ -113,8 +114,10 @@ def _command(
 
 
 def _required_keys(model: str) -> list[str]:
-    keys = ["GEMINI_API_KEY"]  # gemini-embedding-001 is fixed for both arms.
-    if model.startswith("gpt-"):
+    keys = ["GEMINI_API_KEY"]  # Gemini embeddings are fixed for both arms.
+    if model.startswith("azure-"):
+        keys.extend(["AZURE_OPENAI_API_KEY", "AZURE_API_ENDPOINT"])
+    elif model.startswith("gpt-"):
         keys.append("OPENAI_API_KEY")
     elif model.startswith("openrouter/"):
         keys.append("OPENROUTER_API_KEY")
@@ -206,7 +209,8 @@ def main() -> int:
             )
         },
         "proposal_model": args.proposal_model,
-        "embedding_model": "gemini-embedding-001",
+        "embedding_model": EMBEDDING_MODEL,
+        "embedding_input_prefix": "task: sentence similarity | query:",
         "novelty_llm_enabled": False,
         "image": image,
         "generations_per_run": args.generations,

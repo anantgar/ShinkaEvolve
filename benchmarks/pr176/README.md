@@ -16,16 +16,17 @@ common benchmark infrastructure and should not be included in the selector PR.
 
 ## Model policy
 
-The primary proposal model is `gemini-2.5-flash-lite`; embeddings use
-`gemini-embedding-001`. The novelty LLM, meta LLM, prompt evolution, dynamic
+The primary proposal model is `gemini-3.1-flash-lite`; embeddings use
+`gemini-embedding-2`. The novelty LLM, meta LLM, prompt evolution, dynamic
 model selection, and proposal oversubscription are disabled. This isolates the
 inspiration-selection effect and avoids paying a second LLM to reject proposals.
 
-As of 2026-08-29, Google lists Flash-Lite at $0.10/M input tokens and $0.40/M
-output tokens. If the canary shows a quality floor, rerun the entire campaign—not
-just one arm—with `gemini-2.5-flash` or `gpt-5.4-nano`. An OpenRouter Qwen model
-can be passed to the driver, but it is weaker primary PR evidence unless the
-underlying provider and model revision are pinned.
+As of 2026-08-29, Google lists Gemini 3.1 Flash-Lite at $0.25/M text input
+tokens and $1.50/M output tokens, and Gemini Embedding 2 at $0.20/M text input
+tokens. Embedding 2 inputs receive Google's symmetric semantic-similarity task
+instruction before embedding. If the proposal canary shows a quality floor,
+rerun the entire campaign—not just one arm—with an Azure deployment of
+`gpt-5.4-nano`. Do not mix proposal models within one paired campaign.
 
 ## Run
 
@@ -48,12 +49,17 @@ python benchmarks/pr176/run_campaign.py \
   --generations 10 \
   --repeats 1 \
   --policies random \
-  --results-root results/pr176-canary-flash-lite
+  --results-root results/pr176-canary-gemini-3-1-flash-lite
 ```
 
 Promote the model only if most proposals parse/apply, correctness is usable, and
 at least one proposal improves the seed. Otherwise delete neither result nor
 history; choose a fresh results root and canary the fallback model for both arms.
+
+For the Azure fallback, deploy the model under the exact deployment name
+`gpt-5.4-nano`, set `AZURE_OPENAI_API_KEY` and `AZURE_API_ENDPOINT` in addition
+to `GEMINI_API_KEY`, and pass
+`--proposal-model azure-gpt-5.4-nano`. Gemini Embedding 2 remains fixed.
 
 Run the full alternating paired campaign:
 

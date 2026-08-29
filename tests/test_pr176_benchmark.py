@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from benchmarks.pr176.analyze import summarize_run
+from benchmarks.pr176.run_campaign import _required_keys
 from shinka.core import EvolutionConfig
 from shinka.database import DatabaseConfig
 from shinka.launch import SecureDockerJobConfig
@@ -22,8 +23,8 @@ TASK = ROOT / "benchmarks" / "pr176" / "circle_packing"
 def test_pr176_config_is_a_controlled_cheap_model_comparison():
     config = yaml.safe_load((TASK / "benchmark.yaml").read_text(encoding="utf-8"))
 
-    assert config["evo"]["llm_models"] == ["gemini-2.5-flash-lite"]
-    assert config["evo"]["embedding_model"] == "gemini-embedding-001"
+    assert config["evo"]["llm_models"] == ["gemini-3.1-flash-lite"]
+    assert config["evo"]["embedding_model"] == "gemini-embedding-2"
     assert config["evo"]["novelty_llm_models"] is None
     assert config["evo"]["crossover_inspiration_selection"] == "random"
     assert config["evo"]["patch_type_probs"] == [0.45, 0.45, 0.10]
@@ -33,6 +34,14 @@ def test_pr176_config_is_a_controlled_cheap_model_comparison():
     assert EvolutionConfig(**config["evo"]).random_seed is None
     assert DatabaseConfig(**config["db"]).archive_size == 40
     assert SecureDockerJobConfig(**config["job"]).cpus == 1.0
+
+
+def test_azure_fallback_keeps_gemini_embeddings_and_requires_azure_credentials():
+    assert _required_keys("azure-gpt-5.4-nano") == [
+        "GEMINI_API_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_API_ENDPOINT",
+    ]
 
 
 def test_frozen_circle_packing_seed_passes_evaluator(tmp_path: Path):

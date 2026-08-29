@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 # Cache for tiktoken encodings
 _tiktoken_cache = {}
 
+_GEMINI_EMBEDDING_2_MODELS = frozenset(
+    {"gemini-embedding-2", "gemini-embedding-2-preview"}
+)
+_GEMINI_EMBEDDING_2_PREFIX = "task: sentence similarity | query: "
+
+
+def _prepare_google_embedding_text(model_name: str, text: str) -> str:
+    """Apply Gemini Embedding 2's symmetric semantic-distance instruction."""
+    if model_name.removeprefix("models/") in _GEMINI_EMBEDDING_2_MODELS:
+        return _GEMINI_EMBEDDING_2_PREFIX + text
+    return text
+
 
 def _get_google_embeddings_and_cost(
     client,
@@ -32,9 +44,13 @@ def _get_google_embeddings_and_cost(
     price_per_token = get_model_price(model_name)
 
     for text in texts:
+        prepared_text = _prepare_google_embedding_text(model_name, text)
         token_count = None
         try:
-            token_response = client.models.count_tokens(model=model, contents=text)
+            token_response = client.models.count_tokens(
+                model=model,
+                contents=prepared_text,
+            )
             token_count = getattr(token_response, "total_tokens", None)
         except Exception as exc:
             logger.warning(
@@ -44,11 +60,11 @@ def _get_google_embeddings_and_cost(
                 exc,
             )
 
-        result = client.models.embed_content(model=model, contents=text)
+        result = client.models.embed_content(model=model, contents=prepared_text)
         embeddings.append(result.embeddings[0].values)
 
         if token_count is None:
-            token_count = len(text.split())
+            token_count = len(prepared_text.split())
         total_tokens += token_count
 
     return embeddings, total_tokens * price_per_token

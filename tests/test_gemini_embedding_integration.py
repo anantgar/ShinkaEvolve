@@ -12,7 +12,8 @@ from shinka.embed.providers.pricing import (
 )
 
 
-MODEL_NAME = "gemini-embedding-2-preview"
+MODEL_NAME = "gemini-embedding-2"
+PREPARED_TEXT = "task: sentence similarity | query: one two"
 
 
 class _FakeGoogleModels:
@@ -82,8 +83,8 @@ def test_sync_google_embedding_uses_token_count_for_cost(monkeypatch):
     assert embedding == [0.1, 0.2, 0.3]
     assert cost == pytest.approx(11 * (0.20 / 1_000_000))
     assert fake_models.calls == [
-        ("count_tokens", f"models/{MODEL_NAME}", "one two"),
-        ("embed_content", f"models/{MODEL_NAME}", "one two"),
+        ("count_tokens", f"models/{MODEL_NAME}", PREPARED_TEXT),
+        ("embed_content", f"models/{MODEL_NAME}", PREPARED_TEXT),
     ]
 
 
@@ -103,8 +104,8 @@ def test_async_google_embedding_uses_token_count_for_cost(monkeypatch):
     assert embedding == [0.1, 0.2, 0.3]
     assert cost == pytest.approx(17 * (0.20 / 1_000_000))
     assert fake_models.calls == [
-        ("count_tokens", f"models/{MODEL_NAME}", "one two"),
-        ("embed_content", f"models/{MODEL_NAME}", "one two"),
+        ("count_tokens", f"models/{MODEL_NAME}", PREPARED_TEXT),
+        ("embed_content", f"models/{MODEL_NAME}", PREPARED_TEXT),
     ]
 
 
@@ -122,8 +123,8 @@ def test_sync_google_embedding_falls_back_when_token_count_fails(monkeypatch):
     embedding, cost = client.get_embedding("one two")
 
     assert embedding == [0.1, 0.2, 0.3]
-    assert cost == pytest.approx(2 * (0.20 / 1_000_000))
+    assert cost == pytest.approx(7 * (0.20 / 1_000_000))
     assert fake_models.calls == [
-        ("count_tokens", f"models/{MODEL_NAME}", "one two"),
-        ("embed_content", f"models/{MODEL_NAME}", "one two"),
+        ("count_tokens", f"models/{MODEL_NAME}", PREPARED_TEXT),
+        ("embed_content", f"models/{MODEL_NAME}", PREPARED_TEXT),
     ]

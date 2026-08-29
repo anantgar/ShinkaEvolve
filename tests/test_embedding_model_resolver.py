@@ -11,6 +11,13 @@ def test_resolve_known_embedding_model():
     assert resolved.base_url is None
 
 
+def test_resolve_stable_gemini_embedding_2():
+    resolved = resolve_embedding_backend("gemini-embedding-2")
+
+    assert resolved.provider == "google"
+    assert resolved.api_model_name == "gemini-embedding-2"
+
+
 def test_resolve_openrouter_embedding_model():
     resolved = resolve_embedding_backend("openrouter/qwen/qwen3-coder")
 
