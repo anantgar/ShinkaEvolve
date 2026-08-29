@@ -45,6 +45,8 @@ Concurrency is configured on `ShinkaEvolveRunner`, not on `EvolutionConfig`.
 | `meta_max_recommendations` | `int` | `5` | Max recommendations produced per meta step. |
 | `sample_single_meta_rec` | `bool` | `True` | Whether to sample one recommendation when multiple exist. |
 | `embedding_model` | `Optional[str]` | `'text-embedding-3-small'` | Embedding model for code similarity. Also supports `local/<model>@http(s)://host[:port]/v1` for local OpenAI-compatible embedding endpoints, with optional `?api_key_env=ENV_VAR` for per-model credentials. |
+| `crossover_inspiration_selection` | `str` | `'random'` | Crossover selector: `random` preserves the upstream policy; `embedding_distance` chooses the greatest usable cosine distance and falls back to random when embeddings are unavailable. |
+| `random_seed` | `Optional[int]` | `None` | Seed for Python and NumPy sampling. Use matched seeds across benchmark arms; provider responses may still be nondeterministic. |
 | `init_program_path` | `Optional[str]` | `'initial.py'` | Initial program path. |
 | `results_dir` | `Optional[str]` | `None` | Results directory; auto-assigned when `None`. |
 | `enable_wandb_logging` | `bool` | `False` | Mirror evolution metrics to W&B. Existing SQLite and WebUI logging remains enabled. Install the `wandb` extra first. |

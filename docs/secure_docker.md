@@ -2,8 +2,8 @@
 
 `SecureDockerJobConfig` runs Shinka's existing single-file candidate and
 `evaluate.py` interface in one hardened local Docker container. It is opt-in:
-set `EvolutionConfig.job_type="secure_docker"` and supply an immutable image
-digest.
+set `EvolutionConfig.job_type="secure_docker"` and supply an immutable
+repository digest or local `sha256:<image-id>`.
 
 This mode is useful when generated code is untrusted and the main concern is
 protecting the host that runs Shinka. It supports every existing candidate
@@ -25,6 +25,10 @@ Build or obtain an evaluator image that includes:
 
 Pull the exact image digest before starting a run. The secure launcher never
 pulls an image implicitly.
+
+A local image ID is useful for a benchmark image built on the same host. It is
+immutable but can disappear if Docker prunes the local image store, so record it
+with the run manifest.
 
 ```python
 from shinka.core import EvolutionConfig, ShinkaEvolveRunner

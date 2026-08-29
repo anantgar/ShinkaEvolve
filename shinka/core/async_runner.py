@@ -6,6 +6,7 @@ Provides fully asynchronous evolution pipeline with concurrent LLM sampling.
 import json
 import asyncio
 import logging
+import random
 import shutil
 import time
 import uuid
@@ -22,6 +23,7 @@ from dataclasses import dataclass, field
 from rich.console import Console
 from rich.table import Table
 import rich.box
+import numpy as np
 
 from shinka.database import ProgramDatabase, DatabaseConfig, Program
 from shinka.database.async_dbase import AsyncProgramDatabase
@@ -294,6 +296,11 @@ class ShinkaEvolveRunner:
         self.evo_config = evo_config
         self.job_config = job_config
         self.db_config = db_config
+        if evo_config.random_seed is not None:
+            if not 0 <= evo_config.random_seed < 2**32:
+                raise ValueError("random_seed must be between 0 and 2**32 - 1")
+            random.seed(evo_config.random_seed)
+            np.random.seed(evo_config.random_seed)
         self.wandb_logger = ShinkaWandbLogger(enabled=evo_config.enable_wandb_logging)
         self.banner_style = banner_style
         self.enable_deadlock_debugging = debug
@@ -458,6 +465,9 @@ class ShinkaEvolveRunner:
             patch_type_probs=evo_config.patch_type_probs,
             use_text_feedback=evo_config.use_text_feedback,
             inspiration_sort_order=evo_config.inspiration_sort_order,
+            crossover_inspiration_selection=(
+                evo_config.crossover_inspiration_selection
+            ),
         )
 
         # Meta summarizer (create both sync and async versions)
@@ -595,6 +605,7 @@ class ShinkaEvolveRunner:
         self._meta_side_effect_lock = asyncio.Lock()
         self._prompt_side_effect_lock = asyncio.Lock()
         self._best_solution_lock = asyncio.Lock()
+        self._inspiration_selection_log_lock = threading.Lock()
         self._prompt_percentile_recompute_task: Optional[asyncio.Task] = None
         self._prompt_percentile_recompute_pending = False
 
@@ -3629,6 +3640,24 @@ class ShinkaEvolveRunner:
             logger.error(f"Error in fix patch async: {e}")
             return None, {"api_costs": 0.0, "error_attempt": str(e)}, False
 
+    async def _record_inspiration_selection_event(
+        self,
+        selection: Dict[str, Any],
+    ) -> None:
+        """Append one auditable crossover decision without blocking the loop."""
+        path = Path(self.results_dir) / "inspiration_selections.jsonl"
+        line = json.dumps(selection, sort_keys=True) + "\n"
+
+        def append_line() -> None:
+            with self._inspiration_selection_log_lock:
+                with path.open("a", encoding="utf-8") as handle:
+                    handle.write(line)
+
+        try:
+            await asyncio.to_thread(append_line)
+        except OSError as exc:
+            logger.warning("Could not persist inspiration selection: %s", exc)
+
     async def _run_patch_async(
         self,
         parent_program: Program,
@@ -3645,6 +3674,7 @@ class ShinkaEvolveRunner:
         # Initialize prompt-related variables outside try block for exception handling
         current_prompt_id: Optional[str] = None
         original_task_sys_msg = self.prompt_sampler.task_sys_msg
+        inspiration_selection: Dict[str, Any] = {}
 
         try:
             # Get system prompt (potentially evolved)
@@ -3660,6 +3690,7 @@ class ShinkaEvolveRunner:
                 archive_inspirations=archive_programs,
                 top_k_inspirations=top_k_programs,
                 meta_recommendations=meta_recs,
+                selection_metadata=inspiration_selection,
             )
 
             # Restore original task_sys_msg
@@ -3667,6 +3698,16 @@ class ShinkaEvolveRunner:
 
             # Convert numpy string to regular Python string
             patch_type = str(patch_type)
+
+            if inspiration_selection:
+                inspiration_selection.update(
+                    {
+                        "generation": generation,
+                        "novelty_attempt": novelty_attempt,
+                        "resample_attempt": resample_attempt,
+                    }
+                )
+                await self._record_inspiration_selection_event(inspiration_selection)
 
             if self.verbose:
                 logger.info(f"Generated patch type: {patch_type}")
@@ -3801,6 +3842,10 @@ class ShinkaEvolveRunner:
                         **llm_kwargs,
                         "llm_result": response.to_dict() if response else None,
                     }
+                    if inspiration_selection:
+                        meta_patch_data["inspiration_selection"] = dict(
+                            inspiration_selection
+                        )
 
                     # Print metadata table for successful patches
                     if self.verbose:
@@ -3852,8 +3897,12 @@ class ShinkaEvolveRunner:
                 "patch_attempt": self.evo_config.max_patch_attempts,
                 "system_prompt_id": current_prompt_id,  # Track evolved prompt
                 **llm_kwargs,
-                "llm_result": response.to_dict() if "response" in locals() and response else None,
+                "llm_result": response.to_dict()
+                if "response" in locals() and response
+                else None,
             }
+            if inspiration_selection:
+                meta_patch_data["inspiration_selection"] = dict(inspiration_selection)
 
             return None, meta_patch_data, False
 
@@ -3867,6 +3916,11 @@ class ShinkaEvolveRunner:
                     "api_costs": 0.0,
                     "error_attempt": str(e),
                     "system_prompt_id": current_prompt_id,
+                    **(
+                        {"inspiration_selection": dict(inspiration_selection)}
+                        if inspiration_selection
+                        else {}
+                    ),
                 },
                 False,
             )

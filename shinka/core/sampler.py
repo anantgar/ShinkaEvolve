@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Literal
+from typing import Any, Dict, List, Optional, Tuple, Literal
 import numpy as np
 from shinka.database import Program
 from shinka.database.inspirations import InspirationContextBuilder
@@ -36,6 +36,7 @@ class PromptSampler:
         inspiration_sort_order: Literal[
             "ascending", "chronological", "none"
         ] = "ascending",
+        crossover_inspiration_selection: str = "random",
     ):
         if patch_types is None:
             patch_types = default_patch_types()
@@ -54,6 +55,15 @@ class PromptSampler:
             )
         # Whether to use text feedback in the prompt
         self.use_text_feedback = use_text_feedback
+        if crossover_inspiration_selection not in {
+            "random",
+            "embedding_distance",
+        }:
+            raise ValueError(
+                "crossover_inspiration_selection must be 'random' or "
+                "'embedding_distance'"
+            )
+        self.crossover_inspiration_selection = crossover_inspiration_selection
         # Context builder for sorting inspirations (least-to-most by default)
         self.context_builder = InspirationContextBuilder(
             sort_order=inspiration_sort_order
@@ -80,6 +90,7 @@ class PromptSampler:
         archive_inspirations: List[Program],
         top_k_inspirations: List[Program],
         meta_recommendations: Optional[str] = None,
+        selection_metadata: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, str, str]:
         if self.task_sys_msg is None:
             sys_msg = BASE_SYSTEM_MSG
@@ -196,6 +207,9 @@ class PromptSampler:
                 archive_inspirations,
                 top_k_inspirations,
                 language=self.language,
+                parent=parent,
+                selection_policy=self.crossover_inspiration_selection,
+                selection_metadata=selection_metadata,
             )
         elif patch_type == "paper":
             raise NotImplementedError("Paper edit not implemented.")

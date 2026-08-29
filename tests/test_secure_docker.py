@@ -39,7 +39,9 @@ def _tar_response(entries: dict[str, bytes]) -> bytes:
 
 def test_pinned_image_rejects_mutable_references() -> None:
     assert validate_pinned_image(IMAGE) == IMAGE
-    with pytest.raises(SecureDockerError, match="immutable image digest"):
+    local_image_id = "sha256:" + "b" * 64
+    assert validate_pinned_image(local_image_id) == local_image_id
+    with pytest.raises(SecureDockerError, match="immutable"):
         validate_pinned_image("python:3.12")
 
 

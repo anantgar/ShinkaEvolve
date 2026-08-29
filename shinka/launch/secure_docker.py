@@ -28,7 +28,7 @@ import uuid
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Mapping, Optional, TextIO
 
-_PINNED_IMAGE_RE = re.compile(r"^\S+@sha256:[0-9a-f]{64}$")
+_PINNED_IMAGE_RE = re.compile(r"^(?:\S+@sha256:[0-9a-f]{64}|sha256:[0-9a-f]{64})$")
 _SAFE_USER_RE = re.compile(r"^[1-9][0-9]*:[1-9][0-9]*$")
 _SAFE_ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 _MAX_RESULT_FILE_BYTES = 8 * 1024 * 1024
@@ -50,8 +50,9 @@ def validate_pinned_image(image: str) -> str:
     normalized = image.strip()
     if not _PINNED_IMAGE_RE.fullmatch(normalized):
         raise SecureDockerError(
-            "secure_docker.image must be an immutable image digest "
-            "(for example, registry.example/evaluator@sha256:<64-hex-digest>)"
+            "secure_docker.image must be an immutable repository digest or local "
+            "image ID (for example, registry.example/evaluator@sha256:<digest> "
+            "or sha256:<image-id>)"
         )
     return normalized
 
