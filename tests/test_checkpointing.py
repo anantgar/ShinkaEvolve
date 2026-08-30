@@ -212,22 +212,22 @@ def test_configuration_hashes_ignore_location_observability_and_resume_policy(
     assert configuration_hashes(evo, db, job)["evolution"] != expected["evolution"]
 
 
-@pytest.mark.parametrize("mode", ["", "best_effort", "STRICT"])
-def test_evolution_config_rejects_invalid_checkpoint_mode(mode):
-    with pytest.raises(ValueError, match="checkpoint_resume_mode"):
-        EvolutionConfig(checkpoint_resume_mode=mode)
-
-
-@pytest.mark.parametrize("seed", [-1, 2**32])
-def test_evolution_config_rejects_out_of_range_seed(seed):
-    with pytest.raises(ValueError, match="random_seed"):
-        EvolutionConfig(random_seed=seed)
-
-
-@pytest.mark.parametrize("seed", [True, 1.5, "7"])
-def test_evolution_config_rejects_non_integer_seed(seed):
-    with pytest.raises(TypeError, match="random_seed"):
-        EvolutionConfig(random_seed=seed)
+@pytest.mark.parametrize(
+    "kwargs,error",
+    [
+        ({"checkpoint_resume_mode": ""}, ValueError),
+        ({"checkpoint_resume_mode": "best_effort"}, ValueError),
+        ({"checkpoint_resume_mode": "STRICT"}, ValueError),
+        ({"random_seed": -1}, ValueError),
+        ({"random_seed": 2**32}, ValueError),
+        ({"random_seed": True}, TypeError),
+        ({"random_seed": 1.5}, TypeError),
+        ({"random_seed": "7"}, TypeError),
+    ],
+)
+def test_evolution_config_rejects_invalid_checkpoint_settings(kwargs, error):
+    with pytest.raises(error, match="checkpoint_resume_mode|random_seed"):
+        EvolutionConfig(**kwargs)
 
 
 def test_source_tree_identity_changes_with_python_source(tmp_path):
@@ -293,6 +293,7 @@ def _build_checkpoint_runner(
     runner.llm_selection = FixedSampler(
         arm_names=["a", "b"], prior_probs=np.array([0.4, 0.6]), seed=42
     )
+    runner._llm_selection_seed = 42
     runner.meta_summarizer = None
     runner.completed_generations = 3
     runner.next_generation_to_submit = 3
@@ -409,20 +410,43 @@ def test_best_effort_global_reseed_preserves_loaded_bandit_position(tmp_path):
         runner.db.close()
 
 
-def test_strict_validation_rejects_database_ahead_of_checkpoint(tmp_path):
+@pytest.mark.parametrize("kind", ["ahead", "behind", "metadata", "prompt"])
+def test_strict_validation_rejects_database_watermark_mismatch(tmp_path, kind):
     async def run_test():
         runner = _build_checkpoint_runner(tmp_path, initialize_database=True)
+        if kind == "prompt":
+            runner.prompt_db = SystemPromptDatabase(
+                SystemPromptConfig(db_path=str(tmp_path / "prompts.sqlite"))
+            )
+            runner.prompt_db.add(
+                create_system_prompt("initial prompt", generation=0, patch_type="init")
+            )
         try:
             await runner._publish_clean_checkpoint()
-            runner.db.add(
-                Program(
-                    id="advanced",
-                    code="value = 3\n",
-                    generation=3,
-                    correct=True,
-                ),
-                defer_maintenance=True,
-            )
+            if kind == "ahead":
+                runner.db.add(
+                    Program(
+                        id="advanced",
+                        code="value = 3\n",
+                        generation=3,
+                        correct=True,
+                    ),
+                    defer_maintenance=True,
+                )
+            elif kind == "behind":
+                runner.db.cursor.execute(
+                    "DELETE FROM programs WHERE id = ?", ("program-2",)
+                )
+                runner.db.conn.commit()
+            elif kind == "metadata":
+                runner.db._update_metadata_in_db("best_program_id", "program-1")
+            else:
+                runner.prompt_db._update_metadata_in_db("best_prompt_id", "changed")
+                runner.prompt_db.add(
+                    create_system_prompt(
+                        "changed prompt", generation=1, patch_type="full"
+                    )
+                )
             before_python = random.getstate()
             before_numpy = np.random.get_state()
             with pytest.raises(
@@ -432,43 +456,8 @@ def test_strict_validation_rejects_database_ahead_of_checkpoint(tmp_path):
             assert random.getstate() == before_python
             assert np.array_equal(np.random.get_state()[1], before_numpy[1])
         finally:
-            await runner.async_db.close_async()
-            runner.db.close()
-
-    asyncio.run(run_test())
-
-
-def test_strict_validation_rejects_database_behind_checkpoint(tmp_path):
-    async def run_test():
-        runner = _build_checkpoint_runner(tmp_path, initialize_database=True)
-        try:
-            await runner._publish_clean_checkpoint()
-            runner.db.cursor.execute("DELETE FROM programs WHERE id = ?", ("program-2",))
-            runner.db.conn.commit()
-
-            with pytest.raises(
-                CheckpointCompatibilityError, match="Database watermark"
-            ):
-                runner._validate_checkpoint_payload(load_checkpoint(tmp_path).payload)
-        finally:
-            await runner.async_db.close_async()
-            runner.db.close()
-
-    asyncio.run(run_test())
-
-
-def test_strict_validation_rejects_program_metadata_change(tmp_path):
-    async def run_test():
-        runner = _build_checkpoint_runner(tmp_path, initialize_database=True)
-        try:
-            await runner._publish_clean_checkpoint()
-            runner.db._update_metadata_in_db("best_program_id", "program-1")
-
-            with pytest.raises(
-                CheckpointCompatibilityError, match="Database watermark"
-            ):
-                runner._validate_checkpoint_payload(load_checkpoint(tmp_path).payload)
-        finally:
+            if runner.prompt_db is not None:
+                runner.prompt_db.close()
             await runner.async_db.close_async()
             runner.db.close()
 
@@ -573,9 +562,7 @@ def test_async_database_flush_waits_for_all_workers(tmp_path):
 
         try:
             pending = [
-                loop.run_in_executor(
-                    async_db.write_executor, queued_work, f"write-{i}"
-                )
+                loop.run_in_executor(async_db.write_executor, queued_work, f"write-{i}")
                 for i in range(4)
             ] + [
                 loop.run_in_executor(async_db.executor, queued_work, f"read-{i}")
@@ -603,35 +590,6 @@ def test_async_database_flush_waits_for_all_workers(tmp_path):
             gate.set()
             await async_db.close_async()
             db.close()
-
-    asyncio.run(run_test())
-
-
-def test_strict_validation_rejects_prompt_database_ahead_of_checkpoint(tmp_path):
-    async def run_test():
-        runner = _build_checkpoint_runner(tmp_path, initialize_database=True)
-        runner.prompt_db = SystemPromptDatabase(
-            SystemPromptConfig(db_path=str(tmp_path / "prompts.sqlite"))
-        )
-        runner.prompt_db.add(
-            create_system_prompt("initial prompt", generation=0, patch_type="init")
-        )
-        try:
-            await runner._publish_clean_checkpoint()
-            runner.prompt_db._update_metadata_in_db("best_prompt_id", "changed")
-            runner.prompt_db.add(
-                create_system_prompt(
-                    "changed prompt", generation=1, patch_type="full"
-                )
-            )
-            with pytest.raises(
-                CheckpointCompatibilityError, match="Database watermark"
-            ):
-                runner._validate_checkpoint_payload(load_checkpoint(tmp_path).payload)
-        finally:
-            runner.prompt_db.close()
-            await runner.async_db.close_async()
-            runner.db.close()
 
     asyncio.run(run_test())
 

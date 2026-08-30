@@ -22,8 +22,25 @@ from shinka.llm.providers.model_resolver import resolve_model_backend
 from shinka.model_availability import validate_model_env_access
 
 
-def _make_fake_headless(tmp_path: Path) -> Path:
+def _make_fake_headless(tmp_path: Path, *, vary_outputs: bool = False) -> Path:
     script = tmp_path / "fake_headless.py"
+    score_lines = (
+        [
+            "active_generations = [int(path.parent.name.removeprefix('gen_')) "
+            "for path in work_dir.glob('gen_*/.generation_lock')]",
+            "generation = max(active_generations, default=1)",
+            "model = sys.argv[sys.argv.index('--model') + 1] "
+            "if '--model' in sys.argv else 'default'",
+            "print(f'# selected-model: {model}')",
+            "print('def score():')",
+            "print(f'    return {float(generation)!r}')",
+        ]
+        if vary_outputs
+        else [
+            "print('def score():')",
+            "print('    return 1.0')",
+        ]
+    )
     script.write_text(
         "\n".join(
             [
@@ -39,9 +56,6 @@ def _make_fake_headless(tmp_path: Path) -> Path:
                 "work_dir = Path(sys.argv[sys.argv.index('--work-dir') + 1])",
                 "assert prompt_path.exists(), prompt_path",
                 "assert work_dir.exists(), work_dir",
-                "active_generations = [int(path.parent.name.removeprefix('gen_')) for path in work_dir.glob('gen_*/.generation_lock')]",
-                "generation = max(active_generations, default=1)",
-                "model = sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else 'default'",
                 "print('<NAME>')",
                 "print('raise_score')",
                 "print('</NAME>')",
@@ -51,9 +65,7 @@ def _make_fake_headless(tmp_path: Path) -> Path:
                 "print('<CODE>')",
                 "print('```python')",
                 "print('# EVOLVE-BLOCK-START')",
-                "print(f'# selected-model: {model}')",
-                "print('def score():')",
-                "print(f'    return {float(generation)!r}')",
+                *score_lines,
                 "print('# EVOLVE-BLOCK-END')",
                 "print('```')",
                 "print('</CODE>')",
@@ -408,7 +420,7 @@ def _checkpoint_trace(results_dir: Path) -> list[dict[str, object]]:
 def test_seeded_checkpoint_resume_matches_uninterrupted_evolution(
     tmp_path, monkeypatch
 ):
-    fake_headless = _make_fake_headless(tmp_path)
+    fake_headless = _make_fake_headless(tmp_path, vary_outputs=True)
     task_dir = _make_task_dir(tmp_path)
     uninterrupted_dir = tmp_path / "uninterrupted"
     resumed_dir = tmp_path / "resumed"

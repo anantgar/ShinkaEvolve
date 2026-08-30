@@ -1037,9 +1037,6 @@ class AsyncProgramDatabase:
         loop = asyncio.get_running_loop()
 
         async def drain_executor(executor: ThreadPoolExecutor) -> None:
-            # One blocking marker per worker guarantees every worker reaches a
-            # point after all previously queued operations before the barrier
-            # releases any of them.
             barrier = threading.Barrier(self.max_workers)
             markers = [
                 loop.run_in_executor(executor, barrier.wait)
