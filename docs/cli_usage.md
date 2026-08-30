@@ -124,6 +124,16 @@ The async CLI exposes runner-level concurrency separately from config objects:
 
 ---
 
+## Clean checkpoints
+
+Pass `--random-seed` for reproducible Shinka-owned streams and choose a resume
+policy with `--checkpoint-resume-mode`. Press Ctrl-C once during a run to pause
+new proposals, drain active work, publish a clean checkpoint, and exit. See
+[Clean checkpoints and deterministic resume](checkpointing.md) for strict,
+best-effort, and reseed behavior.
+
+---
+
 ## Local Environments
 
 | Mode | Config |

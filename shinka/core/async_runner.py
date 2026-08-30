@@ -11,10 +11,13 @@ import time
 import uuid
 import os
 import math
+import hashlib
 import psutil
+import random
+import signal
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Set, Tuple, Union, Iterable
@@ -22,6 +25,7 @@ from dataclasses import dataclass, field
 from rich.console import Console
 from rich.table import Table
 import rich.box
+import numpy as np
 
 from shinka.database import ProgramDatabase, DatabaseConfig, Program
 from shinka.database.async_dbase import AsyncProgramDatabase
@@ -62,6 +66,22 @@ from shinka.core.prompt_evolver import (
     AsyncSystemPromptEvolver,
 )
 from shinka.core.runtime_slots import LogicalSlotPool
+from shinka.core.checkpointing import (
+    CHECKPOINT_SCHEMA_VERSION,
+    CheckpointError,
+    CheckpointCompatibilityError,
+    UncleanCheckpointError,
+    capture_rng_states,
+    configuration_hashes,
+    load_checkpoint,
+    restore_rng_states,
+    runtime_identity,
+    source_tree_identity,
+    validate_checkpoint_identity,
+    validate_rng_states,
+    write_checkpoint,
+    write_resume_metadata,
+)
 from shinka.logo import BannerStyle, get_logo_ascii, print_gradient_logo
 from shinka.model_availability import validate_model_env_access
 from shinka.pricing.catalog import (
@@ -84,6 +104,7 @@ logger = logging.getLogger(__name__)
 _WANDB_CANDIDATE_QUEUE_SIZE = 256
 _WANDB_DROP_WARNING_INTERVAL_SECONDS = 30.0
 _WANDB_POPULATION_INTERVAL_SECONDS = 5.0
+_CHECKPOINT_WANDB_FINISH_TIMEOUT_SECONDS = 10.0
 _WANDB_CANDIDATE_STOP = object()
 
 
@@ -270,6 +291,10 @@ class ShinkaEvolveRunner:
             evaluate_str: Optional string content for evaluate script
                 (will be saved to results dir and path updated in job_config)
         """
+        if evo_config.random_seed is not None:
+            random.seed(evo_config.random_seed)
+            np.random.seed(evo_config.random_seed)
+
         pricing_snapshot = (
             load_run_pricing_snapshot(Path(evo_config.results_dir))
             if evo_config.results_dir is not None
@@ -394,6 +419,10 @@ class ShinkaEvolveRunner:
         self.console = RichTeeConsole(Console(), Path(log_filename))
 
         # Initialize LLM selection strategy
+        llm_selection_kwargs = dict(evo_config.llm_dynamic_selection_kwargs)
+        if evo_config.random_seed is not None:
+            llm_selection_kwargs.setdefault("seed", evo_config.random_seed)
+        self._llm_selection_seed = llm_selection_kwargs.get("seed")
         if evo_config.llm_dynamic_selection is None:
             self.llm_selection = None
         elif isinstance(evo_config.llm_dynamic_selection, BanditBase):
@@ -401,19 +430,19 @@ class ShinkaEvolveRunner:
         elif evo_config.llm_dynamic_selection.lower() == "fixed":
             self.llm_selection = FixedSampler(
                 arm_names=evo_config.llm_models,
-                **evo_config.llm_dynamic_selection_kwargs,
+                **llm_selection_kwargs,
             )
         elif (evo_config.llm_dynamic_selection.lower() == "ucb") or (
             evo_config.llm_dynamic_selection.lower() == "ucb1"
         ):
             self.llm_selection = AsymmetricUCB(
                 arm_names=evo_config.llm_models,
-                **evo_config.llm_dynamic_selection_kwargs,
+                **llm_selection_kwargs,
             )
         elif evo_config.llm_dynamic_selection.lower() == "thompson":
             self.llm_selection = ThompsonSampler(
                 arm_names=evo_config.llm_models,
-                **evo_config.llm_dynamic_selection_kwargs,
+                **llm_selection_kwargs,
             )
         else:
             raise ValueError("Invalid llm_dynamic_selection")
@@ -542,8 +571,15 @@ class ShinkaEvolveRunner:
         self.slot_available = asyncio.Event()
         self.should_stop = asyncio.Event()
         self.finalization_complete = asyncio.Event()
+        self.pause_new_proposals = asyncio.Event()
+        self.checkpoint_requested = asyncio.Event()
+        self.checkpoint_complete = asyncio.Event()
         self.proposal_queue = asyncio.Queue()
         self.active_proposal_tasks: Dict[str, asyncio.Task] = {}
+        self._run_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._checkpoint_published = False
+        self._checkpoint_error: Optional[BaseException] = None
+        self._resume_metadata: Dict[str, Any] = {}
 
         # Performance tracking
         self.total_proposals_generated = 0
@@ -623,14 +659,17 @@ class ShinkaEvolveRunner:
         except Exception as e:
             logger.warning(f"Failed to save bandit state: {e}")
 
-    def _load_bandit_state(self) -> None:
+    def _load_bandit_state(self, *, restore_rng: bool = True) -> None:
         """Load the LLM selection bandit state from disk."""
         if self.llm_selection is None:
             return
         try:
             bandit_path = Path(self.results_dir) / "bandit_state.pkl"
             if bandit_path.exists():
-                self.llm_selection.load_state(bandit_path)
+                self.llm_selection.load_state(
+                    bandit_path,
+                    restore_rng=restore_rng,
+                )
                 logger.info(f"Loaded bandit state from {bandit_path}")
                 if hasattr(self.llm_selection, "print_summary"):
                     self.llm_selection.print_summary(console=self.console)
@@ -641,6 +680,583 @@ class ShinkaEvolveRunner:
                 )
         except Exception as e:
             logger.warning(f"Failed to load bandit state: {e}")
+
+    def request_checkpoint_and_exit(self) -> bool:
+        """Pause proposal admission, drain active work, checkpoint, and exit."""
+        if self.checkpoint_complete.is_set():
+            return False
+
+        def request() -> None:
+            if not self.checkpoint_requested.is_set():
+                logger.info(
+                    "Checkpoint requested; pausing new proposals and draining "
+                    "active work"
+                )
+            self.pause_new_proposals.set()
+            self.checkpoint_requested.set()
+            self.slot_available.set()
+
+        loop = self._run_loop
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(request)
+        else:
+            request()
+        return True
+
+    def _owned_rng_generators(self) -> Dict[str, np.random.Generator]:
+        generators: Dict[str, np.random.Generator] = {}
+        bandit_rng = getattr(self.llm_selection, "rng", None)
+        if isinstance(bandit_rng, np.random.Generator):
+            generators["llm_selection"] = bandit_rng
+        return generators
+
+    def _seed_random_streams(
+        self,
+        *,
+        force: bool = False,
+        include_named: bool = True,
+    ) -> None:
+        seed = self.evo_config.random_seed
+        if seed is None and not force:
+            return
+        random.seed(seed)
+        np.random.seed(seed)
+        if include_named and self.llm_selection is not None:
+            reseed = getattr(self.llm_selection, "reseed", None)
+            if callable(reseed):
+                reseed(getattr(self, "_llm_selection_seed", seed))
+
+    @staticmethod
+    def _stable_digest(value: Any) -> str:
+        serialized = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+        return hashlib.sha256(serialized).hexdigest()
+
+    @staticmethod
+    def _decode_json_list(value: Any) -> List[Any]:
+        if value in (None, ""):
+            return []
+        if isinstance(value, list):
+            return value
+        try:
+            decoded = json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return decoded if isinstance(decoded, list) else []
+
+    @staticmethod
+    def _decode_json_value(value: Any, default: Any) -> Any:
+        if value in (None, ""):
+            return default
+        if isinstance(value, (dict, list)):
+            return value
+        try:
+            return json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            return default
+
+    @staticmethod
+    def _text_digest(value: Any) -> str:
+        text = "" if value is None else str(value)
+        return hashlib.sha256(text.encode()).hexdigest()
+
+    def _relative_database_path(self, path_value: str) -> str:
+        results_root = Path(self.results_dir).resolve()
+        database_path = Path(path_value).resolve()
+        try:
+            return database_path.relative_to(results_root).as_posix()
+        except ValueError as exc:
+            raise CheckpointCompatibilityError(
+                f"Checkpoint database must be inside results_dir: {database_path}"
+            ) from exc
+
+    def _program_database_watermark(self) -> Dict[str, Any]:
+        if self.db is None or self.db.cursor is None:
+            raise CheckpointCompatibilityError("Program database is not initialized")
+        self.db.cursor.execute("""
+            SELECT id, code, language, generation, timestamp, parent_id,
+                   archive_inspiration_ids, top_k_inspiration_ids, island_idx,
+                   system_prompt_id, combined_score, public_metrics,
+                   private_metrics, text_feedback, complexity, embedding,
+                   embedding_pca_2d, embedding_pca_3d, embedding_cluster_id,
+                   correct, children_count, metadata, migration_history, code_diff
+            FROM programs
+            ORDER BY id
+            """)
+        identities = [
+            {
+                "id": str(row["id"]),
+                "code_sha256": self._text_digest(row["code"]),
+                "language": str(row["language"]),
+                "generation": int(row["generation"]),
+                "timestamp": row["timestamp"],
+                "parent_id": row["parent_id"],
+                "archive_inspiration_ids": self._decode_json_list(
+                    row["archive_inspiration_ids"]
+                ),
+                "top_k_inspiration_ids": self._decode_json_list(
+                    row["top_k_inspiration_ids"]
+                ),
+                "island_idx": row["island_idx"],
+                "system_prompt_id": row["system_prompt_id"],
+                "combined_score": row["combined_score"],
+                "public_metrics": self._decode_json_value(row["public_metrics"], {}),
+                "private_metrics": self._decode_json_value(row["private_metrics"], {}),
+                "text_feedback_sha256": self._text_digest(row["text_feedback"]),
+                "complexity": row["complexity"],
+                "embedding": self._decode_json_list(row["embedding"]),
+                "embedding_pca_2d": self._decode_json_list(
+                    row["embedding_pca_2d"]
+                ),
+                "embedding_pca_3d": self._decode_json_list(
+                    row["embedding_pca_3d"]
+                ),
+                "embedding_cluster_id": row["embedding_cluster_id"],
+                "correct": bool(row["correct"]),
+                "children_count": int(row["children_count"]),
+                "metadata": self._decode_json_value(row["metadata"], {}),
+                "migration_history": self._decode_json_list(row["migration_history"]),
+                "code_diff_sha256": self._text_digest(row["code_diff"]),
+            }
+            for row in self.db.cursor.fetchall()
+        ]
+        self.db.cursor.execute("SELECT program_id FROM archive ORDER BY program_id")
+        archive_ids = [str(row[0]) for row in self.db.cursor.fetchall()]
+        self.db.cursor.execute("SELECT key, value FROM metadata_store ORDER BY key")
+        metadata_store = [
+            {"key": str(row[0]), "value": row[1]}
+            for row in self.db.cursor.fetchall()
+        ]
+        generations = sorted({item["generation"] for item in identities})
+        return {
+            "path": self._relative_database_path(self.db.config.db_path),
+            "last_iteration": int(self.db.last_iteration),
+            "program_count": len(identities),
+            "generation_ids": generations,
+            "archive_program_ids": archive_ids,
+            "program_identity_sha256": self._stable_digest(identities),
+            "metadata_store_sha256": self._stable_digest(metadata_store),
+        }
+
+    def _prompt_database_watermark(self) -> Optional[Dict[str, Any]]:
+        if self.prompt_db is None:
+            return None
+        if self.prompt_db.cursor is None:
+            raise CheckpointCompatibilityError("Prompt database is not initialized")
+        self.prompt_db.cursor.execute("""
+            SELECT id, prompt_text, name, description, parent_id, generation,
+                   program_generation, patch_type, timestamp, program_count,
+                   correct_program_count,
+                   total_percentile, total_improvement, fitness, program_scores,
+                   program_ids, metadata
+            FROM system_prompts
+            ORDER BY id
+            """)
+        identities = [
+            {
+                "id": str(row["id"]),
+                "prompt_text_sha256": self._text_digest(row["prompt_text"]),
+                "name": row["name"],
+                "description": row["description"],
+                "parent_id": row["parent_id"],
+                "generation": int(row["generation"]),
+                "program_generation": int(row["program_generation"]),
+                "patch_type": str(row["patch_type"]),
+                "timestamp": row["timestamp"],
+                "program_count": int(row["program_count"]),
+                "correct_program_count": int(row["correct_program_count"]),
+                "total_percentile": row["total_percentile"],
+                "total_improvement": row["total_improvement"],
+                "fitness": row["fitness"],
+                "program_scores": self._decode_json_list(row["program_scores"]),
+                "program_ids": self._decode_json_list(row["program_ids"]),
+                "metadata": self._decode_json_value(row["metadata"], {}),
+            }
+            for row in self.prompt_db.cursor.fetchall()
+        ]
+        self.prompt_db.cursor.execute(
+            "SELECT prompt_id FROM prompt_archive ORDER BY prompt_id"
+        )
+        archive_ids = [str(row[0]) for row in self.prompt_db.cursor.fetchall()]
+        self.prompt_db.cursor.execute(
+            "SELECT key, value FROM prompt_metadata_store ORDER BY key"
+        )
+        metadata_store = [
+            {"key": str(row[0]), "value": row[1]}
+            for row in self.prompt_db.cursor.fetchall()
+        ]
+        return {
+            "path": self._relative_database_path(self.prompt_db.config.db_path),
+            "last_generation": int(self.prompt_db.last_generation),
+            "prompt_count": len(identities),
+            "prompt_ids": [item["id"] for item in identities],
+            "archive_prompt_ids": archive_ids,
+            "prompt_identity_sha256": self._stable_digest(identities),
+            "metadata_store_sha256": self._stable_digest(metadata_store),
+        }
+
+    def _database_watermark(self) -> Dict[str, Any]:
+        return {
+            "programs": self._program_database_watermark(),
+            "prompts": self._prompt_database_watermark(),
+        }
+
+    def _capture_meta_summarizer_state(self) -> Optional[Dict[str, Any]]:
+        if self.meta_summarizer is None:
+            return None
+        sync_summarizer = getattr(
+            self.meta_summarizer,
+            "sync_summarizer",
+            self.meta_summarizer,
+        )
+        return {
+            "unprocessed_programs": [
+                program.to_dict()
+                for program in sync_summarizer.evaluated_since_last_meta
+            ],
+            "meta_summary": sync_summarizer.meta_summary,
+            "meta_scratch_pad": sync_summarizer.meta_scratch_pad,
+            "meta_recommendations": sync_summarizer.meta_recommendations,
+            "meta_recommendations_history": list(
+                sync_summarizer.meta_recommendations_history
+            ),
+            "total_programs_processed": int(sync_summarizer.total_programs_processed),
+        }
+
+    def _restore_meta_summarizer_state(
+        self,
+        state: Optional[Dict[str, Any]],
+    ) -> None:
+        if state is None:
+            if self.meta_summarizer is not None:
+                raise CheckpointCompatibilityError(
+                    "Checkpoint is missing configured meta-summarizer state"
+                )
+            return
+        if self.meta_summarizer is None:
+            raise CheckpointCompatibilityError(
+                "Checkpoint has meta-summarizer state but it is not configured"
+            )
+        sync_summarizer = getattr(
+            self.meta_summarizer,
+            "sync_summarizer",
+            self.meta_summarizer,
+        )
+        sync_summarizer.evaluated_since_last_meta = [
+            Program.from_dict(program)
+            for program in state.get("unprocessed_programs", [])
+        ]
+        sync_summarizer.meta_summary = state.get("meta_summary")
+        sync_summarizer.meta_scratch_pad = state.get("meta_scratch_pad")
+        sync_summarizer.meta_recommendations = state.get("meta_recommendations")
+        sync_summarizer.meta_recommendations_history = list(
+            state.get("meta_recommendations_history", [])
+        )
+        sync_summarizer.total_programs_processed = int(
+            state.get("total_programs_processed", 0)
+        )
+
+    def _capture_component_state(self) -> Dict[str, Any]:
+        return {
+            "bandit_type": (
+                f"{type(self.llm_selection).__module__}."
+                f"{type(self.llm_selection).__qualname__}"
+                if self.llm_selection is not None
+                else None
+            ),
+            "bandit_state": (
+                self.llm_selection.get_state()
+                if self.llm_selection is not None
+                else None
+            ),
+            "meta_summarizer": self._capture_meta_summarizer_state(),
+        }
+
+    def _restore_component_state(self, state: Dict[str, Any]) -> None:
+        expected_bandit_type = (
+            f"{type(self.llm_selection).__module__}."
+            f"{type(self.llm_selection).__qualname__}"
+            if self.llm_selection is not None
+            else None
+        )
+        if state.get("bandit_type") != expected_bandit_type:
+            raise CheckpointCompatibilityError("LLM selection bandit type changed")
+        bandit_state = state.get("bandit_state")
+        if self.llm_selection is None:
+            if bandit_state is not None:
+                raise CheckpointCompatibilityError(
+                    "Checkpoint unexpectedly contains bandit state"
+                )
+        elif not isinstance(bandit_state, dict):
+            raise CheckpointCompatibilityError("Checkpoint bandit state is missing")
+        else:
+            self.llm_selection.set_state(bandit_state)
+        self._restore_meta_summarizer_state(state.get("meta_summarizer"))
+
+    def _capture_runner_state(self) -> Dict[str, Any]:
+        return {
+            "completed_generations": int(self.completed_generations),
+            "next_generation_to_submit": int(self.next_generation_to_submit),
+            "configured_num_generations": int(self.evo_config.num_generations),
+            "assigned_generations": sorted(self.assigned_generations),
+            "best_program_id": self.best_program_id,
+            "prompt_evolution_counter": int(self.prompt_evolution_counter),
+            "prompt_percentile_recompute_counter": int(
+                self.prompt_percentile_recompute_counter
+            ),
+            "current_prompt_id": self.current_prompt_id,
+            "prompt_api_cost": float(self.prompt_api_cost),
+            "committed_cost_total": float(self.total_api_cost),
+            "completed_proposal_costs": list(self.completed_proposal_costs),
+            "avg_proposal_cost": float(self.avg_proposal_cost),
+            "total_proposals_generated": int(self.total_proposals_generated),
+            "sampling_seconds_ewma": self._sampling_seconds_ewma,
+            "evaluation_seconds_ewma": self._evaluation_seconds_ewma,
+            "proposal_timing_samples": int(self._proposal_timing_samples),
+            "cost_limit_reached": bool(self.cost_limit_reached),
+            "in_flight": {
+                "running_jobs": len(self.running_jobs),
+                "active_proposals": len(self.active_proposal_tasks),
+                "failed_db_jobs": len(self.failed_jobs_for_retry),
+                "submitted_jobs": len(self.submitted_jobs),
+                "completed_jobs": self._get_completed_job_work_count(),
+                "background_side_effects": self._get_background_side_effect_work_count(),
+            },
+        }
+
+    def _restore_runner_state(self, state: Dict[str, Any]) -> None:
+        in_flight = state.get("in_flight")
+        if not isinstance(in_flight, dict) or any(in_flight.values()):
+            raise UncleanCheckpointError(
+                "Checkpoint contains in-flight proposal, evaluation, or DB work"
+            )
+        assigned = state.get("assigned_generations", [])
+        if assigned:
+            raise UncleanCheckpointError(
+                "Clean checkpoint contains assigned generation IDs"
+            )
+        self.completed_generations = int(state["completed_generations"])
+        self.next_generation_to_submit = int(state["next_generation_to_submit"])
+        self.assigned_generations = set()
+        self.best_program_id = state.get("best_program_id")
+        self.prompt_evolution_counter = int(state.get("prompt_evolution_counter", 0))
+        self.prompt_percentile_recompute_counter = int(
+            state.get("prompt_percentile_recompute_counter", 0)
+        )
+        self.current_prompt_id = state.get("current_prompt_id")
+        self.prompt_api_cost = float(state.get("prompt_api_cost", 0.0))
+        self.completed_proposal_costs = list(state.get("completed_proposal_costs", []))
+        self.avg_proposal_cost = float(state.get("avg_proposal_cost", 0.0))
+        self.total_proposals_generated = int(state.get("total_proposals_generated", 0))
+        self._sampling_seconds_ewma = state.get("sampling_seconds_ewma")
+        self._evaluation_seconds_ewma = state.get("evaluation_seconds_ewma")
+        self._proposal_timing_samples = int(state.get("proposal_timing_samples", 0))
+        self.cost_limit_reached = bool(state.get("cost_limit_reached", False))
+
+    def _checkpoint_cleanliness_issues(
+        self,
+        *,
+        allow_database_maintenance: bool = False,
+    ) -> List[str]:
+        issues: List[str] = []
+
+        def nonzero(name: str, value: Any) -> None:
+            if value:
+                issues.append(f"{name}={value}")
+
+        if not self.pause_new_proposals.is_set():
+            issues.append("proposal admission is not paused")
+        nonzero("running_jobs", len(self.running_jobs))
+        nonzero("active_proposals", len(self.active_proposal_tasks))
+        nonzero("failed_db_jobs", len(self.failed_jobs_for_retry))
+        nonzero("submitted_jobs", len(self.submitted_jobs))
+        nonzero("assigned_generations", len(self.assigned_generations))
+        nonzero("completed_job_work", self._get_completed_job_work_count())
+        nonzero(
+            "background_side_effects",
+            self._get_background_side_effect_work_count(),
+        )
+        nonzero("sampling_slots", self.sampling_slot_pool.in_use)
+        nonzero("evaluation_slots", self.evaluation_slot_pool.in_use)
+        nonzero("postprocess_slots", self.postprocess_slot_pool.in_use)
+        if self.processing_lock.locked():
+            issues.append("database processing lock is active")
+        for name in (
+            "_meta_side_effect_lock",
+            "_prompt_side_effect_lock",
+            "_best_solution_lock",
+        ):
+            lock = getattr(self, name, None)
+            if lock is not None and lock.locked():
+                issues.append(f"{name} is active")
+        prompt_task = self._prompt_percentile_recompute_task
+        if prompt_task is not None and not prompt_task.done():
+            issues.append("prompt percentile recomputation is active")
+        if self._prompt_percentile_recompute_pending:
+            issues.append("prompt percentile recomputation is pending")
+        embedding_task = getattr(self.async_db, "_embedding_recompute_task", None)
+        if (
+            not allow_database_maintenance
+            and embedding_task is not None
+            and not embedding_task.done()
+        ):
+            issues.append("embedding recomputation is active")
+        if getattr(self.proposal_queue, "qsize", lambda: 0)():
+            issues.append("proposal queue is not empty")
+        if getattr(self.side_effect_event_queue, "qsize", lambda: 0)():
+            issues.append("side-effect queue is not empty")
+        return issues
+
+    def _assert_clean_checkpoint_boundary(
+        self,
+        *,
+        allow_database_maintenance: bool = False,
+    ) -> None:
+        issues = self._checkpoint_cleanliness_issues(
+            allow_database_maintenance=allow_database_maintenance
+        )
+        if issues:
+            raise UncleanCheckpointError(
+                "Cannot publish a clean checkpoint: " + "; ".join(issues)
+            )
+
+    @staticmethod
+    def _checkpoint_sqlite_wal(connection: Any, label: str) -> None:
+        connection.commit()
+        result = connection.execute("PRAGMA wal_checkpoint(FULL)").fetchone()
+        if result is not None and int(result[0]) != 0:
+            raise CheckpointError(f"{label} WAL checkpoint remained busy")
+
+    async def _commit_checkpoint_databases(self) -> None:
+        flush_async = getattr(self.async_db, "flush_async", None)
+        if callable(flush_async):
+            await flush_async()
+        self.db.save()
+        self._checkpoint_sqlite_wal(self.db.conn, "program database")
+        if self.prompt_db is not None:
+            self.prompt_db.save()
+            self._checkpoint_sqlite_wal(
+                self.prompt_db.conn,
+                "prompt database",
+            )
+
+    def _checkpoint_identity(self) -> Dict[str, Any]:
+        named_generators = self._owned_rng_generators()
+        return {
+            "source": source_tree_identity(),
+            "configuration_hashes": configuration_hashes(
+                self.evo_config,
+                self.db_config,
+                self.job_config,
+            ),
+            "runtime": runtime_identity(named_generators),
+        }
+
+    def _build_checkpoint_payload(self) -> Dict[str, Any]:
+        self._assert_clean_checkpoint_boundary()
+        return {
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
+            "checkpoint_id": str(uuid.uuid4()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "clean": True,
+            "identity": self._checkpoint_identity(),
+            "database_watermark": self._database_watermark(),
+            "runner_state": self._capture_runner_state(),
+            "random_streams": capture_rng_states(self._owned_rng_generators()),
+            "component_state": self._capture_component_state(),
+        }
+
+    def _validate_checkpoint_payload(self, payload: Dict[str, Any]) -> None:
+        identity = self._checkpoint_identity()
+        validate_checkpoint_identity(
+            payload,
+            expected_source=identity["source"],
+            expected_config_hashes=identity["configuration_hashes"],
+            expected_runtime=identity["runtime"],
+        )
+        live_watermark = self._database_watermark()
+        if payload.get("database_watermark") != live_watermark:
+            raise CheckpointCompatibilityError(
+                "Database watermark does not match the checkpoint"
+            )
+        runner_state = payload.get("runner_state")
+        if not isinstance(runner_state, dict):
+            raise CheckpointCompatibilityError("Checkpoint runner state is missing")
+        in_flight = runner_state.get("in_flight")
+        if not isinstance(in_flight, dict) or any(in_flight.values()):
+            raise UncleanCheckpointError(
+                "Checkpoint runner state contains in-flight work"
+            )
+        next_generation = int(runner_state.get("next_generation_to_submit", -1))
+        if self.evo_config.num_generations < next_generation:
+            raise CheckpointCompatibilityError(
+                "Configured num_generations is below checkpoint progress"
+            )
+        program_count = live_watermark["programs"]["program_count"]
+        island_copies = max(0, getattr(self.db_config, "num_islands", 1) - 1)
+        expected_completed = max(0, program_count - island_copies)
+        if int(runner_state.get("completed_generations", -1)) != expected_completed:
+            raise CheckpointCompatibilityError(
+                "Runner progress does not match the database watermark"
+            )
+        random_streams = payload.get("random_streams")
+        if not isinstance(random_streams, dict):
+            raise CheckpointCompatibilityError("Checkpoint RNG state is missing")
+        validate_rng_states(random_streams, self._owned_rng_generators())
+        component_state = payload.get("component_state")
+        if not isinstance(component_state, dict):
+            raise CheckpointCompatibilityError("Checkpoint component state is missing")
+
+    def _restore_checkpoint_without_rng(self, payload: Dict[str, Any]) -> None:
+        self._restore_component_state(payload["component_state"])
+        self._restore_runner_state(payload["runner_state"])
+
+    def _record_resume_status(
+        self,
+        *,
+        deterministic_resume: bool,
+        checkpoint_id: Optional[str],
+        detail: str,
+    ) -> None:
+        metadata = {
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "resumed": True,
+            "checkpoint_resume_mode": self.evo_config.checkpoint_resume_mode,
+            "deterministic_resume": deterministic_resume,
+            "checkpoint_id": checkpoint_id,
+            "detail": detail,
+        }
+        self._resume_metadata = metadata
+        write_resume_metadata(self.results_dir, metadata)
+        logger.info(
+            "Resume audit: deterministic_resume=%s checkpoint_id=%s (%s)",
+            deterministic_resume,
+            checkpoint_id,
+            detail,
+        )
+
+    async def _publish_clean_checkpoint(self) -> Dict[str, Any]:
+        # First ensure there are no producers left, then let the database flush
+        # its final drainable maintenance task and executor queues.
+        self._assert_clean_checkpoint_boundary(allow_database_maintenance=True)
+        await self._commit_checkpoint_databases()
+        self._assert_clean_checkpoint_boundary()
+        payload = self._build_checkpoint_payload()
+        path = write_checkpoint(self.results_dir, payload)
+        self._checkpoint_published = True
+        self.checkpoint_complete.set()
+        logger.info(
+            "Published clean checkpoint %s at %s (programs=%s, last_iteration=%s)",
+            payload["checkpoint_id"],
+            path,
+            payload["database_watermark"]["programs"]["program_count"],
+            payload["database_watermark"]["programs"]["last_iteration"],
+        )
+        return payload
 
     async def _record_generation_event(
         self,
@@ -1012,7 +1628,23 @@ class ShinkaEvolveRunner:
             if "no running event loop" not in str(exc):
                 raise
 
-        asyncio.run(self.run_async())
+        previous_sigint = None
+        signal_installed = threading.current_thread() is threading.main_thread()
+        if signal_installed:
+            previous_sigint = signal.getsignal(signal.SIGINT)
+
+            def checkpoint_on_interrupt(signum: int, frame: Any) -> None:
+                if self.checkpoint_requested.is_set():
+                    signal.default_int_handler(signum, frame)
+                    return
+                self.request_checkpoint_and_exit()
+
+            signal.signal(signal.SIGINT, checkpoint_on_interrupt)
+        try:
+            asyncio.run(self.run_async())
+        finally:
+            if signal_installed and previous_sigint is not None:
+                signal.signal(signal.SIGINT, previous_sigint)
 
     async def run_async(self):
         """Run evolution while retaining provider clients for this loop user."""
@@ -1023,6 +1655,7 @@ class ShinkaEvolveRunner:
 
     async def _run_async(self):
         """Main async evolution loop."""
+        self._run_loop = asyncio.get_running_loop()
         activate_model_catalog(self.pricing_snapshot)
         self.start_time = time.time()
         self.last_progress_time = self.start_time  # Initialize progress tracking
@@ -1064,11 +1697,17 @@ class ShinkaEvolveRunner:
                     )
                 await self._wait_for_background_side_effects()
             await self._shutdown_background_side_effect_worker()
-            if self._prompt_percentile_recompute_task is not None:
+            while self._prompt_percentile_recompute_task is not None:
+                prompt_task = self._prompt_percentile_recompute_task
                 await asyncio.gather(
-                    self._prompt_percentile_recompute_task,
+                    prompt_task,
                     return_exceptions=True,
                 )
+
+            if self.checkpoint_requested.is_set():
+                await self._publish_clean_checkpoint()
+                logger.info("Clean checkpoint complete; exiting evolution run")
+                return
 
             # Perform final operations before cleanup
             if self.verbose:
@@ -1171,6 +1810,9 @@ class ShinkaEvolveRunner:
                 )
 
         except Exception as e:
+            if self.checkpoint_requested.is_set() and not self._checkpoint_published:
+                self._checkpoint_error = e
+                self.checkpoint_complete.set()
             logger.error(f"Error in async evolution run: {e}")
             raise
         finally:
@@ -1182,6 +1824,7 @@ class ShinkaEvolveRunner:
             if tasks:  # Only gather if there are tasks
                 await asyncio.gather(*tasks, return_exceptions=True)
             await self._cleanup_async()
+            self._run_loop = None
 
         # Print final summary
         await self._print_final_summary()
@@ -1190,6 +1833,7 @@ class ShinkaEvolveRunner:
         """Setup initial program (results directory already created)."""
         # Update database path to be in results directory
         db_path = Path(f"{self.results_dir}/programs.sqlite")
+        database_preexisting = db_path.is_file()
 
         # Update database config with results directory path
         self.db_config.db_path = str(db_path)
@@ -1210,6 +1854,70 @@ class ShinkaEvolveRunner:
         if self.evo_config.evolve_prompts:
             await self._setup_prompt_evolution()
 
+        # Check if we're resuming from an existing database
+        program_count = await self.async_db.get_total_program_count_async()
+        resuming_run = database_preexisting and program_count > 0
+        checkpoint_rng_state: Optional[Dict[str, Any]] = None
+
+        if resuming_run:
+            logger.info("=" * 80)
+            logger.info("RESUMING PREVIOUS ASYNC EVOLUTION RUN")
+            logger.info("=" * 80)
+            logger.info(f"Resuming from generation {self.db.last_iteration}")
+            logger.info(f"Found {program_count} programs in database")
+
+            # Load existing API costs from database
+            existing_costs = await self._get_total_api_costs()
+            self.total_api_cost = existing_costs
+            logger.info(f"Loaded existing API costs: ${existing_costs:.4f}")
+
+            logger.info("=" * 80)
+            mode = self.evo_config.checkpoint_resume_mode
+            if mode == "reseed":
+                self._load_bandit_state(restore_rng=False)
+                await self._restore_resume_progress()
+                self._record_resume_status(
+                    deterministic_resume=False,
+                    checkpoint_id=None,
+                    detail="explicit reseed resume",
+                )
+            else:
+                try:
+                    loaded = load_checkpoint(self.results_dir)
+                    self._validate_checkpoint_payload(loaded.payload)
+                    self._restore_checkpoint_without_rng(loaded.payload)
+                    checkpoint_rng_state = loaded.payload["random_streams"]
+                    self._record_resume_status(
+                        deterministic_resume=True,
+                        checkpoint_id=loaded.payload["checkpoint_id"],
+                        detail=f"restored {loaded.path.name}",
+                    )
+                except Exception as exc:
+                    if mode == "strict":
+                        self._record_resume_status(
+                            deterministic_resume=False,
+                            checkpoint_id=None,
+                            detail=f"strict resume rejected: {exc}",
+                        )
+                        raise
+                    logger.warning(
+                        "Checkpoint unavailable or invalid; continuing with "
+                        "best-effort resume: %s",
+                        exc,
+                    )
+                    self._load_bandit_state()
+                    await self._restore_resume_progress()
+                    self._record_resume_status(
+                        deterministic_resume=False,
+                        checkpoint_id=None,
+                        detail=f"best-effort fallback: {exc}",
+                    )
+
+        if self._resume_metadata:
+            self.evo_config.wandb_config = {
+                **self.evo_config.wandb_config,
+                "checkpoint_resume": self._resume_metadata,
+            }
         if self.wandb_logger.enabled:
             await self._run_wandb_operation(
                 self.wandb_logger.start,
@@ -1219,29 +1927,22 @@ class ShinkaEvolveRunner:
                 results_dir=Path(self.results_dir),
             )
 
-        # Check if we're resuming from an existing database
-        resuming_run = db_path.exists() and self.db.last_iteration > 0
-
-        # Load bandit state if resuming
-        if resuming_run:
-            logger.info("=" * 80)
-            logger.info("RESUMING PREVIOUS ASYNC EVOLUTION RUN")
-            logger.info("=" * 80)
-            logger.info(f"Resuming from generation {self.db.last_iteration}")
-            program_count = await self.async_db.get_total_program_count_async()
-            logger.info(f"Found {program_count} programs in database")
-
-            # Load existing API costs from database
-            existing_costs = await self._get_total_api_costs()
-            self.total_api_cost = existing_costs
-            logger.info(f"Loaded existing API costs: ${existing_costs:.4f}")
-
-            logger.info("=" * 80)
-            self._load_bandit_state()
-
-            # Update state for resuming
-            await self._restore_resume_progress()
+        # Restore/reseed last so constructors, database setup, and observability
+        # initialization cannot consume the continuation stream.
+        if checkpoint_rng_state is not None:
+            restore_rng_states(
+                checkpoint_rng_state,
+                self._owned_rng_generators(),
+            )
+        elif resuming_run:
+            self._seed_random_streams(
+                force=self.evo_config.checkpoint_resume_mode == "reseed",
+                include_named=self.evo_config.checkpoint_resume_mode == "reseed",
+            )
         else:
+            self._seed_random_streams()
+
+        if not resuming_run:
             # Generate or copy initial program only if NOT resuming
             if (
                 self.evo_config.init_program_path
@@ -1285,12 +1986,12 @@ class ShinkaEvolveRunner:
         self.prompt_db = SystemPromptDatabase(prompt_config)
 
         # Check if we're resuming from existing prompt database
-        if prompt_db_path.exists() and self.prompt_db.last_generation > 0:
+        prompt_count = self.prompt_db._count_prompts_in_db()
+        if prompt_count > 0:
             logger.info(
                 f"Resuming prompt evolution from generation "
                 f"{self.prompt_db.last_generation}"
             )
-            prompt_count = self.prompt_db._count_prompts_in_db()
             logger.info(f"Found {prompt_count} prompts in database")
         else:
             # Add initial prompt to database
@@ -2235,7 +2936,14 @@ class ShinkaEvolveRunner:
                     self.slot_available.set()
 
                 # Retry any failed DB jobs
-                if self.completed_generations >= self.evo_config.num_generations:
+                checkpoint_event = getattr(self, "checkpoint_requested", None)
+                checkpoint_requested = (
+                    checkpoint_event is not None and checkpoint_event.is_set()
+                )
+                if (
+                    self.completed_generations >= self.evo_config.num_generations
+                    and not checkpoint_requested
+                ):
                     await self._cancel_surplus_inflight_work()
 
                 if self.failed_jobs_for_retry:
@@ -2243,6 +2951,25 @@ class ShinkaEvolveRunner:
                         await self._retry_failed_db_jobs()
                     except Exception as e:
                         logger.error(f"Error retrying failed DB jobs: {e}")
+
+                if checkpoint_requested:
+                    monitor_drained = (
+                        not self.running_jobs
+                        and not self.active_proposal_tasks
+                        and not self.failed_jobs_for_retry
+                        and self._get_completed_job_work_count() == 0
+                    )
+                    if monitor_drained:
+                        logger.info(
+                            "Checkpoint drain reached the proposal/evaluation/DB "
+                            "boundary"
+                        )
+                        self.should_stop.set()
+                        self.slot_available.set()
+                        self.finalization_complete.set()
+                        break
+                    await asyncio.sleep(0.1)
+                    continue
 
                 # Check if we've exceeded the API cost limit
                 # Use committed cost for early detection, actual cost for final check
@@ -2418,6 +3145,11 @@ class ShinkaEvolveRunner:
         """Coordinate proposal generation to keep evaluation queue full."""
         while not self.should_stop.is_set():
             try:
+                pause_event = getattr(self, "pause_new_proposals", None)
+                if pause_event is not None and pause_event.is_set():
+                    await self._wait_for_slot_or_stop(timeout=0.1)
+                    continue
+
                 # Check for stuck system before normal processing
                 if self._is_system_stuck():
                     recovery_success = await self._handle_stuck_system()
@@ -2547,6 +3279,12 @@ class ShinkaEvolveRunner:
         oversample more proposal generations than the configured budget.
         """
         for _ in range(num_proposals):
+            pause_event = getattr(self, "pause_new_proposals", None)
+            if (
+                pause_event is not None and pause_event.is_set()
+            ) or self.should_stop.is_set():
+                break
+
             # Only stop if we've reached max proposal concurrency
             if len(self.active_proposal_tasks) >= self.max_proposal_jobs:
                 break
@@ -5533,7 +6271,11 @@ class ShinkaEvolveRunner:
                 )
 
             # Final recomputation of prompt percentiles to ensure fitness is accurate
-            if self.prompt_db is not None and self.db is not None:
+            if (
+                not self._checkpoint_published
+                and self.prompt_db is not None
+                and self.db is not None
+            ):
                 try:
                     # Get all correct program scores from main database
                     all_programs = self.db.get_all_programs()
@@ -5558,8 +6300,23 @@ class ShinkaEvolveRunner:
                 except Exception as e:
                     logger.warning(f"Failed to recompute prompt percentiles: {e}")
 
-            # Cleanup database
-            await self._finish_wandb_logging()
+            # Once the clean selection-state checkpoint is on disk,
+            # observability shutdown is best effort and bounded.
+            if self._checkpoint_published:
+                try:
+                    await asyncio.wait_for(
+                        self._finish_wandb_logging(),
+                        timeout=_CHECKPOINT_WANDB_FINISH_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "W&B shutdown exceeded %.1fs after checkpoint publication; "
+                        "continuing local cleanup",
+                        _CHECKPOINT_WANDB_FINISH_TIMEOUT_SECONDS,
+                    )
+                    await self._cancel_wandb_tasks_without_waiting()
+            else:
+                await self._finish_wandb_logging()
             await self.async_db.close_async()
 
             # Cleanup scheduler
@@ -5891,6 +6648,29 @@ class ShinkaEvolveRunner:
         queue.put_nowait(_WANDB_CANDIDATE_STOP)
         await worker
         self._wandb_candidate_worker_task = None
+
+    async def _cancel_wandb_tasks_without_waiting(self) -> None:
+        tasks = [
+            task
+            for task in (
+                getattr(self, "_wandb_population_task", None),
+                getattr(self, "_wandb_population_delay_task", None),
+                getattr(self, "_wandb_candidate_worker_task", None),
+            )
+            if task is not None and not task.done()
+        ]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._wandb_population_task = None
+        self._wandb_population_delay_task = None
+        self._wandb_candidate_worker_task = None
+
+        executor = getattr(self, "_wandb_executor", None)
+        if executor is not None:
+            self._wandb_executor = None
+            executor.shutdown(wait=False, cancel_futures=True)
 
     async def _shutdown_wandb_executor(self) -> None:
         executor = getattr(self, "_wandb_executor", None)
