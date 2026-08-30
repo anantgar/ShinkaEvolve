@@ -24,8 +24,8 @@ databases, publishes `checkpoint.pkl`, and exits successfully. Pressing Ctrl-C
 a second time keeps the usual immediate interrupt behavior and may prevent a
 clean checkpoint.
 
-The selection-state checkpoint is published before bounded, best-effort W&B
-shutdown, so an observability stall does not delay checkpoint correctness.
+The selection-state checkpoint is published before bounded, best-effort
+telemetry shutdown, so observability cannot delay checkpoint correctness.
 
 Python callers can request the same workflow without a signal:
 

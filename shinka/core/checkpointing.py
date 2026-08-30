@@ -15,6 +15,7 @@ import os
 import pickle
 import platform
 import random
+import sqlite3
 import tempfile
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -333,6 +334,7 @@ def runtime_identity(
     return {
         "python_version": platform.python_version(),
         "numpy_version": np.__version__,
+        "sqlite_version": sqlite3.sqlite_version,
         "python_random_implementation": _qualified_type(random._inst),
         "numpy_legacy_implementation": _qualified_type(np.random.mtrand._rand),
         "named_bit_generators": {
