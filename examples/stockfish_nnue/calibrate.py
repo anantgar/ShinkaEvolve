@@ -36,6 +36,25 @@ def control_copy(seed: Path, destination: Path, mode: str) -> None:
     header.write_text(code)
 
 
+def validate_aa_bias(measurement: dict, settings: dict) -> None:
+    """A stable weighted average cannot hide biased component workloads."""
+    workloads = measurement.get("workload_speedups")
+    if not isinstance(workloads, dict) or set(workloads) != set(
+        settings["workload_weights"]
+    ):
+        raise ValueError("A/A requires a complete set of workload speedups")
+    for name, speed in {
+        "aggregate": measurement.get("geometric_speedup"),
+        **workloads,
+    }.items():
+        if type(speed) not in {int, float} or not math.isfinite(speed) or speed <= 0:
+            raise ValueError(f"Invalid A/A speedup for {name}")
+        if abs(math.log(speed)) > settings["max_aa_log_bias"]:
+            raise RuntimeError(
+                f"A/A {name} exceeds the campaign's bias limit; investigate the worker"
+            )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign", type=Path, required=True)
@@ -101,10 +120,10 @@ def main():
             if not correct:
                 raise RuntimeError(f"{control} control failed: {result}")
             speed = result["metrics"]["public"]["geometric_speedup"]
-            if control == "aa" and abs(math.log(speed)) > settings["max_aa_log_bias"]:
-                raise RuntimeError(
-                    "A/A exceeds the campaign's bias limit; investigate the worker"
-                )
+            if control == "aa":
+                if aa_measurement is None:
+                    raise ValueError("A/A measurement artifact is required")
+                validate_aa_bias(aa_measurement["measurement"], settings)
             if control == "slow" and speed >= 0.95:
                 raise RuntimeError("Known-slower control was not detected")
     if args.freeze:
@@ -121,6 +140,7 @@ def freeze_campaign(campaign: Path, measurement: dict, controls: Path) -> None:
         raise ValueError(
             "Campaign is already frozen; create a new campaign to change it"
         )
+    validate_aa_bias(measurement["measurement"], manifest["benchmark"])
     manifest["benchmark"]["passes_by_workload"] = measurement["measurement"][
         "passes_by_workload"
     ]
@@ -128,6 +148,7 @@ def freeze_campaign(campaign: Path, measurement: dict, controls: Path) -> None:
         frozen=True,
         calibration_sha256=sha256(controls),
         calibration_machine=measurement["machine"],
+        calibration_policy="aggregate-and-workload-aa-bias-v1",
     )
     data = json.dumps(manifest, indent=2) + "\n"
     manifest_path.write_text(data)

@@ -15,6 +15,7 @@ Rebuild the image and prepare a new campaign; do not reuse v1 calibration.
 | Eager evaluation did not sufficiently exercise chains of unevaluated accumulator frames. | Check both eager and lazy updates, plus fresh/cache-cleared outputs, both perspectives, null moves, siblings and undo. Repeat correctness after timing to expose persistent-state damage. |
 | The minimum duration was checked on a probe, not every scored request. | Record the minimum over all actual baseline/candidate samples and reject the complete measurement if any are too short. |
 | Aggregate uncertainty could conceal noisy workloads that moved in opposite directions. | Retain whole-round covariance in the score and separately gate each workload's uncertainty. |
+| Native AWS A/A tests exposed stable component biases despite acceptable aggregate bias and low noise. | Apply the A/A bias limit to every workload before freezing. Reject the current pool: two of three workers fail this stricter check. Preserve the raw results and investigate process/placement effects before evolution. |
 | Per-call clock reads perturbed the kernel. | Remove them. Score only trusted host elapsed time around batches; no candidate-reported timing affects fitness. |
 | Abort cleanup could miss the reference's separate attempt ID. | Give both containers the same durable attempt identity and different container names. Cleanup regression tests cover both. |
 | UBSan could report a problem and continue. | Sanitizer builds use `-fno-sanitize-recover=all`; a diagnostic cannot silently earn a valid result. |
@@ -29,9 +30,18 @@ unchanged. These checks supplement real A/A, slow and incorrect controls.
 
 ## Evidence from this audit
 
-- The final repository suite passed **850 tests**, with three skipped cases
+- The application branch suite passed **855 tests**, with three skipped cases
   and two secret/live cases deselected. Ruff, the CI Mypy command,
   CloudFormation lint and wheel construction passed.
+- After separating the application, the reusable main branch passed **826 tests**
+  (two skipped, two deselected). Native AWS
+  qualification is recorded in
+  [the canary report](stockfish_aws_canary_2026-09-30.md).
+- Native Graviton sanitizer checks matched **36,312 exact values**. A real
+  container worker execution with S3 stubbed passed after **36,120 exact values**;
+  an incorrect implementation was rejected with zero fitness. A/A workload
+  biases still prevent pool qualification, and the primary slow control remains
+  pending at handoff. These results do not imply an optimization or Elo gain.
 - A real Linux ARM ASan/UBSan build with recovery disabled matched **36,312 exact
   values** against the optimized reference across four reordered eager/lazy
   passes. This is smoke-corpus evidence, not exhaustive validation of future
@@ -46,8 +56,10 @@ unchanged. These checks supplement real A/A, slow and incorrect controls.
   the aggregate gate (0.0245 versus 0.02). Their success assertions therefore
   failed. No thresholds were relaxed, samples removed or fitness admitted.
 
-These results support correctness gating and failure isolation. They do **not**
-qualify timing precision on this shared macOS/Docker host or on AWS. The older v1
+These local results support correctness gating and failure isolation. They do **not**
+qualify timing precision on this shared macOS/Docker host. Native AWS results and
+the remaining workload-bias failure are in the canary report; the AWS pool is
+not approved for evolution. The older v1
 all-controls pass in the handoff remains historical; it does not qualify v2.
 Local logs, controls, raw diagnostic samples and sanitizer results are retained
 under `examples/stockfish_nnue/.work/audit-*`, which is excluded from Git.
@@ -107,7 +119,9 @@ run; do not put tracing or a profiler inside the scored measurement.
 1. **Qualify the worker pool first.** Repeated A/A controls across at least three
    fresh worker instances, all three positive/negative controls, pinned images,
    compiler, AMI, CPU family and corpus. Resolve bias and noise before selection.
-   The production A/A log-bias budget is 0.003, about 0.3%.
+   The production A/A log-bias budget is 0.003, about 0.3%, for the aggregate
+   and every workload. The first AWS pool fails the component check despite
+   acceptable aggregate ratios; do not qualify it by selecting its favorable run.
 2. **Every individual.** Exact checks over the entire frozen fitness corpus,
    always including edge cases and eager/lazy/undo/null/fresh paths; resource
    limits; then paired timing. Start with 1,000–10,000 representative game traces
@@ -116,7 +130,8 @@ run; do not put tracing or a profiler inside the scored measurement.
 3. **Precision.** Production defaults are 24 rounds, every sample at least one
    second, aggregate log-SE at most 0.002 and per-workload log-SE at most 0.005.
    Baseline calibration targets twice the duration floor. These settings have
-   not yet been qualified on AWS. If an unusually fast candidate falls below
+   passed native smoke timing-noise checks, but workload bias still prevents AWS
+   pool qualification. If an unusually fast candidate falls below
    the floor, recalibrate a new campaign for everyone; do not silently alter its
    work or accept an under-measured speedup.
 4. **Finalists.** Larger untouched holdout; ASan/UBSan and long stateful runs;

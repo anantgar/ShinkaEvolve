@@ -124,10 +124,17 @@ The scoped evaluator and campaign design is documented in
 - [x] Keep failed measurements out of the population and rewards; fail closed on
       an unverified seed; preserve failed-job costs and seed-only runs on restart.
 - [x] Run baseline ASan/UBSan exact comparisons (36,312 values on the smoke corpus).
-- [ ] Qualify v2 controls and worker timing; the local v2 slow control and two
-      worker attempts were rejected for noise, so v2 is not yet frozen.
+- [x] Run three native `c8g.2xlarge` Spot A/A controls in `us-east-1` with strict
+      timing gates, recompute raw-sample scores, and run native ASan/UBSan checks.
+- [x] Reject calibration when workload biases cancel in the aggregate; preserve
+      the first AWS measurements, which exposed this gap.
+- [ ] Qualify worker timing across independent process/worker blocks. Two of the
+      first three AWS workers fail the new per-workload A/A bias check, despite
+      passing aggregate bias and timing-noise gates. Do not evolve on this pool.
 - [ ] Select representative production PGNs and keep a separate finalist holdout.
-- [ ] Publish worker images/wheel, choose a pinned AMI and deploy the AWS canary.
+- [x] Transfer pinned image/wheel/baseline to native EC2 canaries on a pinned AMI.
+- [ ] Deploy the S3/SQS stack and ECR images when the operator has the necessary
+      permissions; direct EC2 tests do not qualify that deployment.
 - [ ] Calibrate workload frequencies and noise on the chosen instance type;
       freeze the production campaign before evolution.
 - [ ] Run a 5–10-candidate canary, then broader evolution and independent finalist

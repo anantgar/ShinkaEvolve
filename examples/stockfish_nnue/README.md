@@ -122,6 +122,9 @@ checks, not Graviton performance claims.
 `--dedicated-container-vm` is required when preparing on an intentionally
 dedicated Linux host using rootful Docker. The EC2 worker explicitly declares
 that boundary. Ordinary Linux developer machines should use rootless Docker.
+On a dedicated rootful-Docker VM, run the trusted host coordinator as root, as
+the worker service does, so it can clean up container-owned scratch files. The
+candidate and build containers still use the unprivileged sandbox UID.
 
 Evaluate a candidate or the unchanged seed without invoking an LLM:
 
@@ -169,6 +172,10 @@ the agent. That filename is an importer convention, not permission to expose it.
 
 Configure the campaign's `shinka.yaml` for the intended worker pool, run all
 three calibration controls **on that pool**, then use `calibrate --freeze`.
+The A/A bias limit applies to every workload as well as the aggregate: stable
+component errors can cancel in an apparently neutral weighted score. Frozen
+campaigns record `calibration_policy: aggregate-and-workload-aa-bias-v1`.
+Do not reuse an older aggregate-only calibration without fresh qualification.
 This records pass counts per workload and calibration identity, updates the
 manifest's dependency hash, and copies the calibration report into the campaign.
 Use a new state/run directory after freezing. Do not modify manifests, weights,
@@ -210,6 +217,9 @@ images. Do not mix CPU generations in a pool. The default is `c8g.2xlarge`;
 one thread per core to avoid SMT contention. No GPU is required.
 `PurchaseOption=spot` is the default; use `PurchaseOption=on-demand` if Spot
 capacity is unavailable. Keep one instance type per campaign in either case.
+The first direct EC2 Spot tests, including their exact scope and host setup
+findings, are recorded in the
+[September 30 canary report](../../docs/stockfish_aws_canary_2026-09-30.md).
 
 1. Publish the complete inference image to ECR and record its digest. Prepare
    with that ECR digest and pull it on the submitting host too. Workers refresh

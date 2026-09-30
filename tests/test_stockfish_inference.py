@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from examples.stockfish_nnue.calibrate import freeze_campaign, validate_aa_bias
 from examples.stockfish_nnue.corpus import import_pgn, read_tsv, validate_traces
 from examples.stockfish_nnue.evaluate import (
     InvalidCandidate,
@@ -240,6 +241,83 @@ def test_opposing_workload_noise_cannot_hide_behind_a_stable_aggregate():
     measured = score_pairs(pairs, settings["workload_weights"])
     assert measured["log_standard_error"] < 1e-10
     assert "workload" in measurement_rejection(measured, settings)
+
+
+def test_aa_rejects_stable_opposing_workload_bias():
+    settings = load_manifest(TASK / "task_manifest.json")["benchmark"]
+    pairs = samples([1.0] * 24)
+    for pair in pairs:
+        for sample in pair.values():
+            sample["baseline_seconds"] = sample["candidate_seconds"] = 2.0
+        pair["incremental"]["baseline_seconds"] = 2 * math.exp(0.01)
+        pair["refresh"]["baseline_seconds"] = 2 * math.exp(-0.024)
+    measured = score_pairs(pairs, settings["workload_weights"])
+    assert measured["geometric_speedup"] == pytest.approx(1.0)
+    assert measured["log_standard_error"] == 0.0
+    assert measurement_rejection(measured, settings) is None
+    with pytest.raises(RuntimeError, match="A/A incremental"):
+        validate_aa_bias(measured, settings)
+
+
+def test_freeze_rejects_workload_bias_before_changing_any_files(tmp_path):
+    manifest = load_manifest(TASK / "task_manifest.json")
+    manifest["campaign"] = {"smoke_only": True}
+    (tmp_path / "evaluator").mkdir()
+    (tmp_path / "inputs").mkdir()
+    original = json.dumps(manifest)
+    for parent in ("evaluator", "inputs"):
+        (tmp_path / parent / "task-manifest.json").write_text(original)
+    dependencies = tmp_path / "dependencies.json"
+    dependencies.write_text('{"artifacts": []}')
+    measurement = {
+        "geometric_speedup": 0.9976189234047467,
+        "workload_speedups": {
+            "incremental": 0.9999643075010766,
+            "refresh": 0.9875645728177004,
+            "hot": 1.0051187130966392,
+        },
+    }
+    with pytest.raises(RuntimeError, match="A/A refresh"):
+        freeze_campaign(
+            tmp_path, {"measurement": measurement}, tmp_path / "controls.json"
+        )
+    assert (tmp_path / "evaluator/task-manifest.json").read_text() == original
+    assert (tmp_path / "inputs/task-manifest.json").read_text() == original
+    assert dependencies.read_text() == '{"artifacts": []}'
+    assert not (tmp_path / "calibration.json").exists()
+
+
+def test_freeze_records_the_bias_policy_and_updates_dependency_hash(tmp_path):
+    manifest = load_manifest(TASK / "task_manifest.json")
+    manifest["campaign"] = {"smoke_only": True}
+    (tmp_path / "evaluator").mkdir()
+    (tmp_path / "inputs").mkdir()
+    source = tmp_path / "evaluator/task-manifest.json"
+    source.write_text(json.dumps(manifest))
+    dependency_path = tmp_path / "dependencies.json"
+    dependency_path.write_text(
+        json.dumps({"artifacts": [{"name": "task-manifest.json"}]})
+    )
+    controls = tmp_path / "controls.json"
+    controls.write_text("{}")
+    measurement = score_pairs(
+        samples([1.0] * 24), manifest["benchmark"]["workload_weights"]
+    )
+    measurement["passes_by_workload"] = dict.fromkeys(
+        manifest["benchmark"]["workload_weights"], 2
+    )
+    freeze_campaign(
+        tmp_path, {"measurement": measurement, "machine": "test"}, controls
+    )
+    frozen = load_manifest(source)
+    assert frozen["campaign"]["frozen"] is True
+    assert frozen["campaign"]["calibration_policy"] == "aggregate-and-workload-aa-bias-v1"
+    assert source.read_bytes() == (tmp_path / "inputs/task-manifest.json").read_bytes()
+    from examples.stockfish_nnue.policy import sha256
+
+    artifact = json.loads(dependency_path.read_text())["artifacts"][0]
+    assert artifact["sha256"] == sha256(source)
+    assert artifact["size"] == source.stat().st_size
 
 
 def test_edge_cases_are_checked_but_do_not_change_timing_distribution():
