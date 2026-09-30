@@ -217,9 +217,8 @@ class DependencyPreparer:
                 "system": [asdict(item) for item in manifest.system],
                 "images": list(manifest.images),
             }
-            (root / "manifest.json").write_bytes(
-                canonical_json_bytes(resolved_manifest)
-            )
+            resolved_bytes = canonical_json_bytes(resolved_manifest)
+            (root / "manifest.json").write_bytes(resolved_bytes)
             archive = root.parent / f"{root.name}.tar"
             metadata = create_normalized_archive(
                 root,
@@ -229,7 +228,7 @@ class DependencyPreparer:
                     max_entries=max(32, len(manifest.artifacts) * 2 + 4),
                     max_total_bytes=max(
                         1024 * 1024,
-                        sum(
+                        len(resolved_bytes) + sum(
                             item.size or self.max_artifact_bytes
                             for item in manifest.artifacts
                         ),
@@ -270,7 +269,8 @@ class DependencyPreparer:
                     max_entries=max(32, len(runtime_resolved) * 2 + 4),
                     max_total_bytes=max(
                         1024 * 1024,
-                        sum(int(item["size"]) for item in runtime_resolved),
+                        (runtime_root / "manifest.json").stat().st_size
+                        + sum(int(item["size"]) for item in runtime_resolved),
                     ),
                     max_file_bytes=self.max_artifact_bytes,
                 ),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import subprocess
 import tempfile
 import threading
@@ -60,6 +61,7 @@ class ContainerCandidateRunner:
         request_timeout_seconds: float | None,
         sandbox_user: str | None = None,
         archive_limits: ArchiveLimits = ArchiveLimits(),
+        container_suffix: str = "",
     ) -> None:
         self.engine = engine
         self.artifacts = artifacts
@@ -76,6 +78,9 @@ class ContainerCandidateRunner:
         if self.sandbox_user in {"0", "0:0"}:
             self.sandbox_user = "65532:65532"
         self.archive_limits = archive_limits
+        if container_suffix and not re.fullmatch(r"[a-z0-9-]{1,32}", container_suffix):
+            raise SecurityPolicyError("Invalid runtime container suffix")
+        self.container_suffix = container_suffix
         self._temporary: tempfile.TemporaryDirectory[str] | None = None
         self._handle: ContainerHandle | None = None
         self._process: subprocess.Popen[bytes] | None = None
@@ -97,6 +102,23 @@ class ContainerCandidateRunner:
     @property
     def container_name(self) -> str | None:
         return self._handle.name if self._handle else None
+
+    def peak_memory_bytes(self) -> int:
+        """Read the kernel's cgroup-v2 peak, never a candidate-reported counter."""
+        if self._handle is None:
+            raise SecurityPolicyError("Candidate runner is not started")
+        result = self.engine._run(
+            [self.engine.executable, "exec", self._handle.container_id,
+             "/bin/cat", "/sys/fs/cgroup/memory.peak"],
+            timeout=10.0,
+        )
+        try:
+            value = int(result.stdout.strip())
+        except ValueError as exc:
+            raise SecurityPolicyError("A cgroup-v2 memory.peak counter is required") from exc
+        if value <= 0:
+            raise SecurityPolicyError("Invalid cgroup memory peak")
+        return value
 
     def _read_messages(self) -> None:
         assert self._process is not None and self._process.stdout is not None
@@ -162,6 +184,8 @@ class ContainerCandidateRunner:
         prepare_bind_source(dependencies, writable=False)
         short = self.attempt_id.replace("-", "")[:16]
         name = f"shinka-runtime-{short}"
+        if self.container_suffix:
+            name += f"-{self.container_suffix}"
         plan = ContainerPlan(
             name=name,
             image=self.image,

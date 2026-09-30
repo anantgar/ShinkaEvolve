@@ -58,6 +58,7 @@ class SecureJobConfig(JobConfig):
     dedicated_container_vm: bool = False
     sandbox_user: Optional[str] = None
     cpus: float = 2.0
+    cpu_set: Optional[str] = None
     memory_bytes: int = 2 * 1024 * 1024 * 1024
     pids: int = 128
     open_files: int = 1024
@@ -69,6 +70,14 @@ class SecureJobConfig(JobConfig):
     wall_timeout_seconds: Optional[float] = 28_800.0
     collection_timeout_seconds: float = 300.0
     cleanup_timeout_seconds: float = 120.0
+    backend: str = "local"
+    aws_region: Optional[str] = None
+    aws_bucket: Optional[str] = None
+    aws_queue_url: Optional[str] = None
+    aws_prefix: str = "shinka"
+    aws_poll_seconds: float = 5.0
+    aws_job_timeout_seconds: float = 7200.0
+    mutation_dependency_scope: str = "all"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -81,6 +90,7 @@ class SecureJobConfig(JobConfig):
             pids=self.pids,
             open_files=self.open_files,
             output_bytes=self.output_bytes,
+            cpu_set=self.cpu_set,
         )
 
     @property
@@ -101,6 +111,17 @@ def validate_secure_job_config(
     *,
     mutation_image: str | None,
 ) -> None:
+    if config.mutation_dependency_scope not in {"all", "runtime"}:
+        raise ConfigurationError("Mutation dependency scope must be 'all' or 'runtime'")
+    if config.backend not in {"local", "aws"}:
+        raise ConfigurationError("Secure job backend must be 'local' or 'aws'")
+    if config.backend == "aws":
+        if not all((config.aws_region, config.aws_bucket, config.aws_queue_url)):
+            raise ConfigurationError("AWS evaluation requires region, bucket and queue URL")
+        if not 1 <= config.aws_poll_seconds <= 60:
+            raise ConfigurationError("AWS polling interval must be 1–60 seconds")
+        if not 60 <= config.aws_job_timeout_seconds <= 39000:
+            raise ConfigurationError("AWS job timeout must be 60–39000 seconds")
     if not config.evaluator_repo_path:
         raise ConfigurationError("Secure mode requires job.evaluator_repo_path")
     if not config.candidate_command:
@@ -200,6 +221,15 @@ class SecureEvaluationScheduler:
         )
         self._handles: dict[str, SecureJobHandle] = {}
         self._run_id = Path(state_root).resolve().parent.name or "shinka-run"
+
+    @property
+    def mutation_dependency_artifact(self):
+        bundle = self.prepared.dependencies
+        return (
+            bundle.runtime_artifact
+            if self.config.mutation_dependency_scope == "runtime"
+            else bundle.artifact
+        )
 
     def _candidate_artifact(self, candidate_path: str):
         reference, _metadata = self.coordinator.artifacts.put_tree(

@@ -103,27 +103,34 @@ Integrated on current `main` and `codex/example-tasks` at `022cfff`.
 
 ### Stockfish NNUE
 
-Candidate branch: `codex/assess-shinkaevolve-for-nnue` at `2f0b627`, based on an
-old fork point.
+Implementation and scoring/visibility audit are on the fork's `main`. The earlier
+`codex/assess-shinkaevolve-for-nnue` at `2f0b627` is preserved as historical context.
 
 The scoped evaluator and campaign design is documented in
 [`stockfish_nnue_forward_path_plan.md`](stockfish_nnue_forward_path_plan.md).
 
-- [ ] Rebase or transplant only `examples/stockfish_nnue/**`, its focused test,
-      and a current README catalog link.
-- [ ] Split the old bundle into task/evaluator/replay, pinned preparation
-      tooling, evaluator tests, and documentation commits.
-- [ ] Keep the private corpus and evaluator outside the candidate artifact.
-- [ ] Convert private-corpus evaluation to secure mode.
-- [ ] Pin Stockfish/network preparation and all container images by immutable
+- [x] Implement the task against current SFNNv16, with focused tests and runbook.
+- [x] Keep the private corpus and evaluator outside the candidate artifact.
+- [x] Use secure containers for build, candidate and reference evaluation.
+- [x] Pin Stockfish/network preparation and require all container images by immutable
       digest.
-- [ ] Validate deterministic replay, malformed candidate output, correctness
+- [x] Validate deterministic replay, malformed candidate output, correctness
       gating, and resource limits.
-- [ ] Keep timing qualification serialized and machine-specific.
-- [ ] Do not clone Stockfish, download a network, generate private data, compile
-      the harness, or run an experiment as part of the rebase.
-- [ ] Merge the benchmark definition before running a separate, frozen
-      experiment campaign.
+- [x] Add AWS S3/SQS transport and a dedicated-worker deployment template.
+- [x] Run local A/A, known-slower and incorrect-output controls.
+- [x] Audit score math, every-sample timing limits, lazy accumulator paths,
+      private fixtures/dependencies and reference-container abort cleanup.
+- [x] Keep failed measurements out of the population and rewards; fail closed on
+      an unverified seed; preserve failed-job costs and seed-only runs on restart.
+- [x] Run baseline ASan/UBSan exact comparisons (36,312 values on the smoke corpus).
+- [ ] Qualify v2 controls and worker timing; the local v2 slow control and two
+      worker attempts were rejected for noise, so v2 is not yet frozen.
+- [ ] Select representative production PGNs and keep a separate finalist holdout.
+- [ ] Publish worker images/wheel, choose a pinned AMI and deploy the AWS canary.
+- [ ] Calibrate workload frequencies and noise on the chosen instance type;
+      freeze the production campaign before evolution.
+- [ ] Run a 5–10-candidate canary, then broader evolution and independent finalist
+      verification. No optimization or Elo improvement has been claimed yet.
 
 ## P1: Re-run The Circle-Packing Experiment
 

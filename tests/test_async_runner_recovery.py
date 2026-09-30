@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sqlite3
 import tempfile
 import time
 from pathlib import Path
@@ -296,6 +297,248 @@ def _build_runner(**overrides):
         "_get_text_embedding_async", _default_get_text_embedding_async
     )
     return runner
+
+
+@pytest.mark.parametrize(
+    "results",
+    [
+        None,
+        {},
+        {"job_failure": {"failure_class": "evaluator_failed", "private": "SECRET"}},
+        {"job_failure": {"failure_class": []}},
+        {"correct": {"correct": True}, "metrics": {}},
+        {"correct": {"correct": True}, "metrics": {"combined_score": float("nan")}},
+        {"correct": {"correct": True}, "metrics": {"combined_score": True}},
+        {"correct": {"correct": "true"}, "metrics": {"combined_score": 1.0}},
+    ],
+)
+def test_secure_measurement_failures_never_enter_selection(tmp_path, results):
+    async def _run():
+        database = _RecordingAsyncDB()
+        acknowledged = []
+        runner = _build_runner(
+            async_db=database,
+            scheduler=SimpleNamespace(
+                get_job_results_async=lambda *_args: asyncio.sleep(0, result=results),
+                acknowledge_persisted=acknowledged.append,
+            ),
+            total_api_cost=2.0,
+        )
+        runner.evaluation_mode = "secure"
+
+        async def forbidden_side_effects(_event):
+            pytest.fail("A failed measurement must not reward models or update prompts")
+
+        runner._apply_persisted_program_side_effects = forbidden_side_effects
+        job = AsyncRunningJob(
+            job_id="unmeasured",
+            repo_path="repo",
+            results_dir=str(tmp_path / "results"),
+            start_time=time.time(),
+            proposal_started_at=time.time(),
+            evaluation_submitted_at=time.time(),
+            generation=2,
+            evaluation_worker_id=1,
+            meta_patch_data={"api_costs": 0.25},
+        )
+        runner.submitted_jobs = {"unmeasured": job}
+        await runner._process_completed_jobs_safely([job])
+        assert database.programs == []
+        assert runner.submitted_jobs == {}
+        assert acknowledged == ["unmeasured"]
+        assert runner.total_api_cost == 2.0  # Already counted on submission.
+        assert runner.completed_generations == 0
+        assert runner.evaluation_slot_pool.released == [1]
+        assert runner.postprocess_slot_pool.released == [0]
+        event = database.attempt_events[0]
+        assert event["details"]["node_kind"] == "failed_evaluation"
+        assert event["details"]["source_job_id"] == "unmeasured"
+        text = (tmp_path / "results/evaluation_failure.json").read_text()
+        assert "SECRET" not in text
+        assert "combined_score" not in text
+        assert json.loads(text) == event["details"]
+
+    asyncio.run(_run())
+
+
+def test_secure_failure_is_not_acknowledged_until_durably_recorded(tmp_path):
+    async def _run():
+        async def unavailable_database(**_kwargs):
+            raise RuntimeError("database unavailable")
+
+        acknowledged = []
+        runner = _build_runner(
+            async_db=SimpleNamespace(record_attempt_event_async=unavailable_database),
+            scheduler=SimpleNamespace(
+                get_job_results_async=lambda *_args: asyncio.sleep(
+                    0, result={"job_failure": {"failure_class": "evaluator_failed"}}
+                ),
+                acknowledge_persisted=acknowledged.append,
+            ),
+        )
+        runner.evaluation_mode = "secure"
+        runner.MAX_DB_RETRY_ATTEMPTS = 3
+        job = AsyncRunningJob(
+            job_id="retry-record",
+            repo_path="repo",
+            results_dir=str(tmp_path),
+            start_time=time.time(),
+            proposal_started_at=time.time(),
+            evaluation_submitted_at=time.time(),
+            generation=2,
+        )
+        assert await runner._process_single_job_safely(job) is False
+        assert acknowledged == []
+        assert runner.failed_jobs_for_retry == {"retry-record": job}
+
+    asyncio.run(_run())
+
+
+@pytest.mark.parametrize("outcome", ["exception", "failed", "incorrect", "missing"])
+def test_secure_seed_requires_a_successful_correct_measurement(tmp_path, outcome):
+    async def _run():
+        def evaluate(*_args):
+            if outcome == "exception":
+                raise RuntimeError("worker disconnected")
+            if outcome == "failed":
+                return {"job_failure": {"failure_class": "evaluator_failed"}}, 0.0
+            if outcome == "missing":
+                return None, 0.0
+            return {"correct": {"correct": False}, "metrics": {"combined_score": 0.0}}, 1.0
+
+        async def forbidden_embedding(_text):
+            pytest.fail("An unverified seed must not reach embedding or selection")
+
+        database = _RecordingAsyncDB()
+        runner = _build_runner(
+            async_db=database,
+            scheduler=SimpleNamespace(run=evaluate),
+            results_dir=str(tmp_path),
+            _get_text_embedding_async=forbidden_embedding,
+        )
+        runner.evaluation_mode = "secure"
+        runner.repo_worktree_manager.initialize_seed_repo = lambda: "seed-commit"
+        runner._analyze_repository_complexity_async = lambda _path: asyncio.sleep(
+            0, result={}
+        )
+        with pytest.raises(RuntimeError, match="Secure seed evaluation failed"):
+            await runner._setup_initial_repo()
+        assert database.programs == []
+        assert runner.completed_generations == 0
+        assert list(tmp_path.glob("*/results/evaluation_failure.json"))
+
+    asyncio.run(_run())
+
+
+def test_valid_incorrect_secure_result_remains_a_rejected_candidate(tmp_path):
+    class RecordingDatabase(_RecordingAsyncDB):
+        async def add_program_async(self, program, **kwargs):
+            await super().add_program_async(program, **kwargs)
+            return True
+
+    async def _run():
+        database = RecordingDatabase()
+        runner = _build_runner(
+            async_db=database,
+            db_config=SimpleNamespace(num_islands=1, max_stdout_log_chars=100),
+            scheduler=SimpleNamespace(
+                get_job_results_async=lambda *_args: asyncio.sleep(
+                    0,
+                    result={
+                        "correct": {"correct": False},
+                        "metrics": {"combined_score": 0.0},
+                    },
+                )
+            ),
+        )
+        runner.evaluation_mode = "secure"
+        runner._record_oversubscription_timing_sample = lambda _metadata: None
+        job = AsyncRunningJob(
+            job_id="incorrect",
+            repo_path="repo",
+            results_dir=str(tmp_path),
+            start_time=time.time(),
+            proposal_started_at=time.time(),
+            evaluation_submitted_at=time.time(),
+            generation=2,
+        )
+        result = await runner._persist_completed_job(job)
+        assert result.success is True
+        assert result.persisted_event is not None
+        assert result.persisted_event.program.correct is False
+        assert result.persisted_event.program.combined_score == 0.0
+        assert len(database.programs) == 1
+        assert database.attempt_events == []
+
+    asyncio.run(_run())
+
+
+def test_resume_accounts_failed_measurement_cost_once_without_program(tmp_path):
+    path = tmp_path / "resume.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE programs (metadata TEXT)")
+        connection.execute(
+            "CREATE TABLE attempt_log (id INTEGER PRIMARY KEY, status TEXT, details TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO programs VALUES (?)",
+            (json.dumps({"source_job_id": "scored", "api_costs": 1.5}),),
+        )
+        for job_id in ("failed", "failed", "scored"):
+            connection.execute(
+                "INSERT INTO attempt_log (status, details) VALUES ('failed', ?)",
+                (json.dumps({
+                    "node_kind": "failed_evaluation",
+                    "source_job_id": job_id,
+                    "api_costs": 0.25,
+                    "embed_cost": 0.05,
+                    "novelty_cost": 0.05,
+                }),),
+            )
+    runner = _build_runner(db=SimpleNamespace(config=SimpleNamespace(db_path=str(path))))
+    assert asyncio.run(runner._get_total_api_costs()) == pytest.approx(1.85)
+
+
+def test_setup_resumes_when_only_seed_has_a_measured_result(tmp_path, monkeypatch):
+    import shinka.core.async_runner as module
+
+    async def _run():
+        database = SimpleNamespace(last_iteration=0)
+        async_database = _FakeAsyncDB(total_programs=1)
+        runner = _build_runner(
+            results_dir=str(tmp_path),
+            evo_config=SimpleNamespace(
+                num_generations=10,
+                embedding_model=None,
+                evolve_prompts=False,
+                wandb_run_id=None,
+            ),
+            wandb_logger=SimpleNamespace(start=lambda **_kwargs: None),
+        )
+        runner.console = None
+        runner.enable_deadlock_debugging = False
+        runner.minimum_request_demand = {}
+        calls = []
+        runner._get_total_api_costs = lambda: asyncio.sleep(0, result=2.5)
+        runner._load_bandit_state = lambda: calls.append("bandit")
+        runner._restore_resume_progress = lambda: asyncio.sleep(
+            0, result=calls.append("resume")
+        )
+        runner._log_wandb_population_progress = lambda: None
+
+        async def forbid_new_seed():
+            pytest.fail("A measured seed must not be recreated after failed evaluations")
+
+        runner._setup_initial_repo = forbid_new_seed
+        monkeypatch.setattr(module, "ProgramDatabase", lambda *_a, **_kw: database)
+        monkeypatch.setattr(module, "AsyncProgramDatabase", lambda *_a, **_kw: async_database)
+        monkeypatch.setattr(module, "ensure_wandb_run_id", lambda *_a: "existing")
+        monkeypatch.setattr(module, "write_run_manifest", lambda **_kw: None)
+        await runner._setup_async()
+        assert calls == ["bandit", "resume"]
+        assert runner.total_api_cost == 2.5
+
+    asyncio.run(_run())
 
 
 def test_restore_resume_progress_uses_actual_program_count():

@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any, Mapping, Sequence
 
-from .canonical import canonical_json_bytes, digest_json, validate_digest
+from .canonical import canonical_json_bytes, digest_json, sha256_bytes, validate_digest
 from .errors import ConfigurationError, FailureClass, ResultValidationError
 
 CONTRACT_SCHEMA_VERSION = "shinka-secure-contract-v1"
@@ -187,6 +187,7 @@ class ResourceLimits:
     pids: int
     open_files: int = 1024
     output_bytes: int = 64 * 1024 * 1024
+    cpu_set: str | None = None
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.cpus) or self.cpus <= 0:
@@ -195,6 +196,17 @@ class ResourceLimits:
             raise ConfigurationError("memory_bytes must be at least 64 MiB")
         if self.pids <= 0 or self.open_files <= 0 or self.output_bytes <= 0:
             raise ConfigurationError("PID, open-file, and output limits must be > 0")
+        if self.cpu_set is not None and not re.fullmatch(
+            r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*", self.cpu_set
+        ):
+            raise ConfigurationError("cpu_set must be a Docker CPU list, e.g. '2' or '2-3'")
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        # Preserve identities of persisted v1 jobs that predate CPU affinity.
+        if self.cpu_set is None:
+            payload.pop("cpu_set")
+        return payload
 
 
 @dataclass(frozen=True)
@@ -237,7 +249,7 @@ class EnvironmentContract:
 
     @property
     def digest(self) -> str:
-        return digest_json(asdict(self))
+        return digest_json({**asdict(self), "limits": self.limits.to_dict()})
 
 
 @dataclass(frozen=True)
@@ -290,10 +302,12 @@ class JobSpec:
 
     @property
     def digest(self) -> str:
-        return digest_json(asdict(self))
+        return sha256_bytes(self.to_json_bytes())
 
     def to_json_bytes(self) -> bytes:
-        return canonical_json_bytes(asdict(self))
+        return canonical_json_bytes(
+            {**asdict(self), "resources": self.resources.to_dict()}
+        )
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "JobSpec":

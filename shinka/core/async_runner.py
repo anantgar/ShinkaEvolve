@@ -97,6 +97,7 @@ from shinka.secure.configuration import (
     validate_secure_runtime_configuration,
 )
 from shinka.secure.sessions import ProposalSessionStore
+from shinka.secure.contracts import FailureClass
 
 logger = logging.getLogger(__name__)
 
@@ -637,7 +638,12 @@ class ShinkaEvolveRunner:
         if self.secure_runtime_settings is not None:
             assert isinstance(job_config, SecureJobConfig)
             assert evo_config.mutation_image is not None
-            self.scheduler = SecureEvaluationScheduler(
+            scheduler_class = SecureEvaluationScheduler
+            if job_config.backend == "aws":
+                from shinka.launch.aws import AwsSecureEvaluationScheduler
+
+                scheduler_class = AwsSecureEvaluationScheduler
+            self.scheduler = scheduler_class(
                 config=job_config,
                 state_root=str(self.secure_runtime_settings.state_root),
                 candidate_source=seed_repo_path,
@@ -651,7 +657,7 @@ class ShinkaEvolveRunner:
                 agent_omitted_paths=list(evo_config.agent_hidden_paths),
                 verbose=verbose,
             )
-            dependency_ref = self.scheduler.prepared.dependencies.artifact
+            dependency_ref = self.scheduler.mutation_dependency_artifact
             self.llm.headless_query_defaults[
                 "headless_mutation_dependency_artifact"
             ] = {
@@ -662,8 +668,9 @@ class ShinkaEvolveRunner:
             }
             logger.info(
                 "Secure evaluation mode enabled: candidate artifacts and "
-                "container boundaries are mandatory; the prepared dependency "
-                "bundle is available read-only to secure mutation agents"
+                "container boundaries are mandatory; the %s dependency "
+                "bundle is available read-only to secure mutation agents",
+                job_config.mutation_dependency_scope,
             )
         else:
             self.scheduler = JobScheduler(
@@ -987,7 +994,15 @@ class ShinkaEvolveRunner:
         memory_based_limit = max(1, int(memory_gb * 2))  # Conservative: 2 jobs per GB
 
         # Apply individual limits based on CPU and memory
-        max_evaluation_jobs = min(max_evaluation_jobs, cpu_count, memory_based_limit)
+        remote_evaluation = (
+            isinstance(self.job_config, SecureJobConfig)
+            and self.job_config.backend == "aws"
+        )
+        requested_remote_jobs = max_evaluation_jobs
+        max_evaluation_jobs = (
+            0 if remote_evaluation
+            else min(max_evaluation_jobs, cpu_count, memory_based_limit)
+        )
         max_proposal_jobs = min(
             max_proposal_jobs, max(1, cpu_count // 2), memory_based_limit // 2
         )
@@ -1019,7 +1034,10 @@ class ShinkaEvolveRunner:
             logger.info(f"   • CPU cores: {cpu_count}")
             logger.info(f"   • Memory: {memory_gb:.1f} GB")
             logger.info("🔧 Concurrency settings:")
-            logger.info(f"   • Evaluation jobs: {max_evaluation_jobs}")
+            if remote_evaluation:
+                logger.info(f"   • Remote evaluation jobs: {requested_remote_jobs}")
+            else:
+                logger.info(f"   • Evaluation jobs: {max_evaluation_jobs}")
             logger.info(f"   • Proposal jobs: {max_proposal_jobs}")
             logger.info(f"   • DB workers: {max_db_workers}")
             logger.info(
@@ -1036,6 +1054,8 @@ class ShinkaEvolveRunner:
                     f"⚠️  High concurrency settings may cause memory pressure (limit: {memory_based_limit})"
                 )
 
+        if remote_evaluation:
+            max_evaluation_jobs = requested_remote_jobs
         return max_evaluation_jobs, max_proposal_jobs, max_db_workers
 
     def _configure_local_job_runtime(self, cpu_count: int) -> None:
@@ -1074,11 +1094,14 @@ class ShinkaEvolveRunner:
                 rows = cursor.fetchall()
 
                 total_costs = 0.0
+                scored_job_ids = set()
                 for row in rows:
                     metadata_str = row[0]
                     if metadata_str:
                         try:
                             metadata = json.loads(metadata_str)
+                            if metadata.get("source_job_id"):
+                                scored_job_ids.add(str(metadata["source_job_id"]))
                             # Sum up all cost-related fields (handle None values)
                             api_cost = metadata.get("api_costs")
                             total_costs += api_cost if api_cost is not None else 0.0
@@ -1092,6 +1115,29 @@ class ShinkaEvolveRunner:
                             total_costs += meta_cost if meta_cost is not None else 0.0
                         except json.JSONDecodeError:
                             continue
+
+                # Failed measurements never produce Program rows, but their
+                # already-spent proposal costs must survive a restart. Repeated
+                # delivery/acknowledgement may append the same lifecycle event.
+                cursor.execute(
+                    """
+                    SELECT details FROM attempt_log
+                    WHERE status = 'failed' AND json_valid(details)
+                      AND json_extract(details, '$.node_kind') = 'failed_evaluation'
+                    ORDER BY id
+                    """
+                )
+                accounted_job_ids = set(scored_job_ids)
+                for (details,) in cursor.fetchall():
+                    failure = json.loads(details)
+                    job_id = str(failure["source_job_id"])
+                    if job_id in accounted_job_ids:
+                        continue
+                    accounted_job_ids.add(job_id)
+                    total_costs += sum(
+                        float(failure.get(key) or 0.0)
+                        for key in ("api_costs", "embed_cost", "novelty_cost")
+                    )
 
                 return total_costs
             finally:
@@ -1486,8 +1532,10 @@ class ShinkaEvolveRunner:
             results_dir=Path(self.results_dir),
         )
 
-        # Check if we're resuming from an existing database
-        resuming_run = db_path.exists() and self.db.last_iteration > 0
+        # A run with only generation 0 is still a resumable population. Secure
+        # measurement failures intentionally create no later Program rows.
+        program_count = await self.async_db.get_total_program_count_async()
+        resuming_run = program_count > 0
 
         # Load bandit state if resuming
         if resuming_run:
@@ -1495,7 +1543,6 @@ class ShinkaEvolveRunner:
             logger.info("RESUMING PREVIOUS ASYNC EVOLUTION RUN")
             logger.info("=" * 80)
             logger.info(f"Resuming from generation {self.db.last_iteration}")
-            program_count = await self.async_db.get_total_program_count_async()
             logger.info(f"Found {program_count} programs in database")
 
             # Load existing API costs from database
@@ -1935,6 +1982,31 @@ class ShinkaEvolveRunner:
             results = {"correct": {"correct": False}, "metrics": {}}
             rtime = 0.0
             evaluation_failed = True
+
+        if self.evaluation_mode == "secure":
+            failure_class = self._secure_result_failure(results)
+            if evaluation_failed or failure_class or not results["correct"]["correct"]:
+                # An unmeasured or incorrect seed cannot initialize selection.
+                failure_path = Path(results_dir) / "evaluation_failure.json"
+                await write_text_async(
+                    failure_path,
+                    json.dumps(
+                        {
+                            "node_kind": "failed_evaluation",
+                            "generation": 0,
+                            "failure_class": (
+                                "seed_evaluation_exception"
+                                if evaluation_failed
+                                else failure_class or "seed_incorrect"
+                            ),
+                        },
+                        sort_keys=True,
+                    ),
+                )
+                raise RuntimeError(
+                    "Secure seed evaluation failed; no fitness was recorded. "
+                    f"Inspect {failure_path} and the private evaluation diagnostics."
+                )
 
         summary_embedding, e_cost = await self._get_text_embedding_async(summary_text)
         if self.verbose and summary_embedding:
@@ -4291,6 +4363,72 @@ Required constraints:
             self.MAX_DB_RETRY_ATTEMPTS,
         )
 
+    @staticmethod
+    def _secure_result_failure(results: Any) -> Optional[str]:
+        """Do not turn missing, failed or malformed measurements into fitness."""
+        if not isinstance(results, dict) or not results:
+            return "missing_result"
+        if "job_failure" in results:
+            failure = results["job_failure"]
+            kind = failure.get("failure_class") if isinstance(failure, dict) else None
+            return (
+                kind
+                if isinstance(kind, str) and kind in {item.value for item in FailureClass}
+                else "evaluator_failed"
+            )
+        correctness = results.get("correct")
+        metrics = results.get("metrics")
+        if (
+            not isinstance(correctness, dict)
+            or type(correctness.get("correct")) is not bool
+            or not isinstance(metrics, dict)
+        ):
+            return "invalid_result"
+        score = metrics.get("combined_score")
+        if type(score) not in (float, int) or not math.isfinite(score):
+            return "invalid_result"
+        if not isinstance(metrics.get("public", {}), dict):
+            return "invalid_result"
+        if not isinstance(metrics.get("public_feedback", ""), str):
+            return "invalid_result"
+        return None
+
+    async def _persist_failed_evaluation(
+        self, job: AsyncRunningJob, failure_class: str
+    ) -> None:
+        """Keep an operator failure record outside selection and model rewards."""
+        payload = {
+            "node_kind": "failed_evaluation",
+            "source_job_id": str(job.job_id),
+            "generation": job.generation,
+            "failure_class": failure_class,
+            "parent_id": job.parent_id,
+            "individual_id": job.individual_id,
+            "repo_commit": job.repo_commit,
+            "api_costs": (job.meta_patch_data or {}).get("api_costs", 0.0),
+            "embed_cost": job.embed_cost,
+            "novelty_cost": job.novelty_cost,
+        }
+        output = Path(job.results_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        await write_text_async(
+            output / "evaluation_failure.json",
+            json.dumps(payload, sort_keys=True, allow_nan=False),
+        )
+        # Unlike best-effort debug logging, this must succeed before cleanup.
+        await self.async_db.record_attempt_event_async(
+            generation=job.generation,
+            stage="evaluation",
+            status="failed",
+            details=payload,
+        )
+        await self._acknowledge_persisted_evaluation(job.job_id)
+        logger.warning(
+            "Secure evaluation %s failed (%s); no Program or fitness recorded",
+            job.job_id,
+            failure_class,
+        )
+
     async def _persist_completed_job(
         self, job: AsyncRunningJob
     ) -> CompletedJobPersistResult:
@@ -4337,6 +4475,20 @@ Required constraints:
             postprocess_worker_id = await self.postprocess_slot_pool.acquire()
             db_workers_in_use_at_postprocess_start = self.postprocess_slot_pool.in_use
             postprocess_started_at = time.time()
+
+            if evaluation_mode == "secure":
+                failure_class = self._secure_result_failure(results)
+                if failure_class:
+                    try:
+                        await self._persist_failed_evaluation(job, failure_class)
+                    except Exception as exc:
+                        self._queue_failed_db_job(
+                            job,
+                            log_prefix="Failed to persist evaluation failure:",
+                            error_message=str(exc),
+                        )
+                        return CompletedJobPersistResult(job=job, success=False)
+                    return CompletedJobPersistResult(job=job, success=True)
 
             # Always create a program entry, even if results are missing
             if results:

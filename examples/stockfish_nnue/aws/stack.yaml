@@ -1,0 +1,224 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Dedicated Stockfish inference workers, private S3 artifacts and an SQS queue.
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets with outbound HTTPS access (NAT or suitable VPC endpoints).
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: Pinned Amazon Linux 2023 AMI matching the campaign architecture.
+  InstanceType:
+    Type: String
+    Default: c8g.2xlarge
+    AllowedValues: [c7g.2xlarge, c8g.2xlarge, c7i.2xlarge, c8i.2xlarge, c7a.2xlarge]
+  DesiredWorkers:
+    Type: Number
+    Default: 0
+    MinValue: 0
+  MaxWorkers:
+    Type: Number
+    Default: 64
+    MinValue: 1
+    MaxValue: 1000
+  WorkerWheelKey:
+    Type: String
+    Default: bootstrap/shinka_evolve-0.0.7-py3-none-any.whl
+    AllowedPattern: 'bootstrap/[A-Za-z0-9._/-]+\.whl'
+  WorkerWheelSha256:
+    Type: String
+    AllowedPattern: '[0-9a-f]{64}'
+  EcrRepositoryName:
+    Type: String
+    Default: shinka-stockfish-inference
+    AllowedPattern: '[a-z0-9][a-z0-9/_-]*'
+Conditions:
+  IntelWorker: !Or
+    - !Equals [!Ref InstanceType, c7i.2xlarge]
+    - !Equals [!Ref InstanceType, c8i.2xlarge]
+Resources:
+  Artifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ObjectOwnership: BucketOwnerEnforced}]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      VersioningConfiguration: {Status: Enabled}
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}
+  ArtifactPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Artifacts
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: [!GetAtt Artifacts.Arn, !Sub '${Artifacts.Arn}/*']
+            Condition: {Bool: {'aws:SecureTransport': 'false'}}
+  DeadLetters:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+  Jobs:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      SqsManagedSseEnabled: true
+      VisibilityTimeout: 120
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetters.Arn
+        maxReceiveCount: 3
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Policies:
+        - PolicyName: EvaluationWorker
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:ChangeMessageVisibility, sqs:GetQueueAttributes]
+                Resource: !GetAtt Jobs.Arn
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: [!Sub '${Artifacts.Arn}/bootstrap/*', !Sub '${Artifacts.Arn}/shinka/*']
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt Artifacts.Arn
+              - Effect: Allow
+                Action: [s3:PutObject, s3:AbortMultipartUpload]
+                Resource: [!Sub '${Artifacts.Arn}/shinka/objects/*', !Sub '${Artifacts.Arn}/shinka/jobs/*/result.json']
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: [ecr:BatchGetImage, ecr:GetDownloadUrlForLayer, ecr:BatchCheckLayerAvailability]
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryName}'
+  WorkerProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref WorkerRole]
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Outbound-only evaluation worker; administer through SSM.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
+        CpuOptions: !If
+          - IntelWorker
+          - {CoreCount: 4, ThreadsPerCore: 1}
+          - !Ref AWS::NoValue
+        IamInstanceProfile: {Arn: !GetAtt WorkerProfile.Arn}
+        SecurityGroupIds: [!Ref WorkerSecurityGroup]
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 1
+          HttpEndpoint: enabled
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs: {VolumeSize: 200, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true}
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+            dnf install -y docker python3.11 python3.11-pip
+            systemctl enable --now docker
+            install -d -m 700 /var/lib/shinka /opt/shinka-bootstrap
+            worker_wheel_name=$(basename '${WorkerWheelKey}')
+            aws s3 cp 's3://${Artifacts}/${WorkerWheelKey}' "/opt/shinka-bootstrap/$worker_wheel_name" --region '${AWS::Region}'
+            echo "${WorkerWheelSha256}  /opt/shinka-bootstrap/$worker_wheel_name" | sha256sum --check -
+            python3.11 -m venv /opt/shinka-worker
+            /opt/shinka-worker/bin/pip install "/opt/shinka-bootstrap/$worker_wheel_name"
+            /opt/shinka-worker/bin/pip freeze > /var/lib/shinka/worker-requirements.txt
+            cat > /etc/systemd/system/shinka-worker.service <<'UNIT'
+            [Unit]
+            Description=One isolated Stockfish evaluation per EC2 worker
+            After=docker.service network-online.target
+            Requires=docker.service
+            [Service]
+            Type=simple
+            ExecStart=/opt/shinka-worker/bin/python -m shinka.secure.aws_worker --region ${AWS::Region} --bucket ${Artifacts} --queue-url ${Jobs} --state-root /var/lib/shinka
+            Restart=on-failure
+            RestartSec=15
+            KillMode=control-group
+            TimeoutStopSec=30
+            Environment=PYTHONUNBUFFERED=1
+            Environment=SHINKA_WORKER_INSTANCE_TYPE=${InstanceType}
+            Environment=SHINKA_WORKER_AMI_ID=${AmiId}
+            Environment=SHINKA_WORKER_WHEEL_SHA256=${WorkerWheelSha256}
+            Environment=OMP_NUM_THREADS=1
+            Environment=OPENBLAS_NUM_THREADS=1
+            [Install]
+            WantedBy=multi-user.target
+            UNIT
+            systemctl daemon-reload
+            systemctl enable --now shinka-worker
+  Workers:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '0'
+      MaxSize: !Ref MaxWorkers
+      DesiredCapacity: !Ref DesiredWorkers
+      VPCZoneIdentifier: !Ref SubnetIds
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      Tags:
+        - Key: Name
+          Value: shinka-stockfish-inference
+          PropagateAtLaunch: true
+  DeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Some evaluations exhausted their worker retries.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions: [{Name: QueueName, Value: !GetAtt DeadLetters.QueueName}]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+Outputs:
+  Bucket: {Value: !Ref Artifacts}
+  QueueUrl: {Value: !Ref Jobs}
+  QueueArn: {Value: !GetAtt Jobs.Arn}
+  DeadLetterQueueUrl: {Value: !Ref DeadLetters}
+  AutoScalingGroup: {Value: !Ref Workers}

@@ -215,6 +215,8 @@ class ContainerPlan:
         ]
         if self.read_only_root:
             argv.append("--read-only")
+        if self.limits.cpu_set is not None:
+            argv.append(f"--cpuset-cpus={self.limits.cpu_set}")
         if self.stdin_open:
             argv.append("--interactive")
         argv.append(
@@ -577,6 +579,8 @@ class DockerEngine:
             raise SecurityPolicyError(
                 "Container CPU limit differs from the launch plan"
             )
+        if str(host.get("CpusetCpus") or "") != (plan.limits.cpu_set or ""):
+            raise SecurityPolicyError("Container CPU affinity differs from the plan")
         expected_ulimit = {("nofile", plan.limits.open_files, plan.limits.open_files)}
         actual_ulimit = {
             (str(item.get("Name")), int(item.get("Soft", 0)), int(item.get("Hard", 0)))
