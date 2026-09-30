@@ -1,0 +1,13 @@
+# id<TAB>FEN<TAB>space-separated UCI moves
+italian_castling	rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1	e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 f8c5 e1g1 e8g8
+queens_gambit	rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1	d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8 g1f3 b8d7
+sicilian_capture	rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1	e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6
+en_passant	8/8/8/3pP3/8/8/4K3/7k w - d6 0 1	e5d6 h1g2 d6d7 g2h3 d7d8q
+promotion_queen	8/P6k/8/8/8/8/7p/4K3 w - - 0 1	a7a8q h2h1q e1f2
+promotion_knight	8/P6k/8/8/8/8/8/4K3 w - - 0 1	a7a8n h7g7 a8c7
+promotion_rook	8/P6k/8/8/8/8/8/4K3 w - - 0 1	a7a8r h7g7 a8g8
+promotion_bishop	8/P6k/8/8/8/8/8/4K3 w - - 0 1	a7a8b h7g7 a8g2
+king_mirror_boundary	7k/8/8/8/8/8/P7/3K4 w - - 0 1	d1e1 h8g8 e1d1 g8h8 d1e1 h8g8
+rook_endgame	8/5pk1/6p1/3R4/8/6P1/5PK1/8 w - - 0 1	d5d7 g7f6 d7a7 f6e5 a7f7 e5d4
+minor_piece_endgame	8/5pk1/6p1/8/3N4/6P1/5PK1/8 w - - 0 1	d4b5 g7f6 b5d6 f6e5 d6f7 e5d4
+chess960_castling	4k3/8/8/8/8/8/8/RK5R w HA - 0 1	b1h1 e8d7 f1f7	1

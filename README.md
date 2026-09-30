@@ -110,6 +110,7 @@ For detailed installation instructions and usage examples, see the [Getting Star
 | ✨ [Novelty Generator](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/novelty_generator) | Generate creative, surprising outputs (e.g., ASCII art). | `LocalJobConfig` |
 | ∿ [Sine Approx Headless](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/sine_approx_headless) | Evolve a bounded sine approximation using Headless subscription-backed mutation calls. | `LocalJobConfig` |
 | 🧪 [Inference Pipeline Repo](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/inference_pipeline_repo) | Secure repo-mode candidate service with framed I/O and private evaluation. | `SecureJobConfig` |
+| ♟️ [Stockfish NNUE](examples/stockfish_nnue/README.md) | Exact NNUE implementation optimization, paired timing, and dedicated AWS evaluation workers. | `SecureJobConfig` (local/AWS) |
 | 🧭 [Repo TSP Pipeline](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/pipeline_tests/euclidean_tsp_repo) | Public repo-mode task with a simple `src/solver.py` seed. | `LocalJobConfig` |
 | 📚 [Paper Task Catalog](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/paper_tasks) | 31 independent AlphaEvolve and ShinkaEvolve task artifacts. | Task-local evaluator |
 | 🔭 [Open-Problem Catalog](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/open_problem_tasks) | Four independent construction and optimization tasks. | Task-local evaluator |
