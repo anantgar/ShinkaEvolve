@@ -132,12 +132,19 @@ The scoped evaluator and campaign design is documented in
       outputs scored zero; the slow control matched exact outputs but failed the
       noise gates and received no fitness. Terminate all three canaries and
       delete their temporary key pair and security group.
-- [ ] Qualify worker timing across independent process/worker blocks. Two of the
-      first three AWS workers fail the new per-workload A/A bias check, despite
-      passing aggregate bias and timing-noise gates. The slow control also failed
-      noise limits. Diagnose the cause and include variability across independent
-      blocks in uncertainty; the new rejection guard alone does not fix timing.
-      Do not evolve on this pool.
+- [x] Investigate timing on four additional Spot workers using independent
+      process blocks, kernel CPU counters, controlled allocations and whole-engine
+      profiling. Large pages fix a memory-context mismatch but leave residual
+      replay offsets. Archive/hash evidence and remove all four workers and
+      temporary access resources. See the
+      [profiling report](stockfish_timing_investigation_2026-09-30.md).
+- [ ] Implement and qualify a private, externally timed fixed-work full-engine
+      lane while keeping NNUE as the only mutable component. Three-host A/A
+      diagnostics were promising, but public `bench` controls are not a production
+      corpus. Use hidden representative positions, exact/output checks, fresh
+      process/worker blocks and predeclared gates; validate deliberate small
+      slowdowns and failure cases. The replay pool remains unqualified. Do not
+      evolve on it or relax gates to admit a favorable repeat.
 - [ ] Select representative production PGNs and keep a separate finalist holdout.
 - [x] Transfer pinned image/wheel/baseline to native EC2 canaries on a pinned AMI.
 - [ ] Deploy the S3/SQS stack and ECR images when the operator has the necessary

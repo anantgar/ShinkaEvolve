@@ -10,6 +10,14 @@ new campaign after the visibility/scoring audit; v1 campaigns must not be reused
 See the [evaluation audit](../../docs/stockfish_nnue_evaluation_audit.md) for the
 verification policy, known limits, instance choices and qualification requirements.
 
+**Production timing is not qualified.** AWS controls found stable offsets
+between identical replay programs that within-process error bars did not capture.
+Large pages corrected a memory-context mismatch but did not remove all offsets.
+Three-host, externally timed full-engine controls were more promising; a private
+production lane and its qualification remain to be implemented. Do not start
+evolution on the current replay pool. See the
+[completed timing investigation](../../docs/stockfish_timing_investigation_2026-09-30.md).
+
 The first target is Linux ARM with NEON dot product, suitable for a homogeneous
 Graviton pool. `--target avx2` prepares a separate x86 campaign. Build and evaluate
 on the target architecture; do not use QEMU timings. The native Apple build path
@@ -70,6 +78,22 @@ floor. Aggregate log-SE must be at most 0.002; individual workload log-SE at mos
 looser and cannot qualify a production pool.
 The 60/25/15 weights are provisional; measure baseline search workload frequencies
 and settle them before freezing a real campaign.
+
+The operator-only `diagnose.py` measures variation across fresh process pairs:
+
+```bash
+python -m examples.stockfish_nnue.diagnose \
+  --campaign /private/prepared-campaign \
+  --output /private/new-diagnostics --blocks 8 --pairs 6
+```
+
+Run it on a dedicated native Linux worker with Docker and access to kernel
+process/cgroup counters. Both roles use the same trusted artifact. Its fixed
+4096/2048/1024 workload pass counts and one-second probe floor are diagnostic
+settings, not portable calibration defaults. It never freezes a campaign or
+submits fitness. Keep outputs outside mutation snapshots; archive completed and
+failed attempts. The allocation options require the explicit diagnostic runtime
+artifacts described in the investigation report.
 
 **The authoritative time includes immutable make/undo, accumulator orchestration,
 checksum, allocation and a small protocol overhead.** It excludes parsing and

@@ -27,6 +27,18 @@ factor `s`, a first approximation to engine speedup is
 `1 / ((1 - f) + f/s)`. For example, `f=0.30, s=1.10` gives about 2.8% overall.
 This is an estimate, not an Elo conversion; confirm it with the unchanged search.
 
+**Measurement update, September 30:** the
+[four-worker Spot investigation](stockfish_timing_investigation_2026-09-30.md)
+found replay memory-context mismatches and substantial variation across fresh
+processes. Externally timed fixed-work searches gave tighter three-host A/A
+controls. A promising next version therefore keeps mutations restricted to NNUE
+but scores them through the full engine, using hidden positions, immutable
+search/weights, exact checks and independent process blocks. This still avoids
+per-individual game matches and does not require search coevolution. The current
+replay evaluator remains unqualified; the private full-engine lane is not yet
+implemented. Profiling identified combined accumulator updates, propagation and
+refresh-cache updates as the largest NNUE targets on our Graviton workload.
+
 ## Angles worth pursuing
 
 | Track | Shinka changes | Per-individual fitness | Main difficulty / AWS use |
