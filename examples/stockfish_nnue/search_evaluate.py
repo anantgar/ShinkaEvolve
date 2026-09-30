@@ -16,11 +16,13 @@ try:
     from .corpus import validate_traces
     from .evaluate import InvalidCandidate, check_exact, reference_runner
     from .policy import load_manifest
+    from .search_checkpoint import SearchCheckpoint
     from .search_scoring import score_search_blocks, search_measurement_rejection
 except ImportError:
     from corpus import validate_traces
     from evaluate import InvalidCandidate, check_exact, reference_runner
     from policy import load_manifest
+    from search_checkpoint import SearchCheckpoint
     from search_scoring import score_search_blocks, search_measurement_rejection
 
 MOVE = re.compile(r"[a-h][1-8][a-h][1-8][qrbn]?")
@@ -402,9 +404,7 @@ def evaluate(job, candidate_runner, private_inputs, result_writer) -> None:
         + settings.get("process_isolation", "paired"),
     }
 
-    def checkpoint(progress):
-        diagnostics["progress"] = progress
-        job.checkpoint(json.dumps(diagnostics, allow_nan=False).encode())
+    checkpoint = SearchCheckpoint(diagnostics, job.checkpoint)
 
     try:
         with result_writer.phase("exact_verification"):
@@ -494,6 +494,7 @@ def evaluate(job, candidate_runner, private_inputs, result_writer) -> None:
         )
     except InvalidCandidate as exc:
         diagnostics["rejection"] = str(exc)
+        checkpoint.flush()
         result_writer.add_private_artifact(
             json.dumps(diagnostics, allow_nan=False).encode(),
             kind="stockfish_measurements",
@@ -505,7 +506,7 @@ def evaluate(job, candidate_runner, private_inputs, result_writer) -> None:
         )
     except Exception as exc:
         diagnostics["failure"] = str(exc)
-        job.checkpoint(json.dumps(diagnostics, allow_nan=False).encode())
+        checkpoint.flush()
         raise SecureExecutionError(
             exc.failure_class
             if isinstance(exc, SecureExecutionError)

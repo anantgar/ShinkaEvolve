@@ -222,7 +222,7 @@ def prepare(args) -> None:
     for name in ("evaluate.py", "policy.py", "corpus.py", "scoring.py"):
         shutil.copyfile(HERE / name, evaluator / name)
     if full_search:
-        for name in ("search_evaluate.py", "search_scoring.py"):
+        for name in ("search_evaluate.py", "search_scoring.py", "search_checkpoint.py"):
             shutil.copyfile(HERE / name, evaluator / name)
         cases = corpus.get("search_cases", corpus["traces"][:12])
         validate_traces(cases)

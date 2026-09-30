@@ -58,6 +58,17 @@ no fitness. Private checkpoints preserve partial evidence. Finalists still need
 source review, sanitizers, fresh positions and independent confirmation; a
 four-generation pilot cannot establish a general Stockfish improvement.
 
+Checkpoints retain each distinct raw output once in a compressed, hash-checked
+catalog, with compact references from the timing records. Completed blocks are
+compacted once. Each snapshot is self-contained, including for failed AWS jobs;
+`decode_search_checkpoint` restores the raw evidence. Bulk checkpoint writes
+occur after timing, not between a process's warmup and timed request. Exception
+handlers force a final snapshot, including a failed warmup. This corrects the
+original recorder's repeated serialization of all earlier raw results. The
+timing index still grows with the declared block count; storage regression tests
+bound total writes at the 128-block pilot size. Full final diagnostics retain the
+original raw format. This recording fix must be qualified in a new campaign.
+
 ## Prepare and qualify
 
 Use dedicated native Linux hosts, a pinned compiler/runtime image and one
