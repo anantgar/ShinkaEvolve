@@ -1,0 +1,140 @@
+diff --git a/src/nnue/layers/affine_transform.h b/src/nnue/layers/affine_transform.h
+--- a/src/nnue/layers/affine_transform.h
++++ b/src/nnue/layers/affine_transform.h
+@@ -226,10 +226,10 @@
+         #define vec_add_dpbusd_32 SIMD::m128_add_dpbusd_epi32
+     #elif defined(USE_NEON_DOTPROD)
+             using vec_t = int32x4_t;
+-        #define vec_set_32 vdupq_n_s32
+-        #define vec_add_dpbusd_32(acc, a, b) \
+-            SIMD::dotprod_m128_add_dpbusd_epi32(acc, vreinterpretq_s8_s32(a), \
+-                                                vreinterpretq_s8_s32(b))
++        #define vec_set_32(value) vcombine_s32(vcreate_s32(u32(value)), vdup_n_s32(0))
++        #define vec_add_dpbusd_32(acc, inputValue, weightValue) \
++            acc = vdotq_lane_s32(acc, vreinterpretq_s8_s32(weightValue), \
++                                vreinterpret_s8_s32(vget_low_s32(inputValue)), 0)
+     #elif defined(USE_LASX)
+             using vec_t = __m256i;
+         #define vec_set_32 __lasx_xvreplgr2vr_w
+diff --git a/src/nnue/layers/affine_transform_sparse_input.h b/src/nnue/layers/affine_transform_sparse_input.h
+--- a/src/nnue/layers/affine_transform_sparse_input.h
++++ b/src/nnue/layers/affine_transform_sparse_input.h
+@@ -143,8 +143,9 @@
+     #elif defined(USE_NEON_DOTPROD)
+         using invec_t  = int8x16_t;
+         using outvec_t = int32x4_t;
+-        #define vec_set_32(a) vreinterpretq_s8_u32(vdupq_n_u32(a))
+-        #define vec_add_dpbusd_32 SIMD::dotprod_m128_add_dpbusd_epi32
++        #define vec_set_32(value) vcombine_s8(vcreate_s8(u32(value)), vdup_n_s8(0))
++        #define vec_add_dpbusd_32(acc, inputValue, weightValue) \
++            acc = vdotq_lane_s32(acc, weightValue, vget_low_s8(inputValue), 0)
+     #elif defined(USE_NEON)
+         using invec_t  = int8x16_t;
+         using outvec_t = int32x4_t;
+@@ -175,7 +176,7 @@
+         // If we're using high-latency dot product instructions, split the accumulators
+         // into separate dependency chains and merge at the end
+         constexpr IndexType NumRegs =
+-    #if (defined(USE_VNNI) && defined(USE_AVX512)) || defined(USE_NEON_DOTPROD)
++    #if defined(USE_VNNI) && defined(USE_AVX512)
+           3 * NumAccums;
+     #elif defined(USE_AVXVNNI)
+           2 * NumAccums;
+@@ -191,9 +192,6 @@
+     #if defined(USE_AVXVNNI)
+         for (IndexType k = NumAccums; k < NumRegs; ++k)
+             acc[k] = vec_set_32(0);
+-    #elif defined(USE_NEON_DOTPROD)
+-        for (IndexType k = NumAccums; k < NumRegs; ++k)
+-            acc[k] = vdupq_n_s32(0);
+     #endif
+ 
+         // convince GCC to not do weird pointer arithmetic in the following loops
+@@ -292,54 +290,6 @@
+                     vec_add_dpbusd_32(acc[l + NumAccums], in1, col1[l]);
+                 }
+             }
+-        #elif defined(USE_NEON_DOTPROD)
+-            while (bits)
+-            {
+-                const isize i0 = pop_lsb(bits);
+-                if (!bits)
+-                {
+-                    const invec_t in0  = vec_load_32(base_addr + i0 * sizeof(i32));
+-                    const auto    col0 = reinterpret_cast<const invec_t*>(
+-                      &weights_base[i0 * OutputDimensions * ChunkSize]);
+-                    for (IndexType l = 0; l < NumAccums; ++l)
+-                        vec_add_dpbusd_32(acc[l], in0, col0[l]);
+-                    break;
+-                }
+-
+-                const isize i1 = pop_lsb(bits);
+-                if (!bits)
+-                {
+-                    const invec_t in0  = vec_load_32(base_addr + i0 * sizeof(i32));
+-                    const invec_t in1  = vec_load_32(base_addr + i1 * sizeof(i32));
+-                    const auto    col0 = reinterpret_cast<const invec_t*>(
+-                      &weights_base[i0 * OutputDimensions * ChunkSize]);
+-                    const auto col1 = reinterpret_cast<const invec_t*>(
+-                      &weights_base[i1 * OutputDimensions * ChunkSize]);
+-                    for (IndexType l = 0; l < NumAccums; ++l)
+-                    {
+-                        vec_add_dpbusd_32(acc[l], in0, col0[l]);
+-                        vec_add_dpbusd_32(acc[l + NumAccums], in1, col1[l]);
+-                    }
+-                    break;
+-                }
+-
+-                const isize   i2   = pop_lsb(bits);
+-                const invec_t in0  = vec_load_32(base_addr + i0 * sizeof(i32));
+-                const invec_t in1  = vec_load_32(base_addr + i1 * sizeof(i32));
+-                const invec_t in2  = vec_load_32(base_addr + i2 * sizeof(i32));
+-                const auto    col0 = reinterpret_cast<const invec_t*>(
+-                  &weights_base[i0 * OutputDimensions * ChunkSize]);
+-                const auto col1 = reinterpret_cast<const invec_t*>(
+-                  &weights_base[i1 * OutputDimensions * ChunkSize]);
+-                const auto col2 = reinterpret_cast<const invec_t*>(
+-                  &weights_base[i2 * OutputDimensions * ChunkSize]);
+-                for (IndexType l = 0; l < NumAccums; ++l)
+-                {
+-                    vec_add_dpbusd_32(acc[l], in0, col0[l]);
+-                    vec_add_dpbusd_32(acc[l + NumAccums], in1, col1[l]);
+-                    vec_add_dpbusd_32(acc[l + 2 * NumAccums], in2, col2[l]);
+-                }
+-            }
+         #else
+             while (bits)
+             {
+@@ -363,9 +313,6 @@
+         #if defined(USE_AVXVNNI)
+         for (IndexType l = 0; l < NumAccums; ++l)
+             acc[l] = vec_add_32(acc[l], acc[l + NumAccums]);
+-        #elif defined(USE_NEON_DOTPROD)
+-        for (IndexType l = 0; l < NumAccums; ++l)
+-            acc[l] = vaddq_s32(vaddq_s32(acc[l], acc[l + NumAccums]), acc[l + 2 * NumAccums]);
+         #endif
+     #endif
+         outvec_t* outptr = reinterpret_cast<outvec_t*>(output);
+diff --git a/src/nnue/nnue_accumulator.cpp b/src/nnue/nnue_accumulator.cpp
+--- a/src/nnue/nnue_accumulator.cpp
++++ b/src/nnue/nnue_accumulator.cpp
+@@ -387,6 +387,9 @@
+     {
+         auto* column =
+           reinterpret_cast<const vec_i8_t*>(&ft.threatAndPpWeights[list[i] * Dimensions + j]);
++    #if defined(USE_NEON) && defined(__GNUC__) && !defined(__clang__)
++        asm("" : "+r"(column));
++    #endif
+     #ifdef USE_NEON
+         for (IndexType k = 0; k < Tiling::NumRegs; k += 2)
+         {
+@@ -432,6 +435,9 @@
+ template<int sign>
+ sf_always_inline Tile apply(IndexType j, Tile acc, const i16* data) {
+     const auto* column = reinterpret_cast<const vec_t*>(data + j);
++    #if defined(USE_NEON) && defined(__GNUC__) && !defined(__clang__)
++    asm("" : "+r"(column));
++    #endif
+     for (IndexType k = 0; k < Tiling::NumRegs; ++k)
+         if constexpr (sign == +1)
+             acc[k] = vec_add_16(acc[k], column[k]);

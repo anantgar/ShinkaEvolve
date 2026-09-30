@@ -1,11 +1,11 @@
 # Private NNUE search pilot — September 30, 2026
 
-Status at 11:44 UTC: the system is implemented and fresh AWS qualification is
-running after correcting checkpoint storage.
-No evolutionary candidate or Stockfish speed improvement has been claimed.
+The authorized four-proposal pilot completed at **20:35 UTC**. One candidate
+passed and measured a promising gain on the pilot corpus; independent validation
+is running. No general Stockfish speed or Elo improvement has been established.
 Application code is on `codex/stockfish-inference-aws`. The initial private-search
 implementation is commit `1aedbc8`; the deployed recording fix is **`2bd9b98`**.
-Fork main remains `340bc74`.
+The universal manifest recording fix is **`b3ff0d7`**. Fork main remains `340bc74`.
 
 ## Contract and verification
 
@@ -26,7 +26,8 @@ Fork main remains `340bc74`.
   Wrong output gets zero fitness; excessive noise or infrastructure failure
   produces no fitness. All samples and failures are retained.
 
-Local validation: **895 passed, 3 skipped**, plus clean Ruff and diff checks.
+Local validation: **901 passed, 3 skipped**, including the fake Headless CLI
+end-to-end test, plus clean Ruff and diff checks.
 Native seed ASan/UBSan verification passed **81,124 exact values** and **12 fixed
 depth-11 searches**. Release A/A controls each checked **162,048 exact values**.
 
@@ -47,10 +48,20 @@ requires the entire two-sided 95% interval to fit inside ±0.003 log speedup.
 | Paired, 24 blocks | Replication | 0.997467 | 0.993904–1.001043 | Failed equivalence |
 | Sequential ABBA, 24 blocks | Primary | 1.003153 | 1.000147–1.006168 | Failed equivalence |
 | Sequential ABBA, 24 blocks | Replication | 0.999698 | 0.996490–1.002917 | Failed equivalence |
+| Compact sequential ABBA, 128 blocks | Primary | 0.998752 | 0.997638–0.999867 | Passed equivalence |
+| Compact sequential ABBA, 128 blocks | Replication | 1.000402 | 0.999187–1.001618 | Passed equivalence |
 
-Neither campaign qualified. The initial primary mild control was cancelled after
+Neither 24-block campaign qualified. The initial primary mild control was cancelled after
 the replication failed; concurrent evidence archival also invalidated that
 partial timing. It cannot be used as a performance observation.
+
+The complete compact 128-block campaign qualified. The mild and gross slowdown
+controls measured 0.909237× and 0.229725× geometric speedup, respectively, and the
+wrong-output control received zero fitness. Correct controls each matched
+162,048 exact values. All fixed-budget samples were retained. The mild control
+is roughly a 9% throughput reduction; it does not directly validate detection of
+tiny gains. A/A equivalence permits small residual offsets, so independent
+holdouts remain necessary before claiming a candidate speed improvement.
 
 A diagnostic with GC callbacks measured pauses no longer than **1.34 ms**.
 The largest slow requests had no overlapping GC. A separate GC-disabled host
@@ -81,7 +92,8 @@ snapshot of **160,171 bytes**. An actual interrupted checkpoint shrank from
 
 The new `campaign-compact128` started at **11:42 UTC**. Both workers passed the
 162,048-value exact checker and entered timing with the compact format; their
-first live checkpoints were about 13 KB. A/A qualification has not finished.
+first live checkpoints were about 13 KB. Both A/A qualifications and the remaining
+controls subsequently passed.
 The campaign uses **128 process blocks**, with all correctness, minimum
 duration, standard-error and equivalence gates unchanged. The work is frozen at
 eight passes through twelve private positions per request, depth 13, one search
@@ -90,11 +102,12 @@ thread and 16 MiB hash. It uses the same pinned Graviton compiler/runtime image.
 The larger budget is intended to estimate across-process variation more precisely.
 It is not a successful rerun selected from repeated attempts: the old failures
 remain evidence, the sample count was fixed before collecting new data, and there
-is no interim significance stopping. Whether it qualifies remains unknown.
+is no interim significance stopping. This campaign passed its declared gates;
+the effect of the checkpoint fix on previous noise is not isolated by this result.
 
 Both preselected workers run A/A first. After both pass, the primary runs mild
 and gross deliberate slowdowns and an incorrect-output control. The remaining
-controls must pass before the campaign is frozen. Replication is transferred
+controls passed before the campaign was frozen. Replication was transferred
 only while the primary is between measurement jobs. Nothing builds, mutates,
 archives large trees or copies large evidence files during scored timing.
 
@@ -104,6 +117,83 @@ slot. Failed proposals can leave fewer measured individuals. It has no auxiliary
 model calls and a 20-minute proposal timeout. The larger timing budget means this
 is now a multi-hour pilot. Do not change a frozen evaluator to make it finish sooner.
 
+## Startup failure and bounded continuation
+
+At 15:50 UTC, after qualification and a fresh successful secure provider canary,
+the launcher failed while recording framework provenance. On the installed
+worker, `git rev-parse` returned an error that the manifest writer treated as a
+directory path. The failed invocation is diagnostic: no proposal, program or
+evaluation job had been created. Its logs and databases are preserved alongside
+the complete controls in two downloaded, SHA-256-verified archives.
+
+Commit `b3ff0d7` fixes this universal metadata problem and adds regression tests
+for non-Git installations, unavailable commands, timeouts, clean checkouts and
+complete dirty-state hashing. The replacement worker wheel differs only in
+`shinka/run_manifest.py` and its wheel RECORD. Its SHA-256 is
+`b2fa889397d12c4b6f73c7d327babf1e9a6d702ef986dce727b47548ec61d84b`.
+The installed-worker smoke test passed. The private evaluation identity was
+verified unchanged before and after installation:
+`52f6f05ef9694d5301e951335275dfdd13ac30e6ee1b6bfe25d348bfbca20a84`.
+
+At 17:54 UTC the same results directory continued with the identical config and
+five total proposal IDs. `workflow-mini-recovery.json` records its completion at
+20:35 UTC. Both original controllers are retained as evidence and must not be
+rerun. This continuation does not authorize another evolution batch.
+
+## Pilot outcomes and independent validation
+
+| Generation | Outcome | Geometric speedup | Lower-bound fitness |
+| --- | --- | ---: | ---: |
+| 0 | Correct seed | 1.000758 | 0.999564 |
+| 1 | Build failed | — | None |
+| 2 | Proposal timed out after 20 minutes | — | None |
+| 3 | Correct candidate | 1.023302 | 1.022015 |
+| 4 | Agent process failed | — | None |
+
+The fixed four-proposal budget ended with two measured programs and three failed
+attempts; no extra proposals replaced failures. Both measured programs passed
+162,048 exact comparisons and all private fixed-search fingerprints over all 128
+process blocks. Generation 3's 2.33% geometric speedup has a one-sided 95% lower
+bound of 2.20%. These observations apply to the pilot corpus and pinned Graviton
+environment. Recorded model cost is $16.755375; missing usage on failed routes
+means this is not necessarily the complete provider bill.
+
+The reviewed candidate changes exactly three NNUE files: ARM lane SDOT instead
+of broadcasted inputs, one sparse-layer accumulator bank instead of three, and
+empty GCC/NEON assembly constraints that materialize weight-column pointers.
+All other source files are byte-identical. No weights, search, test, timing,
+compiler flags or interfaces changed. The
+[saved patch](../examples/stockfish_nnue/candidates/pilot_gen3_neon.patch) applies
+to the frozen seed and reconstructs all 80 candidate files exactly. Candidate
+digest: `sha256:6974a34e351f55d2d4bb9bc15abe34df9f5608a320a9c969be265c34aaa76fe6`.
+The complete run archive, including failed attempts, was downloaded and verified
+before finalist validation.
+
+The separate `campaign-finalist-holdout128` is **validation only**. Its predeclared
+corpus seed 2026100101 produces 24 traces and twelve private search positions,
+verified disjoint from the pilot positions. It uses the same evaluator code,
+128-block budget and gates, and the candidate artifact is fixed. Reference work
+calibration chose eight passes with a 2.106-second probe. These synthetic positions
+provide an independent pilot holdout, not a representative production benchmark.
+
+Worker 1 runs candidate ASan/UBSan, then independent A/A. Worker 2 runs all four
+controls. The collector transfers replication only after worker 2 finishes timing
+and waits between jobs. Only if both workers qualify and sanitizers pass does
+worker 2 freeze this validation campaign and evaluate the selected candidate
+once. Failed controls or measurements are retained; none may be repeated until
+favorable. No additional mutation batch runs. Validation identity:
+`046976f9b1bd8277b73a1b5c1110a2e20e512d17e5fd1371868f15539273a7f8`.
+
+At 21:02 UTC, the selected candidate passed **ASan/UBSan, 82,016 exact values,
+and twelve depth-11 searches** on the fresh fixtures. Both holdout A/A jobs passed
+163,824 release exact comparisons and entered their full timing budgets. Holdout
+qualification and the independent candidate timing result remain pending.
+
+The preserved generation-1 build diagnostic contains only a generic build error;
+generation 4 likewise lacks the underlying agent-process cause. Better private
+stderr retention is a follow-up before another batch. Neither failure received
+fitness or was replaced by an extra proposal.
+
 ## AWS and monitoring
 
 The two live workers are Spot `c8g.2xlarge` instances in `us-east-1f`:
@@ -111,7 +201,8 @@ The two live workers are Spot `c8g.2xlarge` instances in `us-east-1f`:
 inference optimization. Controllers run as UID 65532 outside measurement core 2.
 Each runtime container is restricted to core 2, with network disabled and a
 4 GiB memory limit. Each instance terminates on its scheduled shutdown at
-**22:10 UTC** unless active authorized work requires a deliberate extension.
+**05:47 UTC October 1**, extended from 22:10 UTC September 30 to finish the
+authorized continuation. Clean up sooner once evidence is preserved and the run ends.
 
 Bare-metal Spot requests failed on capacity/quota. On-demand bare metal exceeded
 the 32-vCPU quota. EC2 also rejected small dedicated-tenancy instances, requiring
@@ -130,8 +221,10 @@ operator entry points are:
 ```text
 examples/stockfish_nnue/.work/aws-search-mini-20260930/state.json
 examples/stockfish_nnue/.work/aws-search-mini-20260930/OPERATOR.md
-/home/ec2-user/shinka/workflow-compact128.json
-/home/ec2-user/shinka/workflow-compact128.log
+/home/ec2-user/shinka/finalist-replication.json       # worker 1
+/home/ec2-user/shinka/finalist-replication.py.log     # worker 1
+/home/ec2-user/shinka/finalist-validation.json        # worker 2
+/home/ec2-user/shinka/finalist-validation.py.log      # worker 2
 ```
 
 Before cleanup, preserve the full control and candidate evidence, verify archive
