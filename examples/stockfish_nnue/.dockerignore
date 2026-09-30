@@ -1,7 +1,0 @@
-*
-!Dockerfile
-!build.py
-!policy.py
-!seed.py
-!harness/
-!harness/**

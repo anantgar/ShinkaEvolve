@@ -194,8 +194,11 @@ CLIs require Node. The mutation container has no general package-download path.
 Use `SecureJobConfig.dependency_manifest_path` to provide user-defined Python
 dependencies. During trusted preparation Shinka accepts only `https://` (from
 the configured `dependency_https_hosts`) or local `file://` artifacts, verifies
-their declared SHA-256, and stores a content-addressed bundle. The complete
-bundle is then mounted read-only at `/dependencies` for secure mutation, with:
+their declared SHA-256, and stores a content-addressed bundle. By default the
+complete bundle is mounted read-only at `/dependencies` for secure mutation.
+Set `job.mutation_dependency_scope: runtime` to expose only dependencies marked
+`runtime: true`; build-only artifacts then remain outside the mutation container.
+The environment includes:
 
 | Variable | Value |
 | --- | --- |
@@ -219,6 +222,10 @@ The agent may create a venv in writable `/tmp` and install from the bundle with
 All transitive wheels and build requirements must be declared. Use a custom
 digest-pinned mutation image for OS-level packages or tools that cannot be
 provided as bundle artifacts.
+
+Secure jobs can run locally or on dedicated AWS workers. See
+[secure AWS evaluation](secure_aws_evaluation.md) for the generic transport,
+resource controls and failure semantics.
 
 ### DatabaseConfig (`shinka.database.DatabaseConfig`)
 

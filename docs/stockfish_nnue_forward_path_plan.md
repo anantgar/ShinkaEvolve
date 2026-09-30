@@ -2,22 +2,12 @@
 
 ## Goal
 
-Evolve only Stockfish's NNUE evaluation path for lower latency on a fixed CPU
-while preserving every NNUE output exactly. Relevant Stockfish engine source is
-visible to the agent, with tests and benchmark implementations withheld. Search,
-move generation, threading, UCI, build logic, weights and interfaces are immutable.
+Evolve only Stockfish's NNUE evaluation path for lower Apple Silicon latency
+while preserving every NNUE output exactly. The complete Stockfish source tree
+may be visible to the agent, but search, move generation, threading, UCI, build
+logic, network weights, and the evaluator remain immutable.
 
 This experiment does not optimize tree search or claim an Elo improvement.
-
-Implementation, 2026-09-30: [`examples/stockfish_nnue`](../examples/stockfish_nnue/README.md)
-now provides preparation, exact replay, secure evaluation, calibration and AWS
-submission. The first AWS target is Graviton/Linux ARM; x86 AVX2 is a separate
-campaign, and native Apple builds remain useful for harness development. See
-[`stockfish_shinka_research_options.md`](stockfish_shinka_research_options.md)
-for training and search alternatives. The operational runbook supersedes earlier
-prototype assumptions below where explicitly noted.
-The [evaluation audit](stockfish_nnue_evaluation_audit.md) records the v2 changes
-and production qualification requirements.
 
 ## Mutation boundary
 
@@ -39,10 +29,9 @@ the reviewed allowlist before compiling a candidate.
 ## Evaluation corpus
 
 Use deterministic traces derived from real games rather than a bag of random
-independent positions. Keep development, fitness and final-confirmation datasets
-separate and outside mutation containers. Pin the source, generation code, seed
-and digest of each corpus. The importer's legacy `public.json` name does not
-make that split visible to the mutation agent.
+independent positions. Split them into a small public development corpus and a
+much larger sealed holdout. Pin the source, generation code, seed, and digest of
+each corpus.
 
 The corpus should cover openings, middlegames, endgames, captures, quiet moves,
 castling, en passant, promotions, checks, king moves, and materially different
@@ -59,13 +48,9 @@ anti-memoization control, but they are not the primary timing workload.
 
 ## Benchmark workloads
 
-Exclude process startup, network loading, FEN parsing and move parsing from
-fitness timing. Warm the executable and network pages equally before paired
-measurements. The implemented authoritative clock is outside the candidate
-process, so scored replay requests include immutable make/undo, accumulator
-orchestration, checksums and protocol overhead. This deliberately replaces the
-prototype's candidate-reported kernel time as the fitness authority. Per-call
-timers have been removed. Replay gains require full-engine confirmation.
+Exclude process startup, network loading, FEN parsing, move parsing, and move
+application from fitness timing. Warm the executable and network pages equally
+before paired measurements.
 
 1. **Warm incremental:** retain the production accumulator stack and caches
    while replaying consecutive and branch-shaped traces. This is the primary
@@ -74,7 +59,8 @@ timers have been removed. Replay gains require full-engine confirmation.
    position and measure a production refresh. The process and network weights
    remain warm, so this measures NNUE work rather than executable startup.
 3. **Hot reuse:** evaluate an already-computed accumulator repeatedly. This
-   emphasizes the layer propagation path while keeping protocol overhead small.
+   isolates the layer-propagation-heavy path and reduces timer overhead through
+   batching.
 
 Use provisional fitness weights of 60% warm incremental, 25% cold accumulator,
 and 15% hot reuse. Before freezing the benchmark, instrument an immutable
@@ -85,29 +71,28 @@ match observed production frequencies. Do not change them during a campaign.
 
 A candidate receives no timing fitness unless it passes all correctness checks:
 
-- exact raw NNUE outputs at every private checkpoint;
-- eager and lazy incremental output equal to a fresh accumulator/cache refresh;
+- exact raw NNUE outputs at every public and private checkpoint;
+- incremental output equal to a fresh accumulator/cache refresh;
 - exact restoration after make/undo/redo and sibling traversal;
 - identical results after corpus reordering and repeated execution;
 - deterministic behavior with clean and retained cache state;
-- no build, resource, or mutation-policy failure.
+- thread-safety checks if the mutable code introduces shared state; and
+- no build, sanitizer, resource, or mutation-policy failure.
 
 Also compare Stockfish's final static evaluation as an integration guard, but
 do not time or evolve tree search.
-Finalist qualification adds sanitizers, independent holdouts and full-engine
-verification. New shared mutable state also requires explicit concurrency testing.
 
 ## Timing and fitness
 
 For each workload shard, baseline and candidate execute the identical ordered
-trace with the same number of NNUE calls. Record the **externally measured total
-replay duration** and the call count.
+trace with the same number of NNUE calls. Record the **total time spent inside
+the NNUE evaluation boundary** and the call count.
 
 Use total time for comparison, not the arithmetic mean of per-position ratios:
 
 ```text
-workload_speedup = baseline_replay_seconds / candidate_replay_seconds
-replay_ns_per_call = replay_seconds * 1e9 / call_count
+workload_speedup = baseline_total_nnue_ns / candidate_total_nnue_ns
+reported_ns_per_call = total_nnue_ns / call_count
 ```
 
 Total time correctly preserves the cost of expensive and inexpensive positions
@@ -131,9 +116,8 @@ baseline calibration. Do not subtract estimated clock overhead; use identical
 instrumentation and sufficiently long samples so it cancels in paired ratios.
 
 Reject material network, accumulator, cache, binary-size, or RSS growth. Hidden
-traces, reordered runs, memory limits and multiple workload types reduce the
-opportunity for corpus-specific output memoization. They do not prove its absence;
-review finalist diffs and validate on untouched positions and full-engine work.
+traces, reordered runs, memory limits, and multiple workload types must prevent
+corpus-specific output memoization from becoming a valid optimization.
 
 ## Evaluator structure
 
@@ -143,7 +127,7 @@ Keep four separately reviewable components:
 2. trusted preparation tooling for the source, NNUE network, toolchain, and
    immutable baseline;
 3. sealed replay/evaluator code and private trace corpus; and
-4. public task documentation and policy, with operator-only evaluator tests.
+4. public task documentation, policy, and focused evaluator tests.
 
 Run generated code without provider credentials, general network access, a
 Docker socket, or writable host mounts. Record the Stockfish commit, network
@@ -152,27 +136,26 @@ resource limits, and corpus digests with every result.
 
 ## Completion plan
 
-- [x] Implement the task on current secure Shinka contracts, preserving unrelated
-      branch history.
-- [x] Select and pin a current Stockfish development commit and matching NNUE
+- [ ] Transplant only the parked Stockfish task and focused tests onto current
+      Shinka contracts; keep unrelated branch history out.
+- [ ] Select and pin a current Stockfish development commit and matching NNUE
       network before adapting the harness.
-- [x] Finalize the mutable file allowlist and reject all other paths.
-- [x] Implement PGN splitting and linear/branch/cold/hot replay plus public smoke cases.
-- [ ] Select production PGNs and a separate untouched finalist corpus.
-- [x] Implement exact-output replay and externally timed workload measurement.
-- [x] Add focused policy/statistics/transport tests and real container integration.
-- [x] Verify the unchanged seed and separately rebuilt baseline are identical.
-- [x] Run local A/A, deliberately slower and incorrect-output controls.
-- [ ] Repeat calibration on production AWS hardware; freeze workload frequencies,
-      duration, repetitions and promotion threshold before evolution.
-- [ ] Review and integrate the implementation before the evolutionary campaign.
+- [ ] Finalize the mutable file allowlist and prove all other paths are rejected.
+- [ ] Build the real-game linear, branch, cold, hot, public, and sealed corpora.
+- [ ] Implement exact-output replay and total-time workload measurement.
+- [ ] Add unit tests for parsing/statistics and integration tests for replay,
+      illegal changes, malformed output, failures, timeouts, and memory limits.
+- [ ] Verify the unchanged seed and separately rebuilt baseline are identical.
+- [ ] Run repeated baseline-versus-baseline and deliberately slower-candidate
+      calibration; freeze weights, shard duration, repetitions, and promotion
+      threshold from those results.
+- [ ] Merge the benchmark definition before preparing campaign artifacts.
 - [ ] Run a 5–10 evaluated-candidate canary without framework edits.
 - [ ] Run the frozen full campaign with one timing evaluator at a time.
 - [ ] Recheck finalists on the sealed corpus in at least three fresh runs, then
       validate sanitizers, production-equivalent PGO/LTO, and non-target ISA
       compilation before claiming an improvement.
 
-Use the local M2 for development smoke tests. The selected initial production
-path is a homogeneous Graviton/Linux pool. Other instance families and a native
-M2 campaign require separate calibration and result populations; do not mix their
-scores. The fitness machine class and toolchain remain fixed within a campaign.
+Use the local M2 for development and calibration. Choose a quiet local campaign
+or a clean AWS M2 Mac only after calibration reveals the runtime and noise; the
+fitness machine and toolchain must remain unchanged within a campaign.

@@ -50,7 +50,6 @@ dependencies = [
 
 [project.optional-dependencies]
 wandb = ["wandb"]
-stockfish = ["python-chess>=1.999,<2"]
 
 [project.scripts]
 shinka_headless_docker = "shinka.llm.providers.headless_docker:main"
@@ -87,7 +86,6 @@ shinka = [
 dev = [
     "pytest>=6.0",
     "pytest-cov",
-    "python-chess>=1.999,<2",
     "ruff",
     "mypy",
     "black",
