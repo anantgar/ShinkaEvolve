@@ -1,10 +1,10 @@
 # Private NNUE search pilot — September 30, 2026
 
-Status at 11:34 UTC: the system is implemented; qualification is being restarted
-after correcting checkpoint storage.
+Status at 11:44 UTC: the system is implemented and fresh AWS qualification is
+running after correcting checkpoint storage.
 No evolutionary candidate or Stockfish speed improvement has been claimed.
 Application code is on `codex/stockfish-inference-aws`. The initial private-search
-implementation is commit `1aedbc8`; this report also covers its recording fix.
+implementation is commit `1aedbc8`; the deployed recording fix is **`2bd9b98`**.
 Fork main remains `340bc74`.
 
 ## Contract and verification
@@ -79,7 +79,10 @@ Regression tests cover recovery, corruption and timing boundaries. A synthetic
 snapshot of **160,171 bytes**. An actual interrupted checkpoint shrank from
 **3,726,884 to 40,273 bytes** and recovered every raw value exactly.
 
-The new `campaign-compact128` uses **128 process blocks**, with all correctness, minimum
+The new `campaign-compact128` started at **11:42 UTC**. Both workers passed the
+162,048-value exact checker and entered timing with the compact format; their
+first live checkpoints were about 13 KB. A/A qualification has not finished.
+The campaign uses **128 process blocks**, with all correctness, minimum
 duration, standard-error and equivalence gates unchanged. The work is frozen at
 eight passes through twelve private positions per request, depth 13, one search
 thread and 16 MiB hash. It uses the same pinned Graviton compiler/runtime image.
