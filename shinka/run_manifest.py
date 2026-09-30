@@ -35,20 +35,32 @@ def _sha256_file(path: Path) -> str | None:
     return _sha256_bytes(path.read_bytes())
 
 
-def _command_output(command: list[str], cwd: Path | None = None) -> str | None:
+def _run_command(
+    command: list[str], cwd: Path | None = None
+) -> subprocess.CompletedProcess[bytes] | None:
     try:
         completed = subprocess.run(
             command,
             cwd=cwd,
             capture_output=True,
-            text=True,
             timeout=15,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
-    output = (completed.stdout.strip() or completed.stderr.strip()).splitlines()
-    return output[0] if output else f"exit {completed.returncode}"
+    return completed if completed.returncode == 0 else None
+
+
+def _command_output(command: list[str], cwd: Path | None = None) -> str | None:
+    completed = _run_command(command, cwd)
+    if completed is None:
+        return None
+    output = (
+        (completed.stdout.strip() or completed.stderr.strip())
+        .decode(errors="replace")
+        .splitlines()
+    )
+    return output[0] if output else ""
 
 
 def ensure_wandb_run_id(results_dir: Path, configured_id: str | None) -> str:
@@ -75,14 +87,16 @@ def write_run_manifest(
     results_dir.mkdir(parents=True, exist_ok=True)
     repo_root_text = _command_output(["git", "rev-parse", "--show-toplevel"])
     repo_root = Path(repo_root_text) if repo_root_text else Path.cwd()
-    git_commit = _command_output(["git", "rev-parse", "HEAD"], repo_root)
-    dirty_status = _command_output(["git", "status", "--porcelain=v1"], repo_root) or ""
-    dirty_diff = subprocess.run(
-        ["git", "diff", "--binary", "HEAD"],
-        cwd=repo_root,
-        capture_output=True,
-        check=False,
-    ).stdout
+    git_commit = None
+    dirty_status = dirty_diff = None
+    if repo_root_text:
+        git_commit = _command_output(["git", "rev-parse", "HEAD"], repo_root)
+        status_result = _run_command(["git", "status", "--porcelain=v1"], repo_root)
+        diff_result = _run_command(["git", "diff", "--binary", "HEAD"], repo_root)
+        if status_result is not None:
+            dirty_status = status_result.stdout
+        if diff_result is not None:
+            dirty_diff = diff_result.stdout
 
     config_payload = {
         "evo": _jsonable(evo_config),
@@ -134,9 +148,14 @@ def write_run_manifest(
         "framework": {
             "repo_root": str(repo_root),
             "git_commit": git_commit,
-            "dirty": bool(dirty_status),
-            "dirty_status_sha256": _sha256_bytes(dirty_status.encode()),
-            "dirty_diff_sha256": _sha256_bytes(dirty_diff),
+            "git_metadata_available": bool(repo_root_text),
+            "dirty": bool(dirty_status) if dirty_status is not None else None,
+            "dirty_status_sha256": (
+                _sha256_bytes(dirty_status) if dirty_status is not None else None
+            ),
+            "dirty_diff_sha256": (
+                _sha256_bytes(dirty_diff) if dirty_diff is not None else None
+            ),
         },
         "config": config_payload,
         "config_sha256": _sha256_bytes(
