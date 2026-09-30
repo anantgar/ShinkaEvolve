@@ -91,13 +91,25 @@ def prepare(args) -> None:
     if args.mutation_image:
         validate_pinned_image(args.mutation_image)
     manifest = load_manifest(args.manifest)
+    full_search = manifest["schema"] == "stockfish-inference-v3"
+    pilot = getattr(args, "pilot", False)
+    if pilot and (not full_search or not args.corpus):
+        raise ValueError("A private pilot requires a v3 manifest and --corpus")
     source, network = fetch_inputs(args.cache, manifest)
     if args.corpus:
         if args.smoke:
             raise ValueError("Use either --corpus or --smoke")
         corpus = json.loads(args.corpus.read_text())
         validate_traces(corpus["traces"])
-        if corpus.get("provenance", {}).get("split") != "holdout":
+        provenance = corpus.get("provenance", {})
+        if pilot and (
+            provenance.get("kind") != "private_synthetic_pilot"
+            or provenance.get("split") != "pilot"
+        ):
+            raise ValueError(
+                "Pilot provenance must identify private synthetic fixtures"
+            )
+        if not pilot and provenance.get("split") != "holdout":
             raise ValueError(
                 "Production corpus must be the holdout of a game-level split"
             )
@@ -155,6 +167,7 @@ def prepare(args) -> None:
         else corpus["provenance"]["source_sha256"],
         "harness_sha256": sha256(HERE / "harness/nnue_replay.cpp"),
         "smoke_only": args.smoke,
+        "pilot_only": pilot,
     }
     (inputs / "task-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     # Large artifacts stay outside the repository and are uploaded once, by content digest.
@@ -208,6 +221,14 @@ def prepare(args) -> None:
     evaluator.mkdir()
     for name in ("evaluate.py", "policy.py", "corpus.py", "scoring.py"):
         shutil.copyfile(HERE / name, evaluator / name)
+    if full_search:
+        for name in ("search_evaluate.py", "search_scoring.py"):
+            shutil.copyfile(HERE / name, evaluator / name)
+        cases = corpus.get("search_cases", corpus["traces"][:12])
+        validate_traces(cases)
+        if not 1 <= len(cases) <= 256:
+            raise ValueError("Search corpus must contain 1–256 cases")
+        (evaluator / "search-cases.json").write_text(json.dumps(cases))
     shutil.copyfile(
         store.verify(built.runtime_artifact.digest), evaluator / "baseline.tar"
     )
@@ -227,6 +248,7 @@ def prepare(args) -> None:
                     "manifest": "task-manifest.json",
                     "corpus": "corpus.json",
                     "edge_cases": "edge-cases.json",
+                    **({"search_cases": "search-cases.json"} if full_search else {}),
                 },
             }
         )
@@ -241,6 +263,8 @@ def prepare(args) -> None:
         build_command=build_command,
         dedicated_container_vm=args.dedicated_container_vm,
     )
+    if full_search:
+        job["evaluator_entrypoint"] = "search_evaluate.py"
     (output / "shinka.yaml").write_text(yaml.safe_dump(configuration, sort_keys=False))
     (output / "build.log").write_bytes(built.stdout + built.stderr)
     print(
@@ -259,7 +283,13 @@ def main():
     parser.add_argument("--corpus", type=Path)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument(
-        "--strict-timing", action="store_true",
+        "--pilot",
+        action="store_true",
+        help="Use private synthetic pilot data; no production claim",
+    )
+    parser.add_argument(
+        "--strict-timing",
+        action="store_true",
         help="Keep production timing gates with the public smoke corpus; this does not make it production data",
     )
     parser.add_argument("--sanitize", action="store_true")

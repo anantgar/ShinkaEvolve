@@ -44,9 +44,9 @@ def validate_source(root: Path, expected: dict[str, str], mutable: list[str]) ->
 
 def load_manifest(path: Path) -> dict:
     value = json.loads(path.read_text())
-    if value.get("schema") != "stockfish-inference-v2":
+    if value.get("schema") not in {"stockfish-inference-v2", "stockfish-inference-v3"}:
         raise ValueError(
-            "Prepare a new stockfish-inference-v2 campaign and rebuild the image"
+            "Prepare a new stockfish-inference-v2 or v3 campaign and rebuild the image"
         )
     benchmark = value["benchmark"]
     weights = benchmark["workload_weights"]
@@ -83,4 +83,39 @@ def load_manifest(path: Path) -> dict:
     ):
         if not math.isfinite(benchmark[key]) or benchmark[key] <= 0:
             raise ValueError(f"Invalid {key}")
+    if value["schema"] == "stockfish-inference-v3":
+        search = value["search_benchmark"]
+        isolation = search.get("process_isolation", "paired")
+        if isolation not in {"paired", "sequential_abba_v1"}:
+            raise ValueError("Invalid search process isolation")
+        if isolation == "sequential_abba_v1" and search["rounds_per_block"] != 2:
+            raise ValueError("Sequential ABBA requires two timing pairs per block")
+        for name, low, high in (
+            ("process_blocks", 6, 256),
+            ("rounds_per_block", 2, 32),
+            ("warmups", 1, 8),
+            ("depth", 1, 24),
+            ("hash_mb", 1, 512),
+            ("passes", 1, 16),
+            ("maximum_passes", 1, 16),
+        ):
+            if type(search[name]) is not int or not low <= search[name] <= high:
+                raise ValueError(f"Invalid search {name}")
+        if search["process_blocks"] % 2 or search["rounds_per_block"] % 2:
+            raise ValueError("Search startup and timing orders must be balanced")
+        if search["passes"] > search["maximum_passes"]:
+            raise ValueError("Search passes exceed the declared maximum")
+        for name in (
+            "minimum_sample_seconds",
+            "max_log_standard_error",
+            "max_aa_log_bias",
+        ):
+            if (
+                type(search[name]) not in {int, float}
+                or not math.isfinite(search[name])
+                or search[name] <= 0
+            ):
+                raise ValueError(f"Invalid search {name}")
+        if type(search["seed"]) is not int:
+            raise ValueError("Invalid search ordering seed")
     return value

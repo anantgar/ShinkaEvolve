@@ -1,21 +1,24 @@
 # Exact Stockfish NNUE inference optimization
 
-This task evolves C++ NNUE implementation code and scores exact, paired replay
-speed. It does not train weights or change search. Every candidate uses Stockfish
+This task evolves C++ NNUE implementation code and measures speed after exact
+correctness checks. It does not train weights or change search. Every candidate uses Stockfish
 `0a215d6c9e48856ef630013b8ab8312941a59057` and the SHA-256-pinned SFNNv16 network
 in `task_manifest.json`.
 
-The current schema is `stockfish-inference-v2`. Rebuild the image and prepare a
-new campaign after the visibility/scoring audit; v1 campaigns must not be reused.
+The new fixed-search lane uses `stockfish-inference-v3` and
+[`search_manifest.json`](search_manifest.json). See [SEARCH_PILOT.md](SEARCH_PILOT.md)
+for its private fixtures, process-block scoring, qualification and bounded launch.
+The older replay lane remains available as `stockfish-inference-v2` for diagnosis.
+Always rebuild the image and prepare a new campaign when changing lanes.
 See the [evaluation audit](../../docs/stockfish_nnue_evaluation_audit.md) for the
 verification policy, known limits, instance choices and qualification requirements.
 
 **Production timing is not qualified.** AWS controls found stable offsets
 between identical replay programs that within-process error bars did not capture.
 Large pages corrected a memory-context mismatch but did not remove all offsets.
-Three-host, externally timed full-engine controls were more promising; a private
-production lane and its qualification remain to be implemented. Do not start
-evolution on the current replay pool. See the
+Three-host, externally timed full-engine controls were more promising. The private
+v3 lane is implemented and undergoing native qualification; it must pass its
+controls before evolution. Do not start evolution on the old replay pool. See the
 [completed timing investigation](../../docs/stockfish_timing_investigation_2026-09-30.md).
 
 The first target is Linux ARM with NEON dot product, suitable for a homogeneous
@@ -48,7 +51,7 @@ uses Linux containers.
 - S3 content-addressed artifacts, SQS FIFO jobs, dedicated EC2 workers, visibility
   heartbeats, cancellation, timeouts, retries after host loss and a dead-letter queue.
 
-## Score and its limits
+## Legacy replay score and shared limits
 
 Correctness/resource violations receive `correct=false, combined_score=0`.
 Infrastructure/protocol/noise failures receive no fitness. Correct but slower

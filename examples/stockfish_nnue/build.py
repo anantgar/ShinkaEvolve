@@ -35,7 +35,9 @@ def build(
         path.chmod(0o755 if path.is_dir() else 0o644)
     restore_build_context(root, dependencies / "stockfish-build-context.json")
     here = Path(__file__).resolve().parent
-    shutil.copyfile(here / "harness/nnue_replay.cpp", root / "src/main.cpp")
+    full_search = manifest["schema"] == "stockfish-inference-v3"
+    if not full_search:
+        shutil.copyfile(here / "harness/nnue_replay.cpp", root / "src/main.cpp")
     shutil.copyfile(network, root / "src" / manifest["network_filename"])
     settings = manifest["targets"][target]
     # Never accept compiler flags or Makefile fragments from a candidate.
@@ -56,22 +58,42 @@ def build(
         f"EXTRACXXFLAGS={flags}",
         *extra,
     ]
+    build_env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(scratch),
+        "LANG": "C",
+        "LC_ALL": "C",
+    }
     subprocess.run(
         command,
         cwd=root / "src",
         check=True,
         timeout=1800,
-        env={
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(scratch),
-            "LANG": "C",
-            "LC_ALL": "C",
-        },
+        env=build_env,
     )
     output.mkdir(parents=True, exist_ok=True)
+    if full_search:
+        shutil.copyfile(root / "src/stockfish", output / "stockfish")
+        (output / "stockfish").chmod(0o755)
+        # Both executables link the same NNUE object files. Only the trusted
+        # entrypoint changes for the independent exact-output checks.
+        shutil.copyfile(here / "harness/nnue_replay.cpp", root / "src/main.cpp")
+        (root / "src/main.o").unlink()
+        (root / "src/stockfish").unlink()
+        subprocess.run(
+            command,
+            cwd=root / "src",
+            check=True,
+            timeout=1800,
+            env=build_env,
+        )
     shutil.copyfile(root / "src/stockfish", output / "nnue_replay")
     (output / "nnue_replay").chmod(0o755)
-    shutil.copyfile(here / "harness/service.py", output / "service.py")
+    if full_search:
+        shutil.copyfile(here / "harness/service.py", output / "replay_service.py")
+        shutil.copyfile(here / "harness/search_service.py", output / "service.py")
+    else:
+        shutil.copyfile(here / "harness/service.py", output / "service.py")
 
 
 def main():
