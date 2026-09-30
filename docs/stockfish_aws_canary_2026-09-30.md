@@ -65,9 +65,17 @@ campaign files. Neutral controls still freeze with updated dependency hashes.
 Applying the new check to these preserved measurements rejects the primary
 and repeat 1; repeat 2 passes. **The pool is not qualified for evolution.**
 No thresholds were relaxed and no measurements were discarded or replaced by
-favorable retries. The running primary process started before this guard was
-added; any freeze it produces under its old policy is historical evidence only.
-Do not reuse it for evolution.
+favorable retries. The primary process started before this guard was added,
+but its later slow-control noise failure also prevented freezing under the old
+policy. No campaign was frozen by this run.
+
+The new guard detects failed qualification; it does not remove the underlying
+timing bias. Repeated rounds within one persistent process pair can give a very
+small standard error while preserving a process-specific offset. A fitness
+interval based only on those rounds can therefore understate uncertainty across
+fresh processes or machines. The current measurements do not establish reliable
+ranking of sub-percent improvements. There is no evidence yet identifying Spot,
+the clock itself, or any particular runtime mechanism as the cause.
 
 Before a large run, investigate runtime placement and process-lifetime effects,
 then predeclare and validate a protocol with independent process/worker blocks
@@ -80,17 +88,25 @@ disabled, matched **36,312 exact values** against the optimized baseline. It
 produced no sanitizer diagnostics and no fitness score.
 
 The deliberately wrong implementation was rejected with `correct=false` and
-score zero on repeat 1. A separate real-container AWS worker executor test on
-repeat 2 passed in 536 seconds: **36,120 exact values**, 0.999512 geometric speed,
+score zero on both the primary and repeat 1. A separate real-container AWS worker
+executor test on repeat 2 passed in 536 seconds: **36,120 exact values**, 0.999512 geometric speed,
 and a 0.999032 confidence-bound score. Its raw-sample recomputation also matched.
 S3 was stubbed in that test; it does not exercise live SQS delivery or the
 CloudFormation deployment.
 
-At 07:27 UTC, the primary's deliberately slow control was still running its
-original full 24-round protocol. The primary then runs its wrong control. Their
-results remain pending; do not report an all-controls success. The two repeat
-workers have finished and were terminated after their evidence archives were
-downloaded and hash-verified.
+The primary finished all three controls at **07:46:03 UTC**. Its deliberately
+slow control matched **36,120 exact values** over the full 24-round protocol.
+The raw measurements clearly show a slowdown (0.132762 geometric speed ratio),
+but aggregate log-SE was **0.003761**, above the 0.002 limit; incremental log-SE
+was **0.005245**, above 0.005. The evaluator correctly returned a failed
+measurement with **no fitness**, retaining the samples for diagnosis. The
+calibration command exited with status 1 and did not freeze the campaign.
+The wrong-output control supplied a valid incorrect result with score zero.
+
+All raw-sample score recomputations matched, including the rejected slow run.
+This verifies the arithmetic, not the timing protocol's accuracy. All three
+workers were terminated and the temporary key pair and security group were
+deleted by **07:46:59 UTC**, after evidence collection and hash verification.
 
 ## Reproduction identities
 
@@ -167,16 +183,35 @@ three-hour shutdown configured to terminate them. Collect evidence and explicitl
 terminate the owned workers after qualification, then remove their temporary
 security group and imported key pair. Do not alter unrelated AWS resources.
 
-A bounded local collector (`finish-tests.py` in the operator directory) is
-running for the existing primary test. It waits at most 100 minutes, downloads
-and verifies `primary-evidence.tar.gz`, recomputes scores, records the failed
-pool qualification, and terminates the remaining owned worker before deleting
-the temporary key pair and security group. It preserves the VM for recovery if
-evidence collection fails; the original three-hour termination remains active.
-It submits no new evaluations and does not retry measurements.
+A bounded local collector (`finish-tests.py` in the operator directory) completed
+evidence collection, score recomputation, failed-qualification recording and
+resource cleanup. It submitted no new evaluations and did not retry measurements.
+`primary-evidence.tar.gz` has SHA-256
+`7fc79236c06ae92c364146759fa7f6a0db56b23852c6b7cc1b2922ca2f1d6ee0`.
 
 Read `state.json` for `collector_status`, `collector_error`, cleanup timestamps
 and exact resource identities. Read `primary-controls.json`, `score-audit.json`
-and `workload-bias-audit.json` for the resulting operator records. The local
-collector log records any failure; this handoff is a snapshot and does not
-automatically change when that process finishes.
+and `workload-bias-audit.json` for the resulting operator records.
+Final state is `collector_status: complete`, `pool_qualified: false`, all three
+instances `terminated`, `key_pair_deleted: true`, and
+`security_group_deleted: true`.
+
+## Remaining work
+
+1. Diagnose timing differences with separate profiling: process startup/order,
+   memory and cache placement, host interference, and protocol overhead. Keep
+   diagnostic instrumentation outside scored runs.
+2. Predeclare a new protocol with fresh process pairs and worker blocks, varied
+   startup order and uncertainty across those independent blocks. Qualify it
+   with identical, deliberately slow and wrong-output controls; preserve every
+   attempt. Additional AWS budget is useful for independent replications, not
+   just more rounds in the same process pair.
+3. Select representative production traces, validate workload frequencies against
+   baseline search, and reserve an untouched finalist holdout. The current public
+   smoke corpus and provisional 60/25/15 weights remain insufficient for a campaign.
+4. Obtain the deployment permissions and validate live S3/SQS delivery, deadlines,
+   recovery and artifact collection. Direct EC2 execution and stubbed S3 tests
+   leave these paths unqualified.
+5. Freeze a qualified campaign, run a 5–10-candidate Shinka canary, then scale.
+   Confirm finalists on fresh workers and positions, with sanitizer and full-engine
+   fixed-work correctness/speed checks. No optimized candidate has been validated yet.

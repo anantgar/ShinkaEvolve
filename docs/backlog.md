@@ -128,9 +128,16 @@ The scoped evaluator and campaign design is documented in
       timing gates, recompute raw-sample scores, and run native ASan/UBSan checks.
 - [x] Reject calibration when workload biases cancel in the aggregate; preserve
       the first AWS measurements, which exposed this gap.
+- [x] Finish native slow/wrong controls and archive verified evidence. Wrong
+      outputs scored zero; the slow control matched exact outputs but failed the
+      noise gates and received no fitness. Terminate all three canaries and
+      delete their temporary key pair and security group.
 - [ ] Qualify worker timing across independent process/worker blocks. Two of the
       first three AWS workers fail the new per-workload A/A bias check, despite
-      passing aggregate bias and timing-noise gates. Do not evolve on this pool.
+      passing aggregate bias and timing-noise gates. The slow control also failed
+      noise limits. Diagnose the cause and include variability across independent
+      blocks in uncertainty; the new rejection guard alone does not fix timing.
+      Do not evolve on this pool.
 - [ ] Select representative production PGNs and keep a separate finalist holdout.
 - [x] Transfer pinned image/wheel/baseline to native EC2 canaries on a pinned AMI.
 - [ ] Deploy the S3/SQS stack and ECR images when the operator has the necessary

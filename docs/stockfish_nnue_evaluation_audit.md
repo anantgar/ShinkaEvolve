@@ -40,8 +40,12 @@ unchanged. These checks supplement real A/A, slow and incorrect controls.
 - Native Graviton sanitizer checks matched **36,312 exact values**. A real
   container worker execution with S3 stubbed passed after **36,120 exact values**;
   an incorrect implementation was rejected with zero fitness. A/A workload
-  biases still prevent pool qualification, and the primary slow control remains
-  pending at handoff. These results do not imply an optimization or Elo gain.
+  biases still prevent pool qualification. The primary slow control completed all
+  24 rounds and matched 36,120 exact values, but failed the unchanged noise gates:
+  aggregate log-SE 0.003761 > 0.002 and incremental 0.005245 > 0.005. It received
+  no fitness and calibration did not freeze the campaign. Evidence was verified
+  and all three workers and temporary access resources were cleaned up by
+  07:46:59 UTC. These results do not imply an optimization or Elo gain.
 - A real Linux ARM ASan/UBSan build with recovery disabled matched **36,312 exact
   values** against the optimized reference across four reordered eager/lazy
   passes. This is smoke-corpus evidence, not exhaustive validation of future
@@ -130,8 +134,10 @@ run; do not put tracing or a profiler inside the scored measurement.
 3. **Precision.** Production defaults are 24 rounds, every sample at least one
    second, aggregate log-SE at most 0.002 and per-workload log-SE at most 0.005.
    Baseline calibration targets twice the duration floor. These settings have
-   passed native smoke timing-noise checks, but workload bias still prevents AWS
-   pool qualification. If an unusually fast candidate falls below
+   passed the native A/A smoke timing-noise checks; the native slow control failed
+   them, and A/A workload bias independently prevents AWS pool qualification.
+   Independent process/worker variability must enter a revised protocol before
+   small gains can be trusted. If an unusually fast candidate falls below
    the floor, recalibrate a new campaign for everyone; do not silently alter its
    work or accept an under-measured speedup.
 4. **Finalists.** Larger untouched holdout; ASan/UBSan and long stateful runs;
