@@ -7,6 +7,21 @@ runbook are in [`examples/stockfish_nnue`](../examples/stockfish_nnue/README.md)
 
 ## Why this first experiment avoids a large game budget
 
+**User requirement:** do not play engine matches to evaluate or qualify speed in
+this campaign. A full-engine timing run means analyzing fixed hidden positions
+with deterministic, bounded search work, then checking outputs and externally
+measuring completion time. It does not play out games or use win/draw/loss as a
+metric. Match-based strength claims belong to separate future experiments.
+
+The essential constraint is unchanged numerical and search behavior. The NNUE
+file allowlist is a conservative initial scope, not a fundamental requirement
+for timing without games. Frozen weights still permit different SIMD kernels,
+exact sparse execution, accumulator update schedules, activation fusion and
+internal data layouts. Reviewed inference plumbing outside those files could
+also be admitted in a new campaign if it preserves behavior and receives the
+necessary correctness checks. Keep the measurement driver and private tests
+immutable. No allowlist change has been made by this clarification.
+
 Yes: distinguishing small strength differences between strong engines often
 requires very many games. Draws, opening choice, colors, time control and search
 variance make a short match unreliable. A paired game experiment is much more
