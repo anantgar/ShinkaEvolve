@@ -176,10 +176,43 @@ def test_timing_stages_keep_fixed_budgets_reject_noise_and_never_provide_fitness
 
     monkeypatch.setattr(validate_candidate, "measure_search", measure)
     result = validate_candidate.validate(args)
-    assert pinned == [{0, 1}]
+    assert pinned == [{0, 1}, {0, 1, 2}]
     assert result["correct"] is True
     assert result["measurement_accepted"] is not noisy
     assert result["fitness_admitted"] is False
     assert result["supports_speed_claim"] is False
     assert "combined_score" not in result["measurement"]
     assert result["protocol_sha256"]
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_validation_restores_affinity_for_repeated_calls_and_errors(monkeypatch, fail):
+    current = {0, 1, 2}
+    monkeypatch.setattr(validate_candidate.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(
+        validate_candidate.os, "sched_getaffinity", lambda _: current.copy(), raising=False
+    )
+
+    def set_affinity(pid, cpus):
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(
+        validate_candidate.os, "sched_setaffinity", set_affinity, raising=False
+    )
+
+    def run(args):
+        assert args.cpu in current
+        set_affinity(0, current - {args.cpu})
+        if fail:
+            raise RuntimeError("preflight failed")
+        return {"complete": True}
+
+    monkeypatch.setattr(validate_candidate, "_validate", run)
+    for _ in range(2):
+        if fail:
+            with pytest.raises(RuntimeError, match="preflight failed"):
+                validate_candidate.validate(SimpleNamespace(cpu=2))
+        else:
+            assert validate_candidate.validate(SimpleNamespace(cpu=2)) == {"complete": True}
+        assert current == {0, 1, 2}

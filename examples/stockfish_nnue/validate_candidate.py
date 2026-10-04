@@ -75,7 +75,7 @@ class LocalRunner:
             self.temporary.cleanup()
 
 
-def validate(args) -> dict:
+def _validate(args) -> dict:
     corpus = json.loads(args.corpus.read_text())
     cases = corpus["search_cases"]
     validate_traces(cases)
@@ -194,6 +194,18 @@ def validate(args) -> dict:
         checkpoint.flush()
     (args.output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
+
+
+def validate(args) -> dict:
+    # Timing excludes the engine CPU from this controller, only for this run.
+    # Restore the caller's mask even on errors so sequential API calls can
+    # reserve the same engine CPU again.
+    affinity = os.sched_getaffinity(0) if platform.system() == "Linux" else None
+    try:
+        return _validate(args)
+    finally:
+        if affinity is not None:
+            os.sched_setaffinity(0, affinity)
 
 
 def main() -> None:

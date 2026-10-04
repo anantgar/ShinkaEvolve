@@ -45,6 +45,19 @@ SSH, IMDSv2, and no IAM role. Approximately six-hour launch deadlines cap total
 compute at about $2.70 plus storage. Evidence uploads and worker termination run
 automatically, including Spot interruption handling. Unrelated instances untouched.
 
+Intel completed all 128 A/A blocks: accepted, ratio 1.0000527, 95% interval
+[0.9982616, 1.0018470], minimum sample 2.126 seconds. Its candidate timing did not
+start: repeated in-process use of the driver retained the excluded engine CPU in
+controller affinity, and the next call failed preflight. The worker preserved that
+operator failure and terminated. Intel speed comparison is consequently missing;
+its correctness, compiler, sanitizer and benchmark evidence remains valid.
+
+The driver now restores the caller's affinity on success and errors; nine small
+Python tests passed. Frozen AWS protocol files are unchanged. ARM workers retain
+their original A/A runs and execute the candidate phase through that frozen CLI in
+a fresh process after A/A exits, with the same declared depths/passes and no retry.
+The private receipts preserve both the caller failure and this continuation plan.
+
 The operator driver never admits fitness or asserts a general speed claim.
 New mild/gross control qualification, production peak-memory checks, additional
 networks, Clang search-speed tests and Elo games are outside this run. Intel uses
@@ -59,7 +72,7 @@ All three workers passed **22,584,752 integer comparisons each**, including
 search settings: Graviton 3 depth 11 × 10 passes, Graviton 4 depth 11 × 14 passes,
 Intel depth 13 × 7 passes. All three began their A/A controls successfully.
 
-A bounded, one-shot local collector checks only AWS receipt availability, downloads
+A bounded, one-shot local collector checks AWS state and receipt availability, downloads
 small evidence archives, writes `RESULTS.md`, and removes the owned key/security
 group after termination. It launches no new jobs, runs no engines locally, does
 not download production executables, and sends no notifications. Its six-hour

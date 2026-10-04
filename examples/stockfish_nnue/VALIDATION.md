@@ -148,3 +148,12 @@ to AUTHORS if required for a first contribution. Publish the Stockfish branch
 and open its PR when this evidence is ready; Shinka's infrastructure commits
 do not belong in that PR. No upstream PR or public Fishtest test has been created
 by this tooling update.
+
+The October 3 AWS launch and preflight receipts are described in
+[AWS_VALIDATION_2026-10-03.md](AWS_VALIDATION_2026-10-03.md). The operator API restores
+its caller's CPU affinity on return, including failures; separate CLI processes
+are also suitable for A/A and candidate phases. Keep frozen campaign files intact.
+On ARM, the generic `general-64` GCC target supplies an unsupported `-m64`; use the
+ARM target for NEON coverage and check generic scalar code on x86. For future
+sanitizer builds, declare `-O1` with debug assertions and sanitizers retained:
+unoptimized ARM checks can spend most runtime in ASan's fake-stack allocator.
