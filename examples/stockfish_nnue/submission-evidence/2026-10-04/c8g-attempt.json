@@ -1,0 +1,13 @@
+{
+  "archive_complete": true,
+  "run_complete": false,
+  "interrupted": true,
+  "archive_sha256": "ecaceeb0b4c046f9e50c79bca7fcc5f831866af065b1158d0f688d2927f2b55a",
+  "archive_bytes": 6429119,
+  "archive_encryption": "AES256",
+  "partial_comparison": {
+    "name": "gcc-combined",
+    "blocks": 25,
+    "estimate_reported": false
+  }
+}

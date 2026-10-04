@@ -1,14 +1,21 @@
 # Expanded PR validation evidence
 
 This directory contains the frozen component patches, launch plan and original
-operator worker (`worker.py.txt`, preserved byte for byte for audit). Results will
-be added only after complete receipts are collected. Runtime cutoff changes are
+operator worker (`worker.py.txt`, preserved byte for byte for audit). Results are
+added only after complete receipts are collected. Runtime cutoff changes are
 recorded in the [run record](../../AWS_PR_VALIDATION_2026-10-04.md); measurement
 budgets and acceptance rules remain unchanged.
 
 [Native GCC assembly review](ASSEMBLY.md) records the propagation and accumulator
 code changes separately. Static instruction counts are explanatory evidence,
 not speed measurements.
+
+`completed-results.json` lists collected results with the corresponding A/A
+status. `scope_qualified` requires both a complete candidate measurement and an
+accepted matching control; a rejected control makes the comparison inconclusive.
+This flag covers the declared operator workload, not fitness admission or Elo.
+Attempt records preserve infrastructure interruptions and partial block counts
+without reporting partial estimates.
 
 The worker uses the public `validate_candidate.py` fresh-process search protocol,
 compiles native GCC/Clang PGO/LTO pairs, verifies bench/exact outputs, records
