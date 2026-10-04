@@ -61,8 +61,24 @@ Private operator input manifests, scripts and receipts are under
 `stockfish-nnue-validation/2026-10-04-pr/`. Upload authorization stays outside
 archived evidence. The completed October 3 evidence remains unchanged.
 
+AWS interrupted the Graviton4 Spot worker at 23:45:50 UTC, during its first
+candidate comparison. The interruption notice and archive were recovered; its
+accepted A/A and partial candidate checkpoint are retained without a candidate
+estimate. A same-size on-demand replacement restarts the full frozen protocol,
+including new baseline calibration and A/A controls, with a fourteen-hour
+shutdown backstop. It uses a distinct archive destination. This infrastructure
+replacement does not retry an unfavorable completed timing result.
+
 The final patch scope and PR body will follow the completed evidence and Stockfish's
 request for small, distinct ideas. No Fishtest submission or Elo result is claimed.
+
+During validation, maintainer review questioned the lane change and noted an
+Apple-silicon benefit from accumulator splitting. PR #7208 was narrowed to
+pointer-only (`830c5c3`, plus AUTHORS and explanatory comments). The fixed
+component experiments continue unchanged. Their archived combined source and
+patch hashes remain the identities of the measured binaries; the narrowed
+engine code matches the pointer component except for comments. Prior combined
+speed figures were removed from the PR body.
 
 [Public audit inputs](submission-evidence/2026-10-04/README.md) preserve the
 original worker and component patches and provide a public-source corpus

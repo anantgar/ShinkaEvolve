@@ -5,20 +5,32 @@ Updated October 4, 2026. The standalone branch is
 [Upstream PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
 remains a draft while review and remaining validation are open.
 
-The tested optimization commit is `233068f32740aa08433bad2c4af89416e9b65bb4`,
-on upstream `49ea5ded38315cff8e67f4a677a9e7811612fbf6`. Upstream master was fetched
-again October 4 and still matches that base. The PR is now squashed to `97d81e88a303c7fa4fce945026022d2a5585218d`, including
-the AUTHORS entry and a clang-format 20.1.8 continuation-indent fix. Ignoring
-whitespace, the engine source matches the tested optimization. Shinka infrastructure changes stay
-in this repository.
+The PR is narrowed to **GCC NEON weight-pointer materialization**, one commit
+`830c5c3`, plus AUTHORS. Lane-dot and accumulator-bank changes are removed after
+review questioned their individual benefit and noted Apple silicon's benefit
+from accumulator splitting. The original combined candidate and its evidence
+are preserved; they do not establish the narrowed patch's speed.
 
-## Change and completed evidence
+Base: `49ea5ded38315cff8e67f4a677a9e7811612fbf6`, fetched again October 4.
+The pointer-only component passed 237,420 integer comparisons on each of
+Graviton3 and Graviton4. Production bench matches 1,714,434 nodes. clang-format
+20.1.8 passes. Full CI and component timing for this scope are pending.
+Shinka infrastructure changes stay in this repository.
+
+[Native assembly review](submission-evidence/2026-10-04/ASSEMBLY.md) explains
+GCC's increased paired loads and reduced address additions in the hot accumulator
+bodies. Static code counts do not establish workload speed. Maintainers have
+asked about Fishtest; no exemption or game result is assumed.
+
+## Archived combined-patch evidence
 
 The patch uses ARM lane dot products instead of broadcasting the input, uses one
 accumulator bank rather than three in the sparse layer, and constrains GCC NEON
 weight pointers to improve compiler load scheduling. Weights, architecture,
-evaluation formulas and search rules are unchanged. Individual contributions
-of the three changes have not been measured separately.
+evaluation formulas and search rules are unchanged. These October 3 figures
+describe optimization commit `233068f32740aa08433bad2c4af89416e9b65bb4` and its
+formatted squash `97d81e88a303c7fa4fce945026022d2a5585218d`. Individual timing
+contributions are being measured in the expanded run.
 
 | Hardware | Whole-engine speed gain | 95% interval | Status |
 |---|---:|---:|---|
@@ -59,8 +71,8 @@ workers, SSH keys and security-group resources are cleaned up.
       declared inputs and preserve these completed results.
 - [ ] Measure Clang production search speed and ordinary NEON performance. Exact
       compiler/ISA checks passed, but timing currently covers GCC dot-product only.
-- [ ] Review generated assembly and measure the lane/bank and GCC-pointer changes
-      separately; split the patch if benefits or maintainers' scope guidance warrant it.
+- [ ] Complete component timings. Generated assembly is reviewed and published;
+      the PR already contains only the pointer idea in response to scope guidance.
 - [ ] Complete an unaffected x86 timing comparison with a sufficient fixed budget
       and whole-core isolation. Intel's partial checkpoint supplies no final estimate;
       its SMT sibling was not reserved. This checks regression, not the ARM benefit.
