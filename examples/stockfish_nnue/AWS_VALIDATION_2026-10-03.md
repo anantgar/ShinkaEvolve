@@ -1,9 +1,12 @@
 # Real-game NNUE candidate validation — October 3, 2026
 
-Launch snapshot at 03:27 UTC on October 4: correctness is complete; timing is running.
+Status snapshot at 04:44 UTC on October 4: correctness and ARM timing are complete;
+final Intel timing is running.
 Live results are written to `.work/aws-validation-20261003/RESULTS.md` after archives
 arrive. This dated launch record does not assert the run remains pending forever.
-No new speed claim or upstream submission is made by this snapshot.
+The measurements below support speedups within the declared ARM workload.
+They do not establish general workload performance, Elo or fitness admission.
+No upstream submission has been made.
 The Shinka tree was clean at `8eab511` before starting. Local work is limited to
 orchestration, packaging and receipts; compilation and engine tests run on AWS.
 
@@ -23,6 +26,28 @@ with attribution to Lichess broadcasts. Curated PGN SHA-256:
 Game-disjoint splits and public special-move traces produce 1,363 replay segments.
 Finalist search corpus SHA-256:
 `8f89e554f1a1e2003dd9518a2661f4d5e6613c6947a1ea26084de0bf8b00f2a6`.
+
+## Completed ARM measurements
+
+| CPU | Candidate speedup | 95% interval | A/A control | Exact search outputs |
+|---|---:|---:|---|---|
+| Graviton 3 | +1.760% | +1.663% to +1.857% | accepted | matched |
+| Graviton 4 | +1.651% | +1.563% to +1.738% | accepted | matched |
+
+Each row uses 128 complete blocks on twelve held-out positions with production
+GCC PGO/LTO builds. Minimum measured samples were 1.939 and 2.065 seconds;
+log standard errors were 0.000481 and 0.000435. The A/A 95% intervals were
+[0.998926, 1.001047] and [0.999133, 1.000421], both inside the declared noise
+bound. Every warmup and measured search matched scores, PV, best/ponder moves,
+nodes and fingerprints. This is one boot per CPU family with one network and
+compiler performance configuration; broader workload and repeat-boot coverage
+remain open. Neither result is a qualified Shinka fitness or Elo claim.
+
+The ARM evidence archives are encrypted in S3, downloaded locally as small
+receipts, and SHA-256 checked. Both ARM workers are terminated. Intel correctness
+passed, but its final matched A/A and candidate timing is still running. The
+collector retains that result, terminates the last owned worker and removes the
+shared SSH key/security group when complete.
 
 ## Declared checks
 
@@ -49,8 +74,12 @@ Intel completed all 128 A/A blocks: accepted, ratio 1.0000527, 95% interval
 [0.9982616, 1.0018470], minimum sample 2.126 seconds. Its candidate timing did not
 start: repeated in-process use of the driver retained the excluded engine CPU in
 controller affinity, and the next call failed preflight. The worker preserved that
-operator failure and terminated. Intel speed comparison is consequently missing;
-its correctness, compiler, sanitizer and benchmark evidence remains valid.
+operator failure and terminated. That attempt has no Intel speed comparison; its correctness, compiler, sanitizer
+and benchmark evidence remains valid. A final bounded Intel Spot worker reuses
+those hash-verified production executables and the same corpus, repeats the bench,
+and runs a fresh matched 128-block A/A and 128-block candidate comparison through
+separate CLI processes. The prior result and failure remain archived. This is a
+new boot, so its earlier correctness preflight is reused evidence, not a fresh run.
 
 The driver now restores the caller's affinity on success and errors; nine small
 Python tests passed. Frozen AWS protocol files are unchanged. ARM workers retain
@@ -66,7 +95,7 @@ Compare baseline/candidate within a worker, not absolute NPS between CPU models.
 
 ## Confirmed preflight and live completion
 
-All three workers passed **22,584,752 integer comparisons each**, including
+All three hardware preflights passed **22,584,752 integer comparisons each**, including
 224,296 ASan/UBSan comparisons. All baseline/candidate production benches matched
 **1,714,434 nodes**; separate CPU-clock search profiles were captured. Frozen
 search settings: Graviton 3 depth 11 × 10 passes, Graviton 4 depth 11 × 14 passes,
