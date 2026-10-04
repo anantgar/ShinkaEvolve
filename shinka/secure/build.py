@@ -143,19 +143,19 @@ class SecureBuildBackend:
                     raise SecureExecutionError(
                         FailureClass.STARTUP_TIMEOUT,
                         "Candidate build exceeded its explicit timeout",
+                        private_diagnostic=_build_diagnostic(result),
                     )
                 if result.output_limited:
                     raise SecureExecutionError(
                         FailureClass.BUILD_FAILED,
                         "Candidate build exceeded its output limit",
+                        private_diagnostic=_build_diagnostic(result),
                     )
                 if result.exit_code != 0:
                     raise SecureExecutionError(
                         FailureClass.BUILD_FAILED,
                         "Candidate build failed",
-                        private_diagnostic=result.stderr.decode(
-                            "utf-8", errors="replace"
-                        )[-4000:],
+                        private_diagnostic=_build_diagnostic(result),
                     )
                 archive = temporary / "runtime.tar"
                 metadata = create_normalized_archive(
@@ -182,3 +182,15 @@ class SecureBuildBackend:
             finally:
                 if handle is not None:
                     self.engine.remove(handle, force=True)
+
+
+def _build_diagnostic(result) -> str:
+    """Keep both bounded compiler streams, including tools that log to stdout."""
+    return (
+        f"exit_code={result.exit_code}, timed_out={result.timed_out}, "
+        f"output_limited={result.output_limited}\n"
+        "stdout (tail):\n"
+        + result.stdout[-65536:].decode("utf-8", errors="replace")
+        + "\nstderr (tail):\n"
+        + result.stderr[-65536:].decode("utf-8", errors="replace")
+    )

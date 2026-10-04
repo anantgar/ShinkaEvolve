@@ -14,6 +14,7 @@ from shinka.secure.dependencies import (
     DependencyManifest,
     DependencyPreparer,
 )
+from shinka.secure.errors import SecureExecutionError, FailureClass
 
 IMAGE = "example.invalid/headless@sha256:" + "b" * 64
 
@@ -28,6 +29,88 @@ class _FakeDockerEngine:
     def preflight(self, **kwargs):
         self.preflights.append(kwargs)
         return {}
+
+
+@pytest.mark.parametrize(
+    "failure_class", [FailureClass.MUTATION_FAILED, FailureClass.WALL_TIMEOUT]
+)
+def test_secure_provider_failures_keep_redacted_diagnostics_and_stream_links(
+    tmp_path, monkeypatch, failure_class
+):
+    worktree = tmp_path / "candidate"
+    (worktree / ".shinka").mkdir(parents=True)
+    auth = tmp_path / "auth"
+    auth.mkdir()
+    state = tmp_path / "state"
+    session_home = tmp_path / "session-home"
+    session_home.mkdir()
+    store = ContentAddressedStore(state / "artifacts")
+    parent, _ = store.put_tree(
+        worktree, kind="candidate", excludes=headless.DEFAULT_EXCLUDES
+    )
+
+    def fail(**kwargs):
+        root = (
+            Path(kwargs["mutation_store"].path).parent
+            / "headless-failures"
+            / hashlib.sha256(b"attempt").hexdigest()[:32]
+        )
+        root.mkdir(parents=True)
+        (root / "stdout.log").write_text("redacted provider stdout")
+        (root / "stderr.log").write_text("redacted provider stderr")
+        raise SecureExecutionError(
+            failure_class,
+            "Agent failed",
+            private_diagnostic="provider reason secret-value",
+        )
+
+    monkeypatch.setattr(headless, "DockerEngine", _FakeDockerEngine)
+    monkeypatch.setattr(headless, "run_agent_in_workspace", fail)
+    expected = (
+        headless.LLMTimeoutError
+        if failure_class == FailureClass.WALL_TIMEOUT
+        else headless.LLMProcessError
+    )
+    with pytest.raises(expected) as caught:
+        headless.query_headless(
+            None,
+            "headless/codex@test",
+            "mutate",
+            "system",
+            [],
+            None,
+            headless_secure=True,
+            headless_work_dir=str(worktree),
+            headless_mutation_image=IMAGE,
+            headless_auth_profiles={"codex": str(auth)},
+            headless_credentials={"codex": {"OPENAI_API_KEY": "secret-value"}},
+            headless_network="disabled",
+            headless_jobs_db=str(state / "jobs.sqlite"),
+            headless_parent_digest=parent.digest,
+            headless_job_id="proposal",
+            headless_attempt_id="attempt",
+            headless_session_name="session",
+            headless_session_home=str(session_home),
+            headless_resource_limits={
+                "cpus": 1,
+                "memory_bytes": 128 * 1024**2,
+                "pids": 16,
+            },
+        )
+    artifacts = caught.value.artifacts
+    assert (
+        Path(artifacts["headless_stdout_path"]).read_text()
+        == "redacted provider stdout"
+    )
+    assert (
+        Path(artifacts["headless_stderr_path"]).read_text()
+        == "redacted provider stderr"
+    )
+    diagnostic = Path(artifacts["headless_diagnostic_path"])
+    assert "provider reason" in diagnostic.read_text()
+    assert "secret-value" not in diagnostic.read_text()
+    assert diagnostic.stat().st_mode & 0o777 == 0o600
+    assert worktree not in diagnostic.parents
 
 
 def test_secure_headless_reuses_session_home_without_persisting_auth(

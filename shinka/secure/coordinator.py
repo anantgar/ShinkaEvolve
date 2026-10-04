@@ -309,9 +309,28 @@ class SecureEvaluationCoordinator:
                 else FailureClass.BUILD_FAILED
             )
             diagnostic = self.artifacts.put_bytes(
-                str(exc).encode("utf-8", errors="replace"),
+                canonical_json_bytes(
+                    {
+                        "schema_version": "shinka-build-failure-v1",
+                        "job_id": job_id,
+                        "attempt_id": attempt_id,
+                        "candidate_digest": candidate.digest,
+                        "failure_class": failure.value,
+                        "public_message": str(exc),
+                        "private_diagnostic": (
+                            exc.private_diagnostic
+                            if isinstance(exc, SecureExecutionError)
+                            else None
+                        ),
+                    }
+                ),
                 kind="operator_diagnostic",
             )
+            if isinstance(exc, SecureExecutionError):
+                # Only the artifact identity may enter public failure metadata.
+                exc.details.update(
+                    diagnostic_digest=diagnostic.digest, build_job_id=job_id
+                )
             current = self.jobs.get(job_id)
             if current and current.state not in {JobPhase.FAILED, JobPhase.CLEANED}:
                 self.jobs.transition(

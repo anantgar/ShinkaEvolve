@@ -7,6 +7,7 @@ import math
 import os
 import shutil
 import signal
+import hashlib
 import shlex
 import subprocess
 import tempfile
@@ -1310,8 +1311,35 @@ def _secure_query(
             FailureClass.WALL_TIMEOUT,
             FailureClass.STARTUP_TIMEOUT,
         }:
-            raise LLMTimeoutError(str(exc)) from exc
-        raise LLMProcessError(str(exc)) from exc
+            failure = LLMTimeoutError(str(exc))
+        else:
+            failure = LLMProcessError(str(exc))
+        # run_agent_in_workspace already preserves bounded, redacted streams.
+        # Retain links when translating its exception into a provider failure.
+        failure.artifacts["headless_prompt_path"] = str(prompt_path)
+        failure_root = (
+            Path(mutation_store.path).resolve().parent
+            / "headless-failures"
+            / hashlib.sha256(str(attempt_id).encode("utf-8")).hexdigest()[:32]
+        )
+        for key, path in (
+            ("headless_stdout_path", failure_root / "stdout.log"),
+            ("headless_stderr_path", failure_root / "stderr.log"),
+        ):
+            if path.is_file():
+                failure.artifacts[key] = str(path)
+        diagnostic_path = attempt_root / "failure-diagnostic.log"
+        diagnostic_path.write_bytes(
+            _redact(
+                (exc.private_diagnostic or str(exc)).encode("utf-8", errors="replace")[
+                    -65536:
+                ],
+                redaction_values,
+            )
+        )
+        os.chmod(diagnostic_path, 0o600)
+        failure.artifacts["headless_diagnostic_path"] = str(diagnostic_path)
+        raise failure from exc
     except (ValueError, OSError) as exc:
         raise LLMProcessError(str(exc)) from exc
 

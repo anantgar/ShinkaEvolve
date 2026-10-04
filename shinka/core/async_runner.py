@@ -98,6 +98,7 @@ from shinka.secure.configuration import (
 )
 from shinka.secure.sessions import ProposalSessionStore
 from shinka.secure.contracts import FailureClass
+from shinka.secure.errors import SecureExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -3242,6 +3243,13 @@ class ShinkaEvolveRunner:
 
             except Exception as e:
                 logger.error(f"Error submitting job: {e}")
+                if isinstance(e, SecureExecutionError):
+                    meta_patch_data = dict(meta_patch_data or {})
+                    meta_patch_data["secure_failure_class"] = e.failure_class.value
+                    meta_patch_data["operator_diagnostic_digest"] = e.details.get(
+                        "diagnostic_digest"
+                    )
+                    meta_patch_data["build_job_id"] = e.details.get("build_job_id")
                 await self._record_terminal_failed_proposal(
                     generation=generation,
                     generation_dir=generation_dir,
@@ -3397,7 +3405,10 @@ class ShinkaEvolveRunner:
         if failure_stage == "novelty":
             return "novelty_rejected"
         if failure_stage == "evaluation_submit":
-            return "evaluation_submit_failed"
+            return str(
+                (meta_patch_data or {}).get("secure_failure_class")
+                or "evaluation_submit_failed"
+            )
 
         reason = (failure_reason or "").lower()
         error_attempt = str((meta_patch_data or {}).get("error_attempt") or "").lower()
@@ -3456,6 +3467,17 @@ class ShinkaEvolveRunner:
                 artifacts[key] = str(path)
 
         if meta_patch_data:
+            for key in (
+                "headless_stdout_path",
+                "headless_stderr_path",
+                "headless_prompt_path",
+                "headless_diagnostic_path",
+            ):
+                if meta_patch_data.get(key):
+                    add_if_exists(key, Path(meta_patch_data[key]))
+            for key in ("operator_diagnostic_digest", "build_job_id"):
+                if meta_patch_data.get(key):
+                    artifacts[key] = meta_patch_data[key]
             novelty_attempt = meta_patch_data.get("novelty_attempt")
             resample_attempt = meta_patch_data.get("resample_attempt")
             patch_attempt = meta_patch_data.get("patch_attempt")
@@ -4274,6 +4296,9 @@ Required constraints:
                 "headless_prompt_path": response_kwargs.get("headless_prompt_path"),
                 "headless_stdout_path": response_kwargs.get("headless_stdout_path"),
                 "headless_stderr_path": response_kwargs.get("headless_stderr_path"),
+                "headless_diagnostic_path": response_kwargs.get(
+                    "headless_diagnostic_path"
+                ),
                 **_safe_llm_metadata_kwargs(llm_kwargs),
                 "llm_result": (
                     response.to_dict() if "response" in locals() and response else None
