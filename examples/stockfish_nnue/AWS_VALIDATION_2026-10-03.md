@@ -7,7 +7,8 @@ Live results are written to `.work/aws-validation-20261003/RESULTS.md` after arc
 arrive. This dated launch record does not assert the run remains pending forever.
 The measurements below support speedups within the declared ARM workload.
 They do not establish general workload performance, Elo or fitness admission.
-A draft upstream PR is being prepared; no Fishtest run has been submitted.
+[Draft upstream PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
+is open; no Fishtest run has been submitted.
 The Shinka tree was clean at `8eab511` before starting. Local work is limited to
 orchestration, packaging and receipts; compilation and engine tests run on AWS.
 

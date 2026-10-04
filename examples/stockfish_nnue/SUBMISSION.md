@@ -2,7 +2,8 @@
 
 Updated October 4, 2026. The standalone branch is
 [`anantgar/Stockfish:codex/nnue-neon-inference`](https://github.com/anantgar/Stockfish/tree/codex/nnue-neon-inference).
-The PR remains a draft while review and remaining validation are open.
+[Upstream PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
+remains a draft while review and remaining validation are open.
 
 The tested optimization commit is `233068f32740aa08433bad2c4af89416e9b65bb4`,
 on upstream `49ea5ded38315cff8e67f4a677a9e7811612fbf6`. Upstream master was fetched

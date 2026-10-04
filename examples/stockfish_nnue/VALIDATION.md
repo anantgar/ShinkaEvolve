@@ -148,7 +148,8 @@ default bench signatures, hardware/compiler/build details, raw speed scripts and
 results, correctness/sanitizer coverage, and any Fishtest links. Add the author
 to AUTHORS if required for a first contribution. Publish the Stockfish branch
 and open its PR when this evidence is ready; Shinka's infrastructure commits
-do not belong in that PR. An upstream draft PR is now being prepared with the completed ARM evidence.
+do not belong in that PR. [Upstream draft PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
+is open with the completed ARM evidence.
 No public Fishtest test has been submitted. Track review readiness in
 [SUBMISSION.md](SUBMISSION.md).
 
