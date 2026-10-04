@@ -7,8 +7,9 @@ remains a draft while review and remaining validation are open.
 
 The tested optimization commit is `233068f32740aa08433bad2c4af89416e9b65bb4`,
 on upstream `49ea5ded38315cff8e67f4a677a9e7811612fbf6`. Upstream master was fetched
-again October 4 and still matches that base. The submission adds an AUTHORS entry;
-it does not change the tested engine source. Shinka infrastructure changes stay
+again October 4 and still matches that base. The PR is now squashed to `97d81e88a303c7fa4fce945026022d2a5585218d`, including
+the AUTHORS entry and a clang-format 20.1.8 continuation-indent fix. Ignoring
+whitespace, the engine source matches the tested optimization. Shinka infrastructure changes stay
 in this repository.
 
 ## Change and completed evidence
@@ -50,7 +51,9 @@ workers, SSH keys and security-group resources are cleaned up.
 
 ## Remaining work before ready for review
 
-- [ ] Check upstream CI and resolve formatting/compiler/reviewer findings.
+- [x] Fix the Actions formatting finding with clang-format 20.1.8; verify the
+      formatting step passed, not just the overall job. Squash into one commit.
+- [ ] Address any subsequent compiler/reviewer findings.
 - [ ] Confirm ARM performance on broader position groups/depths and independent
       boots. The current twelve-position sample is a coverage limit; use new
       declared inputs and preserve these completed results.
@@ -76,3 +79,7 @@ slowdown/wrong-output controls would broaden qualification. The latter are neces
 before admitting new Shinka fitness; the standalone operator results do not do that.
 Building the agent image and rerunning its provider canary concern future evolution,
 and do not block submitting this saved Stockfish patch.
+
+The [October 4 expanded validation](AWS_PR_VALIDATION_2026-10-04.md) is running
+on fresh AWS Spot workers. Its fixed component/ISA/depth comparisons supersede
+the remaining timing tasks only when their complete receipts are verified.

@@ -161,3 +161,8 @@ On ARM, the generic `general-64` GCC target supplies an unsupported `-m64`; use 
 ARM target for NEON coverage and check generic scalar code on x86. For future
 sanitizer builds, declare `-O1` with debug assertions and sanitizers retained:
 unoptimized ARM checks can spend most runtime in ASan's fake-stack allocator.
+
+For the current PR, [October 4 validation](AWS_PR_VALIDATION_2026-10-04.md) declares
+expanded positions, separate component builds, whole-core Intel isolation and new
+fixed-budget runs. Inspect the actual formatting step: the GitHub workflow permits
+it to fail while leaving the overall job green.
