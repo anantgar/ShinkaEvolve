@@ -69,8 +69,9 @@ workers, SSH keys and security-group resources are cleaned up.
       Fishtest. No game test is claimed or submitted. Add test links if requested.
 
 [Stockfish guidance](https://official-stockfish.github.io/docs/fishtest-wiki/Creating-my-first-test.html#speedups)
-allows direct PRs for small, readily verifiable speedups, while generally recommending
-Fishtest for performance changes. This draft presents the evidence for that decision;
+generally recommends Fishtest for speedups. Its direct-PR exception concerns gains
+too small to verify there but independently verifiable, for example in assembly.
+This draft presents the evidence and ARM coverage limits for that decision;
 it does not assume an exemption. Exact-output tests validate identical computations;
 equal-time games would test playing strength.
 

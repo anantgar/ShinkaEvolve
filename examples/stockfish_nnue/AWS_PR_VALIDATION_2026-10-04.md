@@ -19,8 +19,12 @@ Frozen corpus SHA-256:
 
 ## Declared protocol
 
-- Fresh c7g.xlarge, c8g.xlarge and c7i.xlarge boots. Ten-hour shutdown backstop,
-  one-time Spot capped at $0.15/hour per worker: maximum $4.50 compute plus storage.
+- Fresh c7g.xlarge, c8g.xlarge and c7i.xlarge boots. Initial ten-hour shutdown backstop,
+  one-time Spot capped at $0.15/hour per worker. After observing A/A wall-clock
+  throughput (before any candidate timing), the infrastructure cutoff was extended
+  to fourteen hours to avoid truncating the final groups: maximum $6.30 compute
+  plus storage. Sample budgets, inputs and acceptance rules are unchanged; the
+  deadline-extension receipt is archived on every worker.
   Encrypted auto-deleted volumes, IMDSv2, no IAM role, operator-IP SSH, automatic
   private archive upload and termination. Local work is orchestration, formatting
   and lightweight inspection; engines and compilation stay on AWS.

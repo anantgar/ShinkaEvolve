@@ -135,8 +135,8 @@ pointer-scheduling changes if the latter are not consistently beneficial.
 
 Stockfish requests current-master patches, portable code, readable evidence and
 the appropriate bench/functional-change declaration. Its speedup guidance asks
-for repeated benchmarks on different machines and generally Fishtest; small,
-assembly-verifiable improvements may instead go directly to a PR. Our ARM-specific
+for repeated benchmarks on different machines and generally Fishtest; gains too small to verify on Fishtest but independently verifiable (for example
+in assembly) may instead go directly to a PR. Our ARM-specific
 gain needs ARM-capable testing: an x86-only match fleet will not measure its benefit.
 Discuss the applicable worker coverage with maintainers before consuming Fishtest
 capacity. More complex patches may require normal STC and LTC tests.
