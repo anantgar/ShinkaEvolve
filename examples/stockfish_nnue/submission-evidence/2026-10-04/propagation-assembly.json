@@ -1,0 +1,110 @@
+{
+  "gcc-baseline": {
+    "propagation": {
+      "instructions": 1191,
+      "lane_dots": 0,
+      "vector_dots": 88,
+      "vector_adds": 24,
+      "address_adds": 108,
+      "ld1r": 1
+    },
+    "accumulator": {
+      "instructions": 120,
+      "lane_dots": 0,
+      "vector_dots": 0,
+      "vector_adds": 0,
+      "address_adds": 16,
+      "ld1r": 0
+    }
+  },
+  "gcc-lane": {
+    "propagation": {
+      "instructions": 1179,
+      "lane_dots": 80,
+      "vector_dots": 8,
+      "vector_adds": 24,
+      "address_adds": 107,
+      "ld1r": 0
+    },
+    "accumulator": {
+      "instructions": 120,
+      "lane_dots": 0,
+      "vector_dots": 0,
+      "vector_adds": 0,
+      "address_adds": 16,
+      "ld1r": 0
+    }
+  },
+  "gcc-bank": {
+    "propagation": {
+      "instructions": 895,
+      "lane_dots": 0,
+      "vector_dots": 48,
+      "vector_adds": 8,
+      "address_adds": 102,
+      "ld1r": 1
+    },
+    "accumulator": {
+      "instructions": 120,
+      "lane_dots": 0,
+      "vector_dots": 0,
+      "vector_adds": 0,
+      "address_adds": 16,
+      "ld1r": 0
+    }
+  },
+  "gcc-pointer": {
+    "propagation": {
+      "instructions": 1191,
+      "lane_dots": 0,
+      "vector_dots": 88,
+      "vector_adds": 24,
+      "address_adds": 108,
+      "ld1r": 1
+    },
+    "accumulator": {
+      "instructions": 125,
+      "lane_dots": 0,
+      "vector_dots": 0,
+      "vector_adds": 0,
+      "address_adds": 18,
+      "ld1r": 0
+    }
+  },
+  "gcc-lane-bank": {
+    "propagation": {
+      "instructions": 887,
+      "lane_dots": 40,
+      "vector_dots": 8,
+      "vector_adds": 8,
+      "address_adds": 101,
+      "ld1r": 0
+    },
+    "accumulator": {
+      "instructions": 120,
+      "lane_dots": 0,
+      "vector_dots": 0,
+      "vector_adds": 0,
+      "address_adds": 16,
+      "ld1r": 0
+    }
+  },
+  "gcc-combined": {
+    "propagation": {
+      "instructions": 887,
+      "lane_dots": 40,
+      "vector_dots": 8,
+      "vector_adds": 8,
+      "address_adds": 101,
+      "ld1r": 0
+    },
+    "accumulator": {
+      "instructions": 120,
+      "lane_dots": 0,
+      "vector_dots": 0,
+      "vector_adds": 0,
+      "address_adds": 16,
+      "ld1r": 0
+    }
+  }
+}

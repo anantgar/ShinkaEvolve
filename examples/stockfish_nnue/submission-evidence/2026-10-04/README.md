@@ -6,6 +6,10 @@ be added only after complete receipts are collected. Runtime cutoff changes are
 recorded in the [run record](../../AWS_PR_VALIDATION_2026-10-04.md); measurement
 budgets and acceptance rules remain unchanged.
 
+[Native GCC assembly review](ASSEMBLY.md) records the propagation and accumulator
+code changes separately. Static instruction counts are explanatory evidence,
+not speed measurements.
+
 The worker uses the public `validate_candidate.py` fresh-process search protocol,
 compiles native GCC/Clang PGO/LTO pairs, verifies bench/exact outputs, records
 assembly and performs matching A/A controls before comparisons. It requires a

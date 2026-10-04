@@ -1,0 +1,117 @@
+{
+  "Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_refresh_cache(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Position const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorCaches&)": {
+    "gcc-baseline": {
+      "instructions": 776,
+      "scalar_add": 95,
+      "scalar_multiply": 8,
+      "vector_load_pairs": 19,
+      "vector_single_loads": 38
+    },
+    "gcc-pointer": {
+      "instructions": 744,
+      "scalar_add": 83,
+      "scalar_multiply": 8,
+      "vector_load_pairs": 38,
+      "vector_single_loads": 0
+    },
+    "gcc-combined": {
+      "instructions": 744,
+      "scalar_add": 83,
+      "scalar_multiply": 8,
+      "vector_load_pairs": 38,
+      "vector_single_loads": 0
+    }
+  },
+  "Stockfish::Eval::NNUE::(anonymous namespace)::apply_combined(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&)": {
+    "gcc-baseline": {
+      "instructions": 341,
+      "scalar_add": 35,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 20,
+      "vector_single_loads": 72
+    },
+    "gcc-pointer": {
+      "instructions": 284,
+      "scalar_add": 24,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 54,
+      "vector_single_loads": 4
+    },
+    "gcc-combined": {
+      "instructions": 284,
+      "scalar_add": 24,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 54,
+      "vector_single_loads": 4
+    }
+  },
+  "void Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental<true>(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)": {
+    "gcc-baseline": {
+      "instructions": 192,
+      "scalar_add": 29,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 0,
+      "vector_single_loads": 0
+    },
+    "gcc-pointer": {
+      "instructions": 192,
+      "scalar_add": 29,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 0,
+      "vector_single_loads": 0
+    },
+    "gcc-combined": {
+      "instructions": 192,
+      "scalar_add": 29,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 0,
+      "vector_single_loads": 0
+    }
+  },
+  "Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_hybrid(Stockfish::Color, Stockfish::Position const&, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorCaches&)": {
+    "gcc-baseline": {
+      "instructions": 728,
+      "scalar_add": 83,
+      "scalar_multiply": 7,
+      "vector_load_pairs": 36,
+      "vector_single_loads": 108
+    },
+    "gcc-pointer": {
+      "instructions": 580,
+      "scalar_add": 68,
+      "scalar_multiply": 7,
+      "vector_load_pairs": 67,
+      "vector_single_loads": 15
+    },
+    "gcc-combined": {
+      "instructions": 580,
+      "scalar_add": 68,
+      "scalar_multiply": 7,
+      "vector_load_pairs": 67,
+      "vector_single_loads": 15
+    }
+  },
+  "void Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental<false>(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)": {
+    "gcc-baseline": {
+      "instructions": 76,
+      "scalar_add": 9,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 0,
+      "vector_single_loads": 0
+    },
+    "gcc-pointer": {
+      "instructions": 76,
+      "scalar_add": 9,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 0,
+      "vector_single_loads": 0
+    },
+    "gcc-combined": {
+      "instructions": 76,
+      "scalar_add": 9,
+      "scalar_multiply": 0,
+      "vector_load_pairs": 0,
+      "vector_single_loads": 0
+    }
+  }
+}
