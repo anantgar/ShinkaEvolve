@@ -1,0 +1,9 @@
+{
+  "normalized_cases_sha256": "b2fe0fdb4d516b88352ab64333ba8c14ceb5493f508ea1bdfab66374fc041c45",
+  "positions": 48,
+  "source_url": "https://database.lichess.org/broadcast/lichess_db_broadcast_2025-09.pgn.zst",
+  "compressed_source_sha256": "da3a261e926a2c0f5e79c393818e643d76448edf94cfdaefa3892258a6f9e7ba",
+  "attribution": "Lichess broadcasts",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/"
+}

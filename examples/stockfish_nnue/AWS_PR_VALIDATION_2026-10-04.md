@@ -63,3 +63,8 @@ archived evidence. The completed October 3 evidence remains unchanged.
 
 The final patch scope and PR body will follow the completed evidence and Stockfish's
 request for small, distinct ideas. No Fishtest submission or Elo result is claimed.
+
+[Public audit inputs](submission-evidence/2026-10-04/README.md) preserve the
+original worker and component patches and provide a public-source corpus
+reproducer with a normalized 48-case digest. Concrete cases remain outside
+mutation snapshots. Runtime data is published only from completed receipts.

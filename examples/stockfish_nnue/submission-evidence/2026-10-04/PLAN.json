@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-04",
+  "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+  "patch_sha256": {
+    "lane": "62c8e022ba046bd66da6ec24850e62e665a11bfb7d53d523e50ceccf4f703bd9",
+    "bank": "870c4db814e823f2552dc1643af9125a10046ae1559a91a2e3f5fa01da377b55",
+    "pointer": "c3b2deb620e7de94afdb48d90223f199726eba2741748ceac863d73ced67faed",
+    "lane-bank": "dec08aea96461dab153db9951bbba38c25407247cc545815454e18b209296b87",
+    "combined": "5db8eaab72737101361da9005b09e8265d56a84dd3a1a8d087d4ad28e0b58143"
+  },
+  "source_sha256": "167b76c28c733ef5b639749618720988992b358af719ec9a6dbb6d21e98c8c77",
+  "corpus_sha256": "8cf513a99de0497ea1c64742091da3ce18f966db47488bc0d8c176b44fff7965",
+  "positions": 48,
+  "phases": {
+    "early": 16,
+    "middle": 16,
+    "late": 16
+  },
+  "blocks": 128,
+  "sample_target_seconds": 1.5,
+  "timing": "Sequential fresh-process ABBA/BAAB; A/A per compiler/ISA/depth, fixed 128-block comparisons; no favorable retries",
+  "variants": [
+    "combined",
+    "lane",
+    "bank",
+    "pointer",
+    "lane-bank"
+  ],
+  "builds": "GCC and Clang PGO/LTO dotprod; GCC PGO/LTO ordinary NEON; x86 GCC PGO/LTO AVX2",
+  "hardware": [
+    "Graviton3",
+    "Graviton4",
+    "Intel"
+  ],
+  "boot": "Fresh instance per family; Intel controller excludes both engine core siblings",
+  "deadline_hours": 10,
+  "spot_cap_per_worker_hour": 0.15,
+  "compute_ceiling_usd": 4.5,
+  "selection": "Evaluate fixed components; retain original PR evidence and all new results; narrow or split review scope based on correctness, portability, assembly and performance without retesting until favorable"
+}
