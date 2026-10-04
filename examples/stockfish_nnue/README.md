@@ -359,3 +359,9 @@ for weight training, architecture/search co-design and other Shinka applications
 The replay executable links Stockfish and must be distributed under its GPLv3
 terms with corresponding source. The pinned source snapshot retains Stockfish's
 license and attribution files.
+
+## Upstream patch status
+
+See [submission status](SUBMISSION.md) for the standalone Stockfish draft PR,
+completed ARM evidence and remaining validation. Intel candidate timing is
+incomplete; the October 3 AWS batch is shut down and cleaned up.

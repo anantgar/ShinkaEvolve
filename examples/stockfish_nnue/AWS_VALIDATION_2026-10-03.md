@@ -1,12 +1,13 @@
 # Real-game NNUE candidate validation — October 3, 2026
 
-Status snapshot at 04:44 UTC on October 4: correctness and ARM timing are complete;
-final Intel timing is running.
+Status updated October 4, 2026: correctness and ARM timing are complete. Intel
+candidate timing stopped at 120 of 128 blocks and has no complete speed estimate.
+All owned workers are terminated; SSH key and security group cleanup is complete.
 Live results are written to `.work/aws-validation-20261003/RESULTS.md` after archives
 arrive. This dated launch record does not assert the run remains pending forever.
 The measurements below support speedups within the declared ARM workload.
 They do not establish general workload performance, Elo or fitness admission.
-No upstream submission has been made.
+A draft upstream PR is being prepared; no Fishtest run has been submitted.
 The Shinka tree was clean at `8eab511` before starting. Local work is limited to
 orchestration, packaging and receipts; compilation and engine tests run on AWS.
 
@@ -45,9 +46,13 @@ remain open. Neither result is a qualified Shinka fitness or Elo claim.
 
 The ARM evidence archives are encrypted in S3, downloaded locally as small
 receipts, and SHA-256 checked. Both ARM workers are terminated. Intel correctness
-passed, but its final matched A/A and candidate timing is still running. The
-collector retains that result, terminates the last owned worker and removes the
-shared SSH key/security group when complete.
+passed. The final Intel A/A control passed (ratio 1.000611, 95% interval
+[0.999255, 1.001969], minimum sample 2.665 seconds), but its candidate archive
+contains only 120 of 128 blocks and no final result. Do not calculate or promote
+a speed claim from that partial checkpoint. The archive was collected on October
+4 after the stale collector failed on an expired EC2 instance lookup. All owned
+instances are now absent from EC2 or previously confirmed terminated; the shared
+SSH key, security group and local private key have been removed.
 
 ## Declared checks
 
@@ -145,4 +150,5 @@ Stockfish branch and evidence required for review. Fishtest is distributed acros
 generally recommends game tests for speedups but allows small, independently
 verifiable optimizations to go directly to a PR. Exact-output checks and benchmarks
 come first; maintainers can decide whether this combined ARM patch needs an
-architecture-filtered game test. No public test, push or PR has been created.
+architecture-filtered game test. The standalone branch is published on the author's Stockfish fork for a draft PR.
+No Fishtest test has been submitted. See [submission status](SUBMISSION.md).

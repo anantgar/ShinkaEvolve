@@ -117,7 +117,9 @@ Apple/Clang baseline and candidate. Both default benches searched **1,714,434
 nodes**; fresh-process depth-7 smoke searches matched all recorded fingerprints.
 The public compile helper also passed Apple SIMD and scalar object builds. The
 local standalone branch is `codex/nnue-neon-inference`, commit `233068f`, in
-`.work/submission-master`; it contains only the three NNUE files and is unpushed.
+`.work/submission-master`; the tested optimization contains only the three NNUE files. The published
+branch also adds the first-contribution AUTHORS entry; see
+[submission status and remaining work](SUBMISSION.md).
 These are portability/correctness checks, not local speed evidence. The new
 agent image recipe has not been built: the local Docker daemon was unavailable.
 Master uses `nn-252f33942263.nnue`, different from the pilot's
@@ -146,8 +148,9 @@ default bench signatures, hardware/compiler/build details, raw speed scripts and
 results, correctness/sanitizer coverage, and any Fishtest links. Add the author
 to AUTHORS if required for a first contribution. Publish the Stockfish branch
 and open its PR when this evidence is ready; Shinka's infrastructure commits
-do not belong in that PR. No upstream PR or public Fishtest test has been created
-by this tooling update.
+do not belong in that PR. An upstream draft PR is now being prepared with the completed ARM evidence.
+No public Fishtest test has been submitted. Track review readiness in
+[SUBMISSION.md](SUBMISSION.md).
 
 The October 3 AWS launch and preflight receipts are described in
 [AWS_VALIDATION_2026-10-03.md](AWS_VALIDATION_2026-10-03.md). The operator API restores

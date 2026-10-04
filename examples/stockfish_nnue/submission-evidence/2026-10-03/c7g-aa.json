@@ -1,0 +1,824 @@
+{
+  "schema": "stockfish-candidate-validation-v1",
+  "stage": "finalist",
+  "control": "aa",
+  "settings": {
+    "process_isolation": "sequential_abba_v1",
+    "process_blocks": 128,
+    "rounds_per_block": 2,
+    "warmups": 1,
+    "depth": 11,
+    "hash_mb": 16,
+    "passes": 10,
+    "maximum_passes": 16,
+    "minimum_sample_seconds": 1.0,
+    "max_log_standard_error": 0.002,
+    "max_aa_log_bias": 0.003,
+    "seed": 73013
+  },
+  "cpu": 2,
+  "baseline_sha256": "f178b57d6076eb0c87f7d2162cf985176044b418f6b69e4d229d7af56f76b538",
+  "candidate_sha256": "f178b57d6076eb0c87f7d2162cf985176044b418f6b69e4d229d7af56f76b538",
+  "network_sha256": "252f33942263bc8b8f740ba8aec3fed5a159ff148113c47a55c18c33d6627ab3",
+  "corpus_sha256": "8f89e554f1a1e2003dd9518a2661f4d5e6613c6947a1ea26084de0bf8b00f2a6",
+  "protocol_sha256": {
+    "validate_candidate.py": "9a3a50282d6adeb95238ed9d46285a9a651b18a3b686d769605e1cf3c2e7e24b",
+    "search_evaluate.py": "3adcbdbee057514c44b7f8c1813718f7fcd1122190260930b148c133c82133a2",
+    "search_scoring.py": "eebfbde44ca15df12036359861d0f51301f0d6c46ff4cc48ec951bb656b33806",
+    "search_checkpoint.py": "18f7750fff03de6439aa92660f78c341275c824bb2304a57222bc4008c921832",
+    "harness/search_service.py": "b154a4307dd16400125d3f0644e80543762b54650857afcd29f1d6b00b912f89"
+  },
+  "machine": "aarch64",
+  "system": "Linux-7.0.0-1013-aws-aarch64-with-glibc2.39",
+  "fitness_admitted": false,
+  "resource_checks": "not provided by this operator driver",
+  "scope": "Standalone search measurement; complete controls and release checks are still required",
+  "correct": true,
+  "measurement_accepted": true,
+  "rejection": null,
+  "supports_speed_claim": false,
+  "measurement": {
+    "upper_confidence_score": 1.00087456686842,
+    "geometric_speedup": 0.9999859641316056,
+    "log_standard_error": 0.0005360607145611278,
+    "pair_count": 128,
+    "timed_pair_count": 256,
+    "minimum_sample_seconds_observed": 1.9717559230002735,
+    "interval_95": [
+      0.9989257740136147,
+      1.0010472794614145
+    ],
+    "block_log_ratios": [
+      -0.01481048779270594,
+      1.412446624848851e-05,
+      -0.0009570962180823206,
+      -0.0010223526029072838,
+      0.0070309956194020695,
+      0.0029628973816593906,
+      0.0018048625791565742,
+      0.0006588119765981171,
+      -0.0010985125357466652,
+      0.007067052840963428,
+      -0.00178048087717958,
+      -0.0024052914793427083,
+      0.0029045043423330252,
+      -0.00507325582453888,
+      -0.0035207910992626212,
+      0.0021413070495738262,
+      0.0013650163528442505,
+      -0.008961000095007055,
+      0.0024128073726082944,
+      -0.00045999681282504756,
+      0.00757957833699785,
+      0.001899900871902338,
+      0.001260914959679893,
+      -0.002305310591077747,
+      0.0014783663694321048,
+      0.0027176235008896654,
+      0.005009055940092322,
+      -0.004088333260893806,
+      -0.0011057311340954001,
+      0.0033113012184921575,
+      -0.010985488344329497,
+      0.001664153598047169,
+      0.002129818671149697,
+      0.0004028544796433331,
+      -0.006681045761430915,
+      0.012152544215119354,
+      -0.002210310545170957,
+      -0.005220411291286919,
+      0.00839156113177364,
+      -0.0003338435756323199,
+      -0.0048128571133188025,
+      0.0063862786195679755,
+      0.0033865893644952627,
+      -0.004678996191932905,
+      0.00952513096505092,
+      0.00020944186745713855,
+      0.0027712244379722306,
+      -0.004979529193979704,
+      -0.003598080991384922,
+      -0.007028885103443072,
+      -0.0012955493356062164,
+      -0.002797754133301522,
+      0.005817584928839992,
+      0.003427703045876196,
+      -0.0030022336560809326,
+      0.007932631143812763,
+      -0.0024430726776962786,
+      -0.003660235774902376,
+      -0.006896034107420623,
+      -0.00014812483107645713,
+      -0.0011665514220183804,
+      0.007791794878123481,
+      0.0005004540028091253,
+      -0.003572954701847819,
+      0.003359495116958766,
+      0.007955153148789196,
+      0.006863028983646047,
+      0.0006088312911187721,
+      0.005811420807088297,
+      -0.006296472100338957,
+      0.00733729889897311,
+      0.0049046503890632365,
+      0.0038583984544059424,
+      0.0007546290531177946,
+      -0.0022936485187748934,
+      -0.0022250446609194396,
+      -0.0007240098305661968,
+      3.752674159201996e-05,
+      -0.005303936976699064,
+      0.012468416261673942,
+      0.001279631414170035,
+      0.002462481937346772,
+      -0.0004374329890573514,
+      -0.0022116152120966737,
+      0.0005615155811941053,
+      -0.0039099022800335725,
+      -0.003304265537286244,
+      0.004064111971982309,
+      0.005526642996728115,
+      -0.03801713870428913,
+      -0.004428212057777325,
+      -0.006668264822629777,
+      0.0006467217755524723,
+      -0.0029187903925118053,
+      -0.020326749184232995,
+      0.006662042397154455,
+      0.00035926997276986006,
+      -0.005447542415317974,
+      -0.0019038655052380782,
+      -0.0010837676583935751,
+      0.004408571526724747,
+      -0.0008144937893656556,
+      -0.0005349494196854598,
+      0.004956924353038128,
+      -0.005254040788176206,
+      -0.00045942055170938856,
+      0.009993573314400983,
+      0.0010448800881807108,
+      0.0054870711619995904,
+      -0.0015282333654594304,
+      0.005730019066609526,
+      0.004265294571055067,
+      0.0035925258944325966,
+      -0.002441858950357867,
+      -0.008716588091258637,
+      0.002006281632645268,
+      0.0017222155983935838,
+      -0.0027514569511246645,
+      -0.0006554167468396099,
+      -0.003219987949460379,
+      -0.003066705726592567,
+      0.001031690021721987,
+      -0.003212409257741744,
+      0.000497560126812735,
+      -0.00010328205872728313,
+      0.0044607588704824175,
+      0.007508986120872141,
+      0.005226991735911735
+    ],
+    "plan": [
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 6
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 0
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 2
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 0
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 10
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 11
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 1
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 7
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 0
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 11
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 0
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 8
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 7
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 1
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 10
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 10
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 8
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 8
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 11
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 11
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 9
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 8
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 10
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 11
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 2
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 11
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 0
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 6
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 5
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 0
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 0
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 2
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 11
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 2
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 10
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 11
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 11
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 2
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 7
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 0
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 11
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 0
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 0
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 11
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 10
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 10
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 10
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 0
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 3
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 4
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 9
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 1
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 6
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 5
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 3
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 4
+      },
+      {
+        "startup_order": "BA",
+        "sequence": "BAAB",
+        "offset": 9
+      },
+      {
+        "startup_order": "AB",
+        "sequence": "ABBA",
+        "offset": 9
+      }
+    ]
+  }
+}
