@@ -17,7 +17,16 @@ was **1.023302**, with a one-sided 95% lower confidence bound of **1.022015**.
 This is a pilot-corpus result, not an Elo or general Stockfish speed claim.
 
 ASan/UBSan passed **82,016 exact values and twelve depth-11 searches** on fresh
-fixtures. **Independent timing remains pending:** a separate campaign uses twelve
-new private search positions, the other Spot worker, unchanged 128-block gates,
-and fresh controls. Do not promote the patch based only on the pilot.
+fixtures. Independent timing completed once on twelve fresh private synthetic
+search positions, the other Spot worker, unchanged 128-block gates and fresh
+controls. All controls passed; geometric speedup was **1.022646**, with a
+one-sided 95% lower confidence bound of **1.021734**. Further validation still
+requires representative positions and other CPU/compiler combinations.
 See [the pilot report](../../../docs/stockfish_search_pilot_2026-09-30.md).
+## Validation and submission
+
+Follow [the validation workflow](../VALIDATION.md) for real-game corpora,
+separate correctness and throughput checks, screening, fresh finalist workers,
+release builds and Stockfish submission requirements. The completed synthetic
+holdout confirmed about 2.26% fixed-search speedup; it is not a production or
+playing-strength claim.

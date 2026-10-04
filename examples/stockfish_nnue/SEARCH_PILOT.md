@@ -1,5 +1,11 @@
 # Private fixed-search pilot
 
+The September 30 pilot and independent synthetic holdout are complete; the
+finalist measured 2.33% and 2.26% faster fixed searches, respectively, with exact
+checks and sanitizers passing. AWS workers and monitoring were cleaned up.
+See [validation and submission](VALIDATION.md) for the next steps. The protocol
+below describes reusable setup; it is not an active run status.
+
 The v3 lane keeps the existing NNUE allowlist. Search, network weights, compiler
 flags, adapters and measurement code are frozen. The mutation agent receives
 surrounding engine source and the read-only network dependency. It receives no

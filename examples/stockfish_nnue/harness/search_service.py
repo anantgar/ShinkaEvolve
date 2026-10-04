@@ -72,9 +72,11 @@ def finish_search(info: dict | None, text: str) -> dict:
 
 
 class UciEngine:
-    def __init__(self, binary: Path, network: Path, hash_mb: int):
+    def __init__(
+        self, binary: Path, network: Path, hash_mb: int, *, cpu: int | None = None
+    ):
         self.process = subprocess.Popen(
-            [str(binary)],
+            (["taskset", "-c", str(cpu)] if cpu is not None else []) + [str(binary)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

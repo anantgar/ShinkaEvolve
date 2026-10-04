@@ -1,0 +1,10 @@
+# Build with --build-arg AGENT_BASE=registry/agent@sha256:<qualified-digest>.
+# The existing provider executables and labels come from that pinned image.
+ARG AGENT_BASE
+FROM ${AGENT_BASE}
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends g++ clang make binutils libc6-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && command -v make && command -v g++ && command -v clang++
+USER 65532:65532

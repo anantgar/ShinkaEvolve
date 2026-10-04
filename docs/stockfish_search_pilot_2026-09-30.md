@@ -1,8 +1,11 @@
 # Private NNUE search pilot — September 30, 2026
 
-The authorized four-proposal pilot completed at **20:35 UTC**. One candidate
-passed and measured a promising gain on the pilot corpus; independent validation
-is running. No general Stockfish speed or Elo improvement has been established.
+The authorized four-proposal pilot completed at **20:35 UTC September 30**.
+Independent finalist validation completed at **00:57 UTC October 1** and confirmed
+2.26% faster fixed searches on fresh synthetic positions. All controls, exact
+checks and sanitizers passed. The workers and monitoring were cleaned up.
+No representative production-corpus or Elo improvement has been established.
+See [the validation workflow](../examples/stockfish_nnue/VALIDATION.md) for next steps.
 Application code is on `codex/stockfish-inference-aws`. The initial private-search
 implementation is commit `1aedbc8`; the deployed recording fix is **`2bd9b98`**.
 The universal manifest recording fix is **`b3ff0d7`**. Fork main remains `340bc74`.
@@ -187,22 +190,28 @@ favorable. No additional mutation batch runs. Validation identity:
 At 21:02 UTC, the selected candidate passed **ASan/UBSan, 82,016 exact values,
 and twelve depth-11 searches** on the fresh fixtures. Both holdout A/A jobs passed
 163,824 release exact comparisons and entered their full timing budgets. Holdout
-qualification and the independent candidate timing result remain pending.
+qualification subsequently passed. The fixed candidate was evaluated once,
+matching outputs and measuring geometric speedup **1.0226464126**, lower-bound
+score **1.0217343891**, over all 128 blocks. Independent A/A measured
+**0.9999890172**. This completes the synthetic holdout validation.
 
 The preserved generation-1 build diagnostic contains only a generic build error;
 generation 4 likewise lacks the underlying agent-process cause. Better private
-stderr retention is a follow-up before another batch. Neither failure received
+stderr retention was implemented in the October 3 tooling update; it preserves
+private compiler streams and redacted provider artifacts for future failures.
+It cannot recover the missing historical causes. Neither failure received
 fitness or was replaced by an extra proposal.
 
 ## AWS and monitoring
 
-The two live workers are Spot `c8g.2xlarge` instances in `us-east-1f`:
+The two workers were Spot `c8g.2xlarge` instances in `us-east-1f`:
 `i-0fada3380b3a3bd93` and `i-0f99a358acd33e8db`. No GPU is needed for this exact
-inference optimization. Controllers run as UID 65532 outside measurement core 2.
-Each runtime container is restricted to core 2, with network disabled and a
-4 GiB memory limit. Each instance terminates on its scheduled shutdown at
+inference optimization. Controllers ran as UID 65532 outside measurement core 2.
+Each runtime container was restricted to core 2, with network disabled and a
+4 GiB memory limit. Each instance had a scheduled termination at
 **05:47 UTC October 1**, extended from 22:10 UTC September 30 to finish the
-authorized continuation. Clean up sooner once evidence is preserved and the run ends.
+authorized continuation. Both were explicitly terminated at **01:13:32 UTC
+October 1**, after evidence collection. Temporary access resources were deleted.
 
 Bare-metal Spot requests failed on capacity/quota. On-demand bare metal exceeded
 the 32-vCPU quota. EC2 also rejected small dedicated-tenancy instances, requiring
@@ -214,9 +223,8 @@ Dedicated Spot requires the largest or metal size for the family.
 ([Dedicated instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/dedicated-instance.html),
 [Dedicated Spot restrictions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/how-spot-instances-work.html))
 
-The active heartbeat is `monitor-stockfish-four-generation-pilot`, every ten
-minutes, quiet unless there is a meaningful change or required action. The
-operator entry points are:
+Monitoring is finished: the original heartbeat was replaced for finalist work,
+and its replacement was deleted after closeout. Historical operator entry points are:
 
 ```text
 examples/stockfish_nnue/.work/aws-search-mini-20260930/state.json
@@ -227,8 +235,7 @@ examples/stockfish_nnue/.work/aws-search-mini-20260930/OPERATOR.md
 /home/ec2-user/shinka/finalist-validation.py.log      # worker 2
 ```
 
-Before cleanup, preserve the full control and candidate evidence, verify archive
-hashes, and exclude credentials and durable provider homes. Terminate only the
-two owned workers, confirm termination, remove their temporary SSH key pair and
-security group, record cleanup, then stop the heartbeat. A promising candidate
-still needs source review, sanitizers and fresh independent holdout measurements.
+Full evidence was checksum-verified and archived to S3 before cleanup. The
+compact final report is retained under the ignored operator directory at
+`finalist-holdout-final-evidence/REPORT.md`. Further claims require representative
+workloads, portability/release-build checks and additional independent machines.

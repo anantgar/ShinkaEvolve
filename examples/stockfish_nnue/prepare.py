@@ -140,6 +140,8 @@ def prepare(args) -> None:
     inputs = output / "inputs"
     inputs.mkdir()
     prepare_seed(source, seed, inputs / "stockfish-build-context.json")
+    # Public, immutable compile helper; contains no checker or concrete cases.
+    shutil.copyfile(HERE / "agent_compile.py", seed / "agent_compile.py")
     # Public contract only: no concrete test inputs, expected values or test code.
     (seed / "SHINKA_TASK.md").write_text(
         f"Target: {args.target}. Fixed Stockfish build: "
@@ -154,7 +156,12 @@ def prepare(args) -> None:
         "harnesses and expected outputs are withheld. Surrounding engine source is "
         "readable but immutable; only the NNUE allowlist may change. The pinned "
         "network is available read-only at "
-        "/dependencies/files/network.nnue. Keep the final repository free of build artifacts.\n"
+        "/dependencies/files/network.nnue. "
+        f"Before finishing, run python3 agent_compile.py --target {args.target}. "
+        "It compiles NNUE objects in temporary scratch space; the full engine "
+        "cannot be linked in this sanitized source view because its benchmark/test "
+        "sources are private. Do not reconstruct those sources. "
+        "Keep the final repository free of build artifacts.\n"
     )
     (inputs / "seed-fingerprints.json").write_text(
         json.dumps(fingerprints(seed), sort_keys=True)
