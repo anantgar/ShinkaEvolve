@@ -47,8 +47,8 @@ Plans, exact patches, workers, calibration and receipts are retained in the
 
 Every production bench is **1714434**. Exact pointer replay, ordinary NEON/Clang
 replay and ASan/UBSan pass. clang-format 20 and
-[all 59 fork CI jobs](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
-pass. [Assembly evidence](submission-evidence/2026-10-05-common-profile/accumulator-assembly.json)
+[full fork CI](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
+pass (55 jobs successful; four publication jobs skipped). [Assembly evidence](submission-evidence/2026-10-05-common-profile/accumulator-assembly.json)
 records paired-load changes as static counts, without inferring dynamic load counts.
 
 These are fixed-corpus, fixed-network, common-profile speed measurements, not Elo,
