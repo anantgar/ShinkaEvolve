@@ -1,0 +1,264 @@
+{
+  "sanitized.exact.json": {
+    "passed": true,
+    "checked_integer_values": 79120,
+    "trace_count": 60,
+    "rounds": 1,
+    "baseline_metadata": {
+      "ready": true,
+      "network_bytes": 112335424,
+      "stack_bytes": 1122432,
+      "cache_bytes": 278528
+    },
+    "candidate_metadata": {
+      "ready": true,
+      "network_bytes": 112335424,
+      "stack_bytes": 1122432,
+      "cache_bytes": 278528
+    }
+  },
+  "pointer.exact.json": {
+    "passed": true,
+    "checked_integer_values": 237420,
+    "trace_count": 60,
+    "rounds": 3,
+    "baseline_metadata": {
+      "ready": true,
+      "network_bytes": 112335424,
+      "stack_bytes": 1122432,
+      "cache_bytes": 278528
+    },
+    "candidate_metadata": {
+      "ready": true,
+      "network_bytes": 112335424,
+      "stack_bytes": 1122432,
+      "cache_bytes": 278528
+    }
+  },
+  "gcc.pointer.build.json": {
+    "arch": "x86-64-avx2",
+    "compiler": "gcc",
+    "variant": "pointer",
+    "binary_sha256": "77365c615fe45e0b482ef95582e98e009cd510abeb54543256d59b6f4fe897f8",
+    "bytes": 99274992,
+    "make_options": [
+      "ARCH=x86-64-avx2",
+      "COMP=gcc",
+      "EXTRAPROFILEFLAGS=-Wno-error=coverage-mismatch",
+      "GIT_SHA=49ea5ded",
+      "GIT_DATE=20260930",
+      "GIT_DIFFINDEX="
+    ],
+    "profile_hashes": {
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#attacks.gcda": "618b189118dc1601241c9026ef88a2a6e9d47e5eea6c49edeab04a4f4b99ade8",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#benchmark.gcda": "15af7b1755ca1bb600f9acb9d124c111c4bbfbab6a960a92fb6f5690150a07db",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#bitboard.gcda": "348c96b484deddeefbb8d5dd40f45208d3e8111e007bfa66ecb1ce33a361c0d6",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#engine.gcda": "6789590fb027e73a7dabe036fdcc7f596ddd7f798a7c23950d3c1141fb735be4",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#evaluate.gcda": "5fd0da8760190c49c2c748f2dffd39317b6ea20581c9800b38c78ecef0b9cd72",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#full_threats.gcda": "6bbaecaa05624e2d436d204482fd70ed239c91304861a3c03cb1cc4434a7475f",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#half_ka_v2_hm.gcda": "7cb0beb151c94ef6bc6e050c744504a7612699910836046e9acd3f031d2d91d9",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#main.gcda": "eed6aa02d587f841d0d488690a7c37a37164b2aeddf899b64191cf1d231a6c54",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#memory.gcda": "13334fa4657cabf29c6b85f3f93e2d8494a1be8fa61dcd35eebd1e166e5d36f9",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#misc.gcda": "71d90482f8031804b55486573d1e1ee317dc0c4bf72c5ffa4be80dcfeb89248d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#movegen.gcda": "778cc4d1f610840289b8bb4f0c60b5cbd608ba670957f2339be76b0ad26f86ae",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#movepick.gcda": "e14d44bbdf4f584f391bf16e1c467730f8a7364987287dd61ba63868462a1b4e",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#network.gcda": "3b594e1c286f81aa878529a804f3763a7f6fd3a9191272cc5976422ce6604945",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#nnue_accumulator.gcda": "0a8ada2ec432511bb761bfea7b9c6a93b176f20c6dca03cd44825ab20edae874",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#nnue_misc.gcda": "e0e973cbcad2a8e200f6391a02330d1e7e9e4906481afdbc37f476bc50dececd",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#position.gcda": "2efbc7d328ce6a1455d37168d55a7e28f1dece7fe4a1386485bf9f00ef9f83f2",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#pp_3wide.gcda": "cba5c0d4d67113adf343fd4bf4baf38d1a2a36cc90aa2c30cee52282a0391e8d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#score.gcda": "374919b9686162a9268832f6af9b1081e303a93cca8ee5f898f10e26b3201278",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#search.gcda": "28ba532fc30b2ad07a5216bc42681979fd4dbb599b2de01985070266a2309fc0",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tbprobe.gcda": "2e23d7afd162b233ec7eb87152bffbe7991e0c07785e713cce10aac545ab3a7b",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#thread.gcda": "ad54bf3b16482bf0b01edc28e681d59b7bcc06d2cd14a6440a324b4701f02afb",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#timeman.gcda": "924148216a7166b2488ed5754439d3fa8fadfb6e5788fed7c4b9246e6e9b831c",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tt.gcda": "f9574d80fc139f4853b8051b3b69762abda2e6b6f35f6d51106bd536454a3f30",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tune.gcda": "7e6c9d1c9209db0e29c7fdaa25965c0e6e1845a92567e1e5310fda4580643b06",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#uci.gcda": "eb1d6f0a7a8bbce6f2dd23505bb6cfc2d40d3ef0da135a255a232940785eca9d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#ucioption.gcda": "8e643d0e78d912ba1d3779a56dc2f2f10f3f7d431ea7cbd9277a46fada3441ec"
+    },
+    "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+    "patch_sha256": "b84b50cdabf31d1b4e6ac127765837527f504ca7444e0d104026c36c287a8c38"
+  },
+  "replay-sanitized.build.json": {
+    "arch": "x86-64-avx2",
+    "compiler": "gcc",
+    "variant": "pointer",
+    "replay": true,
+    "sanitize": true,
+    "make_options": [
+      "ARCH=x86-64-avx2",
+      "COMP=gcc",
+      "debug=yes",
+      "optimize=no",
+      "sanitize=address undefined",
+      "EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF -O1 -fno-sanitize-recover=all -fno-omit-frame-pointer",
+      "GIT_SHA=49ea5ded",
+      "GIT_DATE=20260930",
+      "GIT_DIFFINDEX="
+    ],
+    "binary_sha256": "8b3d3e9009df747b23c3dff2f73692e5b913ef8161c46d299fdcf60bc52a3374",
+    "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+    "patch_sha256": "b84b50cdabf31d1b4e6ac127765837527f504ca7444e0d104026c36c287a8c38",
+    "bytes": 39227520
+  },
+  "gcc.baseline.build.json": {
+    "arch": "x86-64-avx2",
+    "compiler": "gcc",
+    "variant": "baseline",
+    "binary_sha256": "77365c615fe45e0b482ef95582e98e009cd510abeb54543256d59b6f4fe897f8",
+    "bytes": 99274992,
+    "make_options": [
+      "ARCH=x86-64-avx2",
+      "COMP=gcc",
+      "EXTRAPROFILEFLAGS=-Wno-error=coverage-mismatch",
+      "GIT_SHA=49ea5ded",
+      "GIT_DATE=20260930",
+      "GIT_DIFFINDEX="
+    ],
+    "profile_hashes": {
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#attacks.gcda": "618b189118dc1601241c9026ef88a2a6e9d47e5eea6c49edeab04a4f4b99ade8",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#benchmark.gcda": "15af7b1755ca1bb600f9acb9d124c111c4bbfbab6a960a92fb6f5690150a07db",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#bitboard.gcda": "348c96b484deddeefbb8d5dd40f45208d3e8111e007bfa66ecb1ce33a361c0d6",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#engine.gcda": "6789590fb027e73a7dabe036fdcc7f596ddd7f798a7c23950d3c1141fb735be4",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#evaluate.gcda": "5fd0da8760190c49c2c748f2dffd39317b6ea20581c9800b38c78ecef0b9cd72",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#full_threats.gcda": "6bbaecaa05624e2d436d204482fd70ed239c91304861a3c03cb1cc4434a7475f",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#half_ka_v2_hm.gcda": "7cb0beb151c94ef6bc6e050c744504a7612699910836046e9acd3f031d2d91d9",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#main.gcda": "eed6aa02d587f841d0d488690a7c37a37164b2aeddf899b64191cf1d231a6c54",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#memory.gcda": "13334fa4657cabf29c6b85f3f93e2d8494a1be8fa61dcd35eebd1e166e5d36f9",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#misc.gcda": "71d90482f8031804b55486573d1e1ee317dc0c4bf72c5ffa4be80dcfeb89248d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#movegen.gcda": "778cc4d1f610840289b8bb4f0c60b5cbd608ba670957f2339be76b0ad26f86ae",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#movepick.gcda": "e14d44bbdf4f584f391bf16e1c467730f8a7364987287dd61ba63868462a1b4e",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#network.gcda": "3b594e1c286f81aa878529a804f3763a7f6fd3a9191272cc5976422ce6604945",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#nnue_accumulator.gcda": "0a8ada2ec432511bb761bfea7b9c6a93b176f20c6dca03cd44825ab20edae874",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#nnue_misc.gcda": "e0e973cbcad2a8e200f6391a02330d1e7e9e4906481afdbc37f476bc50dececd",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#position.gcda": "2efbc7d328ce6a1455d37168d55a7e28f1dece7fe4a1386485bf9f00ef9f83f2",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#pp_3wide.gcda": "cba5c0d4d67113adf343fd4bf4baf38d1a2a36cc90aa2c30cee52282a0391e8d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#score.gcda": "374919b9686162a9268832f6af9b1081e303a93cca8ee5f898f10e26b3201278",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#search.gcda": "28ba532fc30b2ad07a5216bc42681979fd4dbb599b2de01985070266a2309fc0",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tbprobe.gcda": "2e23d7afd162b233ec7eb87152bffbe7991e0c07785e713cce10aac545ab3a7b",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#thread.gcda": "ad54bf3b16482bf0b01edc28e681d59b7bcc06d2cd14a6440a324b4701f02afb",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#timeman.gcda": "924148216a7166b2488ed5754439d3fa8fadfb6e5788fed7c4b9246e6e9b831c",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tt.gcda": "f9574d80fc139f4853b8051b3b69762abda2e6b6f35f6d51106bd536454a3f30",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tune.gcda": "7e6c9d1c9209db0e29c7fdaa25965c0e6e1845a92567e1e5310fda4580643b06",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#uci.gcda": "eb1d6f0a7a8bbce6f2dd23505bb6cfc2d40d3ef0da135a255a232940785eca9d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#ucioption.gcda": "8e643d0e78d912ba1d3779a56dc2f2f10f3f7d431ea7cbd9277a46fada3441ec"
+    },
+    "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+    "patch_sha256": null
+  },
+  "replay-baseline.build.json": {
+    "arch": "x86-64-avx2",
+    "compiler": "gcc",
+    "variant": null,
+    "replay": true,
+    "sanitize": false,
+    "make_options": [
+      "ARCH=x86-64-avx2",
+      "COMP=gcc",
+      "EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF",
+      "GIT_SHA=49ea5ded",
+      "GIT_DATE=20260930",
+      "GIT_DIFFINDEX="
+    ],
+    "binary_sha256": "10c5738a58c3fdfb830a0c3052612da14e30277b155ff05950be27050c7c7836",
+    "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+    "patch_sha256": null,
+    "bytes": 245800
+  },
+  "replay-pointer.build.json": {
+    "arch": "x86-64-avx2",
+    "compiler": "gcc",
+    "variant": "pointer",
+    "replay": true,
+    "sanitize": false,
+    "make_options": [
+      "ARCH=x86-64-avx2",
+      "COMP=gcc",
+      "EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF",
+      "GIT_SHA=49ea5ded",
+      "GIT_DATE=20260930",
+      "GIT_DIFFINDEX="
+    ],
+    "binary_sha256": "10c5738a58c3fdfb830a0c3052612da14e30277b155ff05950be27050c7c7836",
+    "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+    "patch_sha256": "b84b50cdabf31d1b4e6ac127765837527f504ca7444e0d104026c36c287a8c38",
+    "bytes": 245800
+  },
+  "gcc.profile.json": {
+    "training": "baseline bench; one thread CPU 2",
+    "profile_hashes": {
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#attacks.gcda": "618b189118dc1601241c9026ef88a2a6e9d47e5eea6c49edeab04a4f4b99ade8",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#benchmark.gcda": "15af7b1755ca1bb600f9acb9d124c111c4bbfbab6a960a92fb6f5690150a07db",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#bitboard.gcda": "348c96b484deddeefbb8d5dd40f45208d3e8111e007bfa66ecb1ce33a361c0d6",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#engine.gcda": "6789590fb027e73a7dabe036fdcc7f596ddd7f798a7c23950d3c1141fb735be4",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#evaluate.gcda": "5fd0da8760190c49c2c748f2dffd39317b6ea20581c9800b38c78ecef0b9cd72",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#full_threats.gcda": "6bbaecaa05624e2d436d204482fd70ed239c91304861a3c03cb1cc4434a7475f",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#half_ka_v2_hm.gcda": "7cb0beb151c94ef6bc6e050c744504a7612699910836046e9acd3f031d2d91d9",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#main.gcda": "eed6aa02d587f841d0d488690a7c37a37164b2aeddf899b64191cf1d231a6c54",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#memory.gcda": "13334fa4657cabf29c6b85f3f93e2d8494a1be8fa61dcd35eebd1e166e5d36f9",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#misc.gcda": "71d90482f8031804b55486573d1e1ee317dc0c4bf72c5ffa4be80dcfeb89248d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#movegen.gcda": "778cc4d1f610840289b8bb4f0c60b5cbd608ba670957f2339be76b0ad26f86ae",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#movepick.gcda": "e14d44bbdf4f584f391bf16e1c467730f8a7364987287dd61ba63868462a1b4e",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#network.gcda": "3b594e1c286f81aa878529a804f3763a7f6fd3a9191272cc5976422ce6604945",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#nnue_accumulator.gcda": "0a8ada2ec432511bb761bfea7b9c6a93b176f20c6dca03cd44825ab20edae874",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#nnue_misc.gcda": "e0e973cbcad2a8e200f6391a02330d1e7e9e4906481afdbc37f476bc50dececd",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#position.gcda": "2efbc7d328ce6a1455d37168d55a7e28f1dece7fe4a1386485bf9f00ef9f83f2",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#pp_3wide.gcda": "cba5c0d4d67113adf343fd4bf4baf38d1a2a36cc90aa2c30cee52282a0391e8d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#score.gcda": "374919b9686162a9268832f6af9b1081e303a93cca8ee5f898f10e26b3201278",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#search.gcda": "28ba532fc30b2ad07a5216bc42681979fd4dbb599b2de01985070266a2309fc0",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tbprobe.gcda": "2e23d7afd162b233ec7eb87152bffbe7991e0c07785e713cce10aac545ab3a7b",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#thread.gcda": "ad54bf3b16482bf0b01edc28e681d59b7bcc06d2cd14a6440a324b4701f02afb",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#timeman.gcda": "924148216a7166b2488ed5754439d3fa8fadfb6e5788fed7c4b9246e6e9b831c",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tt.gcda": "f9574d80fc139f4853b8051b3b69762abda2e6b6f35f6d51106bd536454a3f30",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#tune.gcda": "7e6c9d1c9209db0e29c7fdaa25965c0e6e1845a92567e1e5310fda4580643b06",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#uci.gcda": "eb1d6f0a7a8bbce6f2dd23505bb6cfc2d40d3ef0da135a255a232940785eca9d",
+      "profdir/#home#ubuntu#validation#builds#pgo-gcc#src#ucioption.gcda": "8e643d0e78d912ba1d3779a56dc2f2f10f3f7d431ea7cbd9277a46fada3441ec"
+    },
+    "options": [
+      "ARCH=x86-64-avx2",
+      "COMP=gcc",
+      "EXTRAPROFILEFLAGS=-Wno-error=coverage-mismatch",
+      "GIT_SHA=49ea5ded",
+      "GIT_DATE=20260930",
+      "GIT_DIFFINDEX="
+    ],
+    "training_signature": "1714434"
+  },
+  "gcc.assembly-identity.json": {
+    "identical": true,
+    "hashes": [
+      "e212103a2ced0eb5c21df1090c8c1c90925d329bc68e60e19f9c96bfa891f0ee",
+      "e212103a2ced0eb5c21df1090c8c1c90925d329bc68e60e19f9c96bfa891f0ee"
+    ]
+  },
+  "gcc.baseline.profile-diagnostics.json": {
+    "permitted_source_location_warnings": [],
+    "structural_mismatch": false,
+    "missing_profile": false
+  },
+  "gcc.pointer.profile-diagnostics.json": {
+    "permitted_source_location_warnings": [
+      "nnue/nnue_accumulator.cpp:829:1: warning: source locations for function \u2018_GLOBAL__sub_I__ZNK9Stockfish4Eval4NNUE16AccumulatorStack6latestEv\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:829:1: warning: source locations for function \u2018_GLOBAL__sub_I__ZNK9Stockfish4Eval4NNUE16AccumulatorStack6latestEv\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:450:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental<false>(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)void\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:450:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental<false>(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)void\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:450:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental<true>(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)void\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:450:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental<true>(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)void\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:771:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_refresh_cache(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Position const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorCaches&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:771:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_refresh_cache(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Position const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorCaches&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:639:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_hybrid(Stockfish::Color, Stockfish::Position const&, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorCaches&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:639:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_hybrid(Stockfish::Color, Stockfish::Position const&, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorCaches&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:497:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental_both(Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:497:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_incremental_both(Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Square, Stockfish::Square, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:421:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::apply_combined(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]",
+      "nnue/nnue_accumulator.cpp:421:6: warning: source locations for function \u2018Stockfish::Eval::NNUE::(anonymous namespace)::apply_combined(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&)\u2019 have changed, the profile data may be out of date [-Wcoverage-mismatch]"
+    ],
+    "structural_mismatch": false,
+    "missing_profile": false
+  },
+  "bench_signatures": {
+    "gcc.baseline.bench.log": "1714434",
+    "gcc.pointer.bench.log": "1714434"
+  }
+}

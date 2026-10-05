@@ -1,0 +1,48 @@
+{
+  "baseline": {
+    "update_accumulator_refresh_cache": {
+      "symbol": "Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_refresh_cache(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Position const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorCaches&)",
+      "instructions": 776,
+      "paired_vector_loads": 19,
+      "single_vector_loads": 38,
+      "integer_adds": 95
+    },
+    "apply_combined": {
+      "symbol": "Stockfish::Eval::NNUE::(anonymous namespace)::apply_combined(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&)",
+      "instructions": 341,
+      "paired_vector_loads": 20,
+      "single_vector_loads": 72,
+      "integer_adds": 35
+    },
+    "update_accumulator_hybrid": {
+      "symbol": "Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_hybrid(Stockfish::Color, Stockfish::Position const&, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorCaches&)",
+      "instructions": 728,
+      "paired_vector_loads": 36,
+      "single_vector_loads": 108,
+      "integer_adds": 83
+    }
+  },
+  "pointer": {
+    "update_accumulator_refresh_cache": {
+      "symbol": "Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_refresh_cache(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Position const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorCaches&)",
+      "instructions": 744,
+      "paired_vector_loads": 38,
+      "single_vector_loads": 0,
+      "integer_adds": 83
+    },
+    "apply_combined": {
+      "symbol": "Stockfish::Eval::NNUE::(anonymous namespace)::apply_combined(Stockfish::Color, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 32ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&, Stockfish::ValueList<unsigned short, 256ul> const&)",
+      "instructions": 284,
+      "paired_vector_loads": 54,
+      "single_vector_loads": 4,
+      "integer_adds": 24
+    },
+    "update_accumulator_hybrid": {
+      "symbol": "Stockfish::Eval::NNUE::(anonymous namespace)::update_accumulator_hybrid(Stockfish::Color, Stockfish::Position const&, Stockfish::Eval::NNUE::FeatureTransformer const&, Stockfish::Eval::NNUE::AccumulatorState&, Stockfish::Eval::NNUE::AccumulatorState const&, Stockfish::Eval::NNUE::AccumulatorCaches&)",
+      "instructions": 580,
+      "paired_vector_loads": 67,
+      "single_vector_loads": 15,
+      "integer_adds": 68
+    }
+  }
+}

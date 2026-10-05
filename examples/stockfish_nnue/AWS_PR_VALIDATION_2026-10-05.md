@@ -1,7 +1,8 @@
 # Controlled pointer validation — October 5, 2026
 
-Status: the common-profile x86 preflight is running. No qualified speed estimate
-is claimed. The PR remains pointer-only at `830c5c3`, based on `49ea5ded`.
+Status: [x86 code identity passed](submission-evidence/2026-10-05-common-profile/x86-code-identity.json).
+Primary ARM checks and independent-boot confirmations are running. No qualified
+speed estimate is claimed. The PR remains pointer-only at `830c5c3`, based on `49ea5ded`.
 
 ## Why the builds changed
 

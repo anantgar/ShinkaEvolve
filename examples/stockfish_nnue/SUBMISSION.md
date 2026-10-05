@@ -18,13 +18,13 @@ exposed separate-PGO code differences on unaffected x86 before timing. The
 profile for both builds and requires excluded-path code identity.
 
 Remaining work: complete pointer-only workload/depth, compiler/NEON, x86 and
-independent-boot comparisons; recheck master; resolve Fishtest with maintainers.
+independent-boot comparisons; recheck master; Fishtest is deferred by the user.
 Rejected measurements remain inconclusive. The PR stays draft.
 
 The user has no Fishtest account. A [prepared configuration](submission-evidence/2026-10-04/FISHTEST.md)
-pins the revisions, benches and affected ARM/GCC scope. A maintainer/account holder
-must submit a test or establish that the documented direct-evidence exception
-applies. No game result, exemption or Elo gain is claimed.
+pins the revisions, benches and affected ARM/GCC scope. A future game test needs
+a maintainer/account holder or an agreed direct-evidence exception. No game
+result, exemption or Elo gain is claimed.
 
 Historical observations and exact-output receipts are retained in the
 [October 3](AWS_VALIDATION_2026-10-03.md) and
