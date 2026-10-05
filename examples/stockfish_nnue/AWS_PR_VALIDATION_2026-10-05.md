@@ -58,3 +58,9 @@ measured +0.918% at depth 11 (95% interval +0.843% to +0.994%) and +1.108% at
 depth 13 (+1.048% to +1.167%), with accepted matching A/A controls and verified
 immutable profiles. Other comparisons remain pending; cross-boot variation
 will be reported rather than replaced by one pooled estimate.
+
+The [complete Intel receipts](submission-evidence/2026-10-05-common-profile/completed-results.json)
+pass the predefined equivalence band at both depths: −0.042% at depth 11
+(95% interval −0.170% to +0.086%) and −0.012% at depth 13
+(−0.130% to +0.107%). Matching A/A controls pass and the paired executables
+are byte-identical. The archive is collected and the owned Intel worker terminated.
