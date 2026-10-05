@@ -19,8 +19,9 @@ record the replacement before timing:
 
 - Generate one baseline PGO profile per compiler/architecture using single-thread
   `bench`. Preserve its files and SHA-256 hashes. Compile baseline and pointer
-  candidate at the same source path from this profile; reject missing/mismatched
-  profiles or changed hashes. Independent boots generate independent profiles.
+  candidate at the same source path from this profile; reject missing profiles, changed CFG/counter counts
+  or changed hashes. Source-line warnings are recorded and permitted under
+  the [GCC compatibility policy](submission-evidence/2026-10-05-common-profile/profile-policy.md). Independent boots generate independent profiles.
 - Verify equal version macros in actual compile commands. Use normal production
   network embedding and checksum-pinned external EvalFile. Every production
   build must retain bench `1714434`. Replay builds use embedding-off flags.

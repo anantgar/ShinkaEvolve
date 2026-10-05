@@ -53,5 +53,6 @@
   ],
   "x86_guard": "Exact disassembly identity using common profile, before timing",
   "clang_guard": "Exact disassembly identity using common profile, before timing",
-  "arm_gate": "ARM workers may build and run exact checks concurrently; no calibration or candidate timing until the Intel common-profile identity receipt is approved."
+  "arm_gate": "ARM workers may build and run exact checks concurrently; no calibration or candidate timing until the Intel common-profile identity receipt is approved.",
+  "profile_warning_policy": "GCC source-line location warnings only are recorded and permitted via -Wno-error=coverage-mismatch; GCC retains these counts. Control-flow/counter-count mismatches and missing profiles stop validation. No counter data modified."
 }

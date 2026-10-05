@@ -68,7 +68,7 @@ def production_pair(label,arch,compiler):
  status('pgo-'+label);tree=R/'builds'/('pgo-'+label);tree.parent.mkdir(exist_ok=True)
  run(['git','clone','-q','--no-hardlinks',str(R/'stockfish'),str(tree)],label+'.clone.log')
  src=tree/'src';(src/NET.name).symlink_to(NET)
- opts=['ARCH='+arch,'COMP='+compiler,'EXTRAPROFILEFLAGS=-Wno-error=coverage-mismatch','GIT_SHA=49ea5ded','GIT_DATE=20260930','GIT_DIFFINDEX=']
+ opts=['ARCH='+arch,'COMP='+compiler,'GIT_SHA=49ea5ded','GIT_DATE=20260930','GIT_DIFFINDEX=']
  run(['make','-j2',compiler+'-profile-make',*opts],label+'.profile-generate.log',cwd=src)
  run(['taskset','-c','2',str(src/'stockfish'),'bench'],label+'.profile-training.log',cwd=src,timeout=600)
  def profile_hashes():
@@ -84,10 +84,7 @@ def production_pair(label,arch,compiler):
   run(['make','objclean',*opts],label+'.'+variant+'.clean.log',cwd=src)
   run(['make','-j2',compiler+'-profile-use',*opts],label+'.'+variant+'.build.log',cwd=src)
   log=(O/(label+'.'+variant+'.build.log')).read_text()
-  diagnostics=[x for x in log.splitlines() if ('warning:' in x or 'error:' in x) and 'coverage-mismatch' in x]
-  assert all('source locations for function' in x for x in diagnostics),'Structural profile mismatch'
-  assert not re.search(r'control flow of function|number of counters in profile data|missing-profile|profile.*not found|unprofiled|coverage mismatch ignored',log,re.I),'Missing or structural profile mismatch'
-  write(label+'.'+variant+'.profile-diagnostics.json',{'permitted_source_location_warnings':diagnostics,'structural_mismatch':False,'missing_profile':False})
+  assert not re.search(r'coverage-mismatch|missing-profile|profile.*(not found|out of date)|unprofiled',log,re.I),'Profile mismatch'
   lines=[x for x in log.splitlines() if '-c -o misc.o misc.cpp' in x]
   assert lines and all('-DGIT_SHA=49ea5ded' in x and '-DGIT_DATE=20260930' in x and '-DGIT_DIFFINDEX' not in x for x in lines),'Metadata mismatch'
   assert profile_hashes()==frozen,'Profile was modified'

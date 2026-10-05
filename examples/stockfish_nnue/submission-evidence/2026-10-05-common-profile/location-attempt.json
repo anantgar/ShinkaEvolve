@@ -1,0 +1,24 @@
+{
+  "failure": "GCC source-location profile warnings were fatal by default; compile stopped before candidate timing. Only these warnings are allowed in the declared replacement; structural/missing profile mismatches remain fatal.",
+  "workers": {
+    "c7i": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "65f5987e02ea4286753db1a890b1fcc5512f0ceb3771e5defb53836560296e6a",
+      "archive_bytes": 685317
+    },
+    "c7g": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "b4f0159401ea015224deac08eb4e40a30fe9c45fccae23b5ccf43b94e293cf3d",
+      "archive_bytes": 676745
+    },
+    "c8g": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "aedd68a8bc4aee99d366db438c8e233b5e093272d5d21016c73537aaea7d7c1f",
+      "archive_bytes": 676656
+    }
+  },
+  "owned_resources_cleaned": true
+}
