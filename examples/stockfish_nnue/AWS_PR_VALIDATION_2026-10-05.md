@@ -46,3 +46,9 @@ are auto-deleted; workers upload private archives and terminate. Concrete cases
 and operator credentials remain private. No game test or evolution fitness
 admission is included. Fishtest requires a maintainer/account holder because the
 user has no account.
+
+Baseline-only calibration produced longer deeper samples on Graviton4. The
+[ARM runtime bound](submission-evidence/2026-10-05-common-profile/runtime-bound.json)
+was extended to 7h45 for the worker and 7h50 for archive handling, without
+restarting it. Repeat workers are bounded to 5h45 plus archive handling.
+Comparison budgets, samples and statistical rejection rules are unchanged.

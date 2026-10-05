@@ -1,0 +1,14 @@
+{
+  "c7g": {
+    "worker_pid_unchanged": true,
+    "worker_runtime_max": "7h 45min",
+    "finisher_runtime_max": "7h 50min",
+    "reason": "Allow unchanged fixed comparison budgets to complete; no sample budgets or statistical rules changed."
+  },
+  "c8g": {
+    "worker_pid_unchanged": true,
+    "worker_runtime_max": "7h 45min",
+    "finisher_runtime_max": "7h 50min",
+    "reason": "Allow unchanged fixed comparison budgets to complete; no sample budgets or statistical rules changed."
+  }
+}
