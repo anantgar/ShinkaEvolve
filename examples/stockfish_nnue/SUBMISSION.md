@@ -21,3 +21,10 @@ Native validation and archive/resource cleanup are complete. Upstream master was
 Fishtest is deferred by the user. The PR stays draft; no game result or exemption
 is claimed. A [future test configuration](submission-evidence/2026-10-04/FISHTEST.md)
 is prepared for a maintainer/account holder.
+
+A [related review comment](https://github.com/official-stockfish/Stockfish/pull/7208#issuecomment-5989957463)
+identifies an unreachable GCC 15 per-input barrier in the sparse layer:
+`FIX_GCC15_MISOPTIMIZATION` requires NEON dotprod, whose branch precedes the
+fallback containing that barrier. The outer base-pointer barrier remains active.
+This is a separate follow-up requiring GCC 15 assembly, correctness and timing
+checks; the completed performance evidence here uses GCC 13.
