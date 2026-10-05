@@ -1,0 +1,12 @@
+{
+  "failure": "Copied binary lacked execute permission; fixed copyfile to copy2. No candidate build or timing reached.",
+  "archives": {
+    "c7i": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "0f879f483446778322ead70277542bf494205573099c5a5c0fd83d3965f87010",
+      "archive_bytes": 100570
+    }
+  },
+  "owned_resources_cleaned": true
+}

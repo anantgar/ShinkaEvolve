@@ -52,5 +52,6 @@
     "clang-pointer"
   ],
   "x86_guard": "Exact disassembly identity using common profile, before timing",
-  "clang_guard": "Exact disassembly identity using common profile, before timing"
+  "clang_guard": "Exact disassembly identity using common profile, before timing",
+  "arm_gate": "ARM workers may build and run exact checks concurrently; no calibration or candidate timing until the Intel common-profile identity receipt is approved."
 }

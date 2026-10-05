@@ -88,7 +88,7 @@ def production_pair(label,arch,compiler):
   lines=[x for x in log.splitlines() if '-c -o misc.o misc.cpp' in x]
   assert lines and all('-DGIT_SHA=49ea5ded' in x and '-DGIT_DATE=20260930' in x and '-DGIT_DIFFINDEX' not in x for x in lines),'Metadata mismatch'
   assert profile_hashes()==frozen,'Profile was modified'
-  dest=R/'binaries'/(label+'-'+variant);dest.parent.mkdir(exist_ok=True);shutil.copy2(src/'stockfish',dest)
+  dest=R/'binaries'/(label+'-'+variant);dest.parent.mkdir(exist_ok=True);shutil.copyfile(src/'stockfish',dest)
   run([str(dest),'bench'],label+'.'+variant+'.bench.log',cwd=src,timeout=600)
   assert re.findall(r'Nodes searched\s*:\s*(\d+)',(O/(label+'.'+variant+'.bench.log')).read_text())[-1]=='1714434'
   asm=subprocess.check_output(['objdump','-d','-C','--no-show-raw-insn',str(dest)])
@@ -120,11 +120,6 @@ def main():
   for label,target,compiler in [('clang',arch,'clang'),('neon','armv8','gcc')]:
    a,b=production_pair(label,target,compiler);groups.append((label,a,b,11))
    ra=build(label+'-replay-baseline',target,compiler,replay=True);rc=build(label+'-replay-pointer',target,compiler,'pointer',replay=True);exact(label,ra,rc,traces)
- if arm:
-  status('wait-x86-guard')
-  while not (R/'x86-guard-approved.json').exists():time.sleep(15)
-  guard=json.loads((R/'x86-guard-approved.json').read_text());assert guard.get('identical') is True
-  write('x86-guard-approved.json',guard)
  settings={label:calibrate(a,d) for label,a,b,d in groups};baseline=groups[0][1];candidate=groups[0][2];settings['gcc-deeper']=calibrate(baseline,settings['gcc']['depth']+2);write('calibration.json',settings)
  jobs=[('gcc-aa','gcc','aa',baseline,baseline),('gcc-pointer','gcc','candidate',baseline,candidate),('gcc-deeper-aa','gcc-deeper','aa',baseline,baseline),('gcc-deeper-pointer','gcc-deeper','candidate',baseline,candidate)]
  for label,a,b,d in groups[1:]:jobs +=[(label+'-aa',label,'aa',a,a),(label+'-pointer',label,'candidate',a,b)]
