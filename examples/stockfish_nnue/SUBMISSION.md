@@ -14,7 +14,9 @@ are preserved; they do not establish the narrowed patch's speed.
 Base: `49ea5ded38315cff8e67f4a677a9e7811612fbf6`, fetched again October 4.
 The pointer-only component passed 237,420 integer comparisons on each of
 Graviton3 and Graviton4. Production bench matches 1,714,434 nodes. clang-format
-20.1.8 passes. Full CI and component timing for this scope are pending.
+20.1.8 passes. [Full fork CI](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
+passed for the narrowed commit, including compilers, sanitizers, Valgrind,
+platform tests, Android and universal builds. Component timing is pending.
 Shinka infrastructure changes stay in this repository.
 
 [Native assembly review](submission-evidence/2026-10-04/ASSEMBLY.md) explains
@@ -65,7 +67,8 @@ workers, SSH keys and security-group resources are cleaned up.
 
 - [x] Fix the Actions formatting finding with clang-format 20.1.8; verify the
       formatting step passed, not just the overall job. Squash into one commit.
-- [ ] Address any subsequent compiler/reviewer findings.
+- [x] Address the current formatting and scope findings; full fork CI passes for
+      the narrowed commit. Fishtest discussion remains open below.
 - [ ] Confirm ARM performance on broader position groups/depths and independent
       boots. The current twelve-position sample is a coverage limit; use new
       declared inputs and preserve these completed results.

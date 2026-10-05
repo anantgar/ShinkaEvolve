@@ -80,6 +80,13 @@ patch hashes remain the identities of the measured binaries; the narrowed
 engine code matches the pointer component except for comments. Prior combined
 speed figures were removed from the PR body.
 
+[Full fork CI](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
+passed on `830c5c3`, including the compiler matrix, sanitizers, Valgrind,
+platform tests, Android and universal builds. [The job receipt](submission-evidence/2026-10-04/CI.json)
+pins its commit and conclusions. Upstream clang-format also passed. An earlier
+Windows attempt failed downloading MSYS2 signatures before compilation; the
+final commit's complete workflow passed without a retry.
+
 [Public audit inputs](submission-evidence/2026-10-04/README.md) preserve the
 original worker and component patches and provide a public-source corpus
 reproducer with a normalized 48-case digest. Concrete cases remain outside

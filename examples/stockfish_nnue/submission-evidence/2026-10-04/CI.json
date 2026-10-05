@@ -1,0 +1,304 @@
+{
+  "conclusion": "success",
+  "headSha": "830c5c301ad1f5698f7aa3821a23c4156f0dfff1",
+  "jobs": [
+    {
+      "name": "Prepare matrices",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655433"
+    },
+    {
+      "name": "Tests / Linux GCC ppc64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655574"
+    },
+    {
+      "name": "Matetrack / Matetrack",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655576"
+    },
+    {
+      "name": "Sanitizers / Run with UB sanitizer",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655585"
+    },
+    {
+      "name": "MSVC / avx2 (msvc)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655594"
+    },
+    {
+      "name": "WASM compilation / wasm (wasm32-relaxed-simd)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655596"
+    },
+    {
+      "name": "MSVC / avx512icl (msvc)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655600"
+    },
+    {
+      "name": "WASM compilation / wasm (wasm32)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655621"
+    },
+    {
+      "name": "IWYU / Check includes",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655629"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-13)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655635"
+    },
+    {
+      "name": "Sanitizers / Run under valgrind",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655660"
+    },
+    {
+      "name": "Sanitizers / Run with glibcxx assertions and trapv",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655668"
+    },
+    {
+      "name": "Sanitizers / Run with thread sanitizer",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655671"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-10)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655680"
+    },
+    {
+      "name": "Sanitizers / Run under valgrind-thread",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655685"
+    },
+    {
+      "name": "Tests / Linux GCC loongarch64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655691"
+    },
+    {
+      "name": "Sanitizers / Run non-instrumented",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655699"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-19)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655701"
+    },
+    {
+      "name": "Tests / Android NDK aarch64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655702"
+    },
+    {
+      "name": "Tests / Ubuntu 22.04 GCC",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655703"
+    },
+    {
+      "name": "Games / Games",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655711"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-12)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655713"
+    },
+    {
+      "name": "Tests / Android NDK arm",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655715"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-11)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655723"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-12)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655733"
+    },
+    {
+      "name": "Tests / macOS 15 GCC 11",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655735"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-13)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655749"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-15)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655751"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-16)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655756"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-17)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655761"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-11)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655764"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-15)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655775"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-20)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655777"
+    },
+    {
+      "name": "Tests / Windows 2022 Mingw-w64 Clang x86_64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655782"
+    },
+    {
+      "name": "Tests / Windows 2022 Mingw-w64 GCC i686",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655783"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-18)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655785"
+    },
+    {
+      "name": "Compiler check / avx2 (gcc-14)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655786"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-16)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655792"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-22)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655795"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-21)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655808"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-14)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655820"
+    },
+    {
+      "name": "Tests / macOS 15 Apple Clang M1",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655823"
+    },
+    {
+      "name": "Tests / Ubuntu 22.04 Clang",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655827"
+    },
+    {
+      "name": "Compiler check / avx2 (clang-23)",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655833"
+    },
+    {
+      "name": "Tests / Windows 11 Mingw-w64 Clang arm64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655862"
+    },
+    {
+      "name": "Tests / macOS 15 Apple Clang",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655918"
+    },
+    {
+      "name": "Tests / Windows 2022 Mingw-w64 GCC x86_64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111561655993"
+    },
+    {
+      "name": "Universal builds / macOS",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235662"
+    },
+    {
+      "name": "Universal builds / Windows arm64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235674"
+    },
+    {
+      "name": "Universal builds / Linux",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235704"
+    },
+    {
+      "name": "Android builds / Android build: Android NDK aarch64 arm64-universal",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235712"
+    },
+    {
+      "name": "Universal builds / Windows",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235720"
+    },
+    {
+      "name": "Android builds / Android build: Android NDK arm armv7-neon",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235744"
+    },
+    {
+      "name": "Universal builds / Linux riscv64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235748"
+    },
+    {
+      "name": "Universal builds / Linux arm64",
+      "conclusion": "success",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111567235773"
+    },
+    {
+      "name": "Prerelease",
+      "conclusion": "skipped",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111570443758"
+    },
+    {
+      "name": "Universal uploads",
+      "conclusion": "skipped",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111570444050"
+    },
+    {
+      "name": "Android uploads",
+      "conclusion": "skipped",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111570444271"
+    },
+    {
+      "name": "PublishPrerelease",
+      "conclusion": "skipped",
+      "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905/job/111570444479"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/anantgar/Stockfish/actions/runs/37245204905",
+  "workflowName": "Stockfish"
+}
