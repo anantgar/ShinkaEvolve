@@ -1,6 +1,38 @@
 {
-  "all_attempts_collected": false,
+  "all_attempts_collected": true,
+  "build_metadata_controlled": false,
+  "speed_claims_withdrawn": true,
   "rows": [
+    {
+      "hardware_attempt": "c7g",
+      "comparison": "gcc-aa",
+      "correct": true,
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": false,
+      "speedup": 1.0010226579801056,
+      "interval_95": [
+        0.999609042208878,
+        1.0024382728424424
+      ],
+      "rejection": null,
+      "file": "c7g-gcc-aa.json"
+    },
+    {
+      "hardware_attempt": "c7g",
+      "comparison": "gcc-combined",
+      "correct": true,
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": false,
+      "speedup": 1.0213226622649154,
+      "interval_95": [
+        1.0194095632783078,
+        1.0232393515138318
+      ],
+      "rejection": null,
+      "file": "c7g-gcc-combined.json"
+    },
     {
       "hardware_attempt": "c8g",
       "comparison": "gcc-aa",
@@ -15,6 +47,81 @@
       ],
       "rejection": null,
       "file": "c8g-gcc-aa.json"
+    },
+    {
+      "hardware_attempt": "c7i",
+      "comparison": "gcc-aa",
+      "correct": true,
+      "accepted": false,
+      "matching_aa_accepted": false,
+      "scope_qualified": false,
+      "speedup": 1.0019744310599303,
+      "interval_95": [
+        0.9984043777546487,
+        1.0055572500149694
+      ],
+      "rejection": "Search A/A interval exceeds the equivalence margin",
+      "file": "c7i-gcc-aa.json"
+    },
+    {
+      "hardware_attempt": "c7i",
+      "comparison": "gcc-combined",
+      "correct": true,
+      "accepted": true,
+      "matching_aa_accepted": false,
+      "scope_qualified": false,
+      "speedup": 0.9966694379146368,
+      "interval_95": [
+        0.9948346150469878,
+        0.9985076448371877
+      ],
+      "rejection": null,
+      "file": "c7i-gcc-combined.json"
+    },
+    {
+      "hardware_attempt": "c7i",
+      "comparison": "gcc-deeper-aa",
+      "correct": true,
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": false,
+      "speedup": 0.9997767859465592,
+      "interval_95": [
+        0.9988422349946153,
+        1.000712211296332
+      ],
+      "rejection": null,
+      "file": "c7i-gcc-deeper-aa.json"
+    },
+    {
+      "hardware_attempt": "c7i",
+      "comparison": "gcc-deeper-combined",
+      "correct": true,
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": false,
+      "speedup": 0.9986436735387946,
+      "interval_95": [
+        0.9979015770024889,
+        0.9993863219404161
+      ],
+      "rejection": null,
+      "file": "c7i-gcc-deeper-combined.json"
+    },
+    {
+      "hardware_attempt": "c8g-repeat",
+      "comparison": "gcc-aa",
+      "correct": true,
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": false,
+      "speedup": 1.0005260991926315,
+      "interval_95": [
+        1.0000465912333676,
+        1.001005837069066
+      ],
+      "rejection": null,
+      "file": "c8g-repeat-gcc-aa.json"
     }
   ]
 }

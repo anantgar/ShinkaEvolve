@@ -1,106 +1,76 @@
 # Stockfish ARM NNUE submission
 
-Updated October 4, 2026. The standalone branch is
-[`anantgar/Stockfish:codex/nnue-neon-inference`](https://github.com/anantgar/Stockfish/tree/codex/nnue-neon-inference).
-[Upstream PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
-remains a draft while review and remaining validation are open.
+[Draft PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
+contains **GCC NEON weight-pointer materialization**: one commit
+`830c5c301ad1f5698f7aa3821a23c4156f0dfff1`, plus AUTHORS and explanatory comments.
+Lane-dot and accumulator-bank changes are removed after review questioned their
+individual benefit and noted Apple silicon's benefit from accumulator splitting.
+The PR body describes the narrowed scope and claims no qualified speed result.
 
-The PR is narrowed to **GCC NEON weight-pointer materialization**, one commit
-`830c5c3`, plus AUTHORS. Lane-dot and accumulator-bank changes are removed after
-review questioned their individual benefit and noted Apple silicon's benefit
-from accumulator splitting. The original combined candidate and its evidence
-are preserved; they do not establish the narrowed patch's speed.
+Base: `49ea5ded38315cff8e67f4a677a9e7811612fbf6`, fetched again October 5 UTC.
+Bench: **1,714,434 nodes**, matching baseline. clang-format 20.1.8 and
+[full fork CI](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
+pass, including 59 compiler, sanitizer, Valgrind, platform, Android and universal
+jobs. [The CI receipt](submission-evidence/2026-10-04/CI.json) pins the commit.
+Shinka's Ruff, Mypy and non-secret CI suite also passes on the docs branch.
 
-Base: `49ea5ded38315cff8e67f4a677a9e7811612fbf6`, fetched again October 4.
-The pointer-only component passed 237,420 integer comparisons on each of
-Graviton3 and Graviton4. Production bench matches 1,714,434 nodes. clang-format
-20.1.8 passes. [Full fork CI](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
-passed for the narrowed commit, including compilers, sanitizers, Valgrind,
-platform tests, Android and universal builds. Component timing is pending.
-Shinka infrastructure changes stay in this repository.
+## Timing claims withdrawn; corrected validation running
 
-[Native assembly review](submission-evidence/2026-10-04/ASSEMBLY.md) explains
-GCC's increased paired loads and reduced address additions in the hot accumulator
-bodies. Static code counts do not establish workload speed. Maintainers have
-asked about Fishtest; no exemption or game result is assumed.
+The October 3 and first October 4 timing builds did not control Stockfish's build
+metadata. Baseline compilation omitted `GIT_DIFFINDEX`; patched working trees
+set it. This changes version code and binary layout even on x86, where the engine
+edits are excluded. Accepted A/A controls alone did not detect this build mismatch.
+**The earlier ARM speed claims are withdrawn.** Completed statistics and partial
+attempts remain archived as observations, not isolated optimization effects.
 
-## Archived combined-patch evidence
+The completed October 4 Intel deeper comparison measured −0.136%
+(95% interval −0.210% to −0.061%) with an accepted A/A. The shallow control failed.
+The generated binaries differ, so neither observation qualifies an assertion
+that the source patch changes x86 speed. See the
+[build-identity receipt](submission-evidence/2026-10-04/x86-assembly-identity.json).
+All first October 4 workers and their owned key/security-group resources are
+cleaned up; interrupted and deliberately stopped checkpoints are preserved.
 
-The patch uses ARM lane dot products instead of broadcasting the input, uses one
-accumulator bank rather than three in the sparse layer, and constrains GCC NEON
-weight pointers to improve compiler load scheduling. Weights, architecture,
-evaluation formulas and search rules are unchanged. These October 3 figures
-describe optimization commit `233068f32740aa08433bad2c4af89416e9b65bb4` and its
-formatted squash `97d81e88a303c7fa4fce945026022d2a5585218d`. Individual timing
-contributions are being measured in the expanded run.
+[The corrected October 5 protocol](AWS_PR_VALIDATION_2026-10-05.md) repeats fixed
+comparisons with equal `GIT_SHA`, `GIT_DATE` and empty `GIT_DIFFINDEX`, verified in
+actual compile commands. Production PGO uses normal network embedding; its
+external EvalFile is the same checksum-pinned network. A pre-timing x86 assembly
+identity check must pass. The corpus, 128-block budgets and rejection rules are
+unchanged. Pointer-only gets both depth groups as well as the main component
+comparisons. Final conclusions await complete corrected receipts.
 
-| Hardware | Whole-engine speed gain | 95% interval | Status |
-|---|---:|---:|---|
-| Graviton3, c7g.xlarge | 1.760% | 1.663%–1.857% | 128 blocks; A/A accepted |
-| Graviton4, c8g.xlarge | 1.651% | 1.563%–1.738% | 128 blocks; A/A accepted |
-| Intel, c7i.xlarge | No complete estimate | — | A/A accepted; candidate stopped at 120/128 blocks |
+## Completed correctness and review work
 
-ARM builds use Ubuntu GCC 13.3.0, `make -j2 profile-build ARCH=armv8-dotprod
-COMP=gcc EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF`, with PGO/LTO and the same external
-`nn-252f33942263.nnue` in both binaries. Each measurement uses twelve held-out
-positions from a seeded 1,000-game Lichess broadcast sample, one thread, 16 MiB
-hash and CPU 2. Sequential fresh processes use balanced ABBA/BAAB order, warmups,
-and baseline-only calibrated depth/passes: depth 11 × 10 on Graviton3 and depth
-11 × 14 on Graviton4. There is one boot per ARM CPU family, one network and one
-compiler timing configuration. These results cover this workload and do not
-establish Elo or general performance.
+The original full-corpus preflight passed 22,584,752 integer comparisons per
+hardware family, including 224,296 ASan/UBSan comparisons with recovery disabled.
+Those exact-output results remain valid; they do not isolate speed. The first
+expanded run's pointer component passed 237,420 comparisons on each ARM family.
+GCC/Clang, ordinary NEON, scalar and production bench checks also passed.
 
-Each hardware preflight passed 22,584,752 integer comparisons, including 224,296
-ASan/UBSan comparisons with recovery disabled. GCC/Clang, ordinary NEON on ARM,
-and scalar on Intel were checked. Production bench signatures match 1,714,434
-nodes. Completed ARM searches matched score, PV, best/ponder moves, nodes and
-fingerprints exactly. Native Apple/Clang portability smoke checks also matched.
+[Diagnostic assembly review](submission-evidence/2026-10-04/ASSEMBLY.md) records
+more paired loads and fewer address additions in GCC's accumulator bodies.
+Static code counts explain the proposed optimization; corrected builds and
+whole-engine timing must establish its benefit.
 
-[The dated run record](AWS_VALIDATION_2026-10-03.md) gives corpus/network hashes,
-coverage and attempt history. [Public timing summaries](submission-evidence/2026-10-03/)
-include complete ARM A/A and candidate statistics and block log ratios, plus the
-final Intel A/A result. They omit private corpus positions and operator access
-information. Raw logs/checkpoints remain in private archives. All owned AWS
-workers, SSH keys and security-group resources are cleaned up.
+## Work before ready for review
 
-## Remaining work before ready for review
+- [x] Fix the Actions formatting finding and verify the actual step.
+- [x] Reduce the PR to one idea, one commit and AUTHORS; address current scope findings.
+- [x] Complete the current commit's full compiler/platform CI and assembly review.
+- [ ] Complete metadata-controlled broader workloads/depths and repeat boots.
+- [ ] Complete corrected Clang and ordinary-NEON timing.
+- [ ] Complete corrected component isolation and x86 regression checks.
+- [ ] Recheck current master after validation; rerun affected checks if needed.
+- [ ] Resolve the Fishtest requirement or direct-evidence exception with maintainers.
 
-- [x] Fix the Actions formatting finding with clang-format 20.1.8; verify the
-      formatting step passed, not just the overall job. Squash into one commit.
-- [x] Address the current formatting and scope findings; full fork CI passes for
-      the narrowed commit. Fishtest discussion remains open below.
-- [ ] Confirm ARM performance on broader position groups/depths and independent
-      boots. The current twelve-position sample is a coverage limit; use new
-      declared inputs and preserve these completed results.
-- [ ] Measure Clang production search speed and ordinary NEON performance. Exact
-      compiler/ISA checks passed, but timing currently covers GCC dot-product only.
-- [ ] Complete component timings. Generated assembly is reviewed and published;
-      the PR already contains only the pointer idea in response to scope guidance.
-- [ ] Complete an unaffected x86 timing comparison with a sufficient fixed budget
-      and whole-core isolation. Intel's partial checkpoint supplies no final estimate;
-      its SMT sibling was not reserved. This checks regression, not the ARM benefit.
-- [ ] Recheck master before marking ready; rerun affected checks if source or net changes.
-- [ ] Resolve whether maintainers accept direct speed evidence or require ARM-capable
-      Fishtest. No game test is claimed or submitted. Add test links if requested.
+[Stockfish's speedup guidance](https://official-stockfish.github.io/docs/fishtest-wiki/Creating-my-first-test.html#speedups)
+generally calls for Fishtest. The direct-PR exception concerns benefits too small
+to verify there but otherwise verifiable, for example in assembly. No exemption,
+STC/LTC result or Elo claim is assumed. [A prepared test configuration](submission-evidence/2026-10-04/FISHTEST.md)
+pins the narrowed commit, base, benches and affected ARM/GCC worker scope. The
+user has no Fishtest account; no game test is submitted. Account access and
+compatible worker capacity are external prerequisites.
 
-[Stockfish guidance](https://official-stockfish.github.io/docs/fishtest-wiki/Creating-my-first-test.html#speedups)
-generally recommends Fishtest for speedups. Its direct-PR exception concerns gains
-too small to verify there but independently verifiable, for example in assembly.
-This draft presents the evidence and ARM coverage limits for that decision;
-it does not assume an exemption. Exact-output tests validate identical computations;
-equal-time games would test playing strength.
-
-[Prepared Fishtest configuration](submission-evidence/2026-10-04/FISHTEST.md)
-pins the narrowed commit, base and bench, and explains the affected compiler/ARM
-worker scope. Submission needs account access and compatible worker capacity;
-the accessible browser session is signed out. No test has been submitted.
-
-Additional networks, production peak-memory measurements and fresh private evaluator
-slowdown/wrong-output controls would broaden qualification. The latter are necessary
-before admitting new Shinka fitness; the standalone operator results do not do that.
-Building the agent image and rerunning its provider canary concern future evolution,
-and do not block submitting this saved Stockfish patch.
-
-The [October 4 expanded validation](AWS_PR_VALIDATION_2026-10-04.md) is running
-on fresh AWS Spot workers. Its fixed component/ISA/depth comparisons supersede
-the remaining timing tasks only when their complete receipts are verified.
+Additional networks and Apple/GCC performance would broaden coverage. Resource
+and slowdown/wrong-output controls are necessary before admitting new Shinka
+fitness; standalone operator measurements do not perform that admission.

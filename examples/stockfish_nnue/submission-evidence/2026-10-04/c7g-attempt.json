@@ -1,0 +1,9 @@
+{
+  "archive_complete": true,
+  "run_complete": false,
+  "interrupted": false,
+  "archive_sha256": "b546b207eddf2e86603e4ad49a99e5a37a1a474d7e1ded36e332b0edffff72fe",
+  "archive_bytes": 6651193,
+  "archive_encryption": "AES256",
+  "build_metadata_controlled": false
+}

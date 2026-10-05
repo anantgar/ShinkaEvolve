@@ -1,5 +1,9 @@
 # Native GCC assembly review
 
+These are diagnostic counts from the first October 4 build cohort. Its dirty-
+tree build metadata differed from baseline; timing claims are withdrawn.
+Corrected assembly and timings must qualify the optimization's benefit.
+
 These static counts come from the frozen Graviton3 GCC PGO/LTO executables,
 before timing. Build receipts and full `objdump -d -C` output remain in the
 private run archive. This review explains the generated code; timing must

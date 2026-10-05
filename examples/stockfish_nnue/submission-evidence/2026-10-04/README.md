@@ -1,5 +1,10 @@
 # Expanded PR validation evidence
 
+**Timing claims withdrawn:** these builds differed in `GIT_DIFFINDEX` between
+baseline and patched trees. Even accepted controls do not isolate a source
+optimization under that build mismatch. See the [corrected protocol](../../AWS_PR_VALIDATION_2026-10-05.md).
+Complete statistics and partial attempt counts remain preserved.
+
 This directory contains the frozen component patches, launch plan and original
 operator worker (`worker.py.txt`, preserved byte for byte for audit). Results are
 added only after complete receipts are collected. Runtime cutoff changes are
@@ -11,8 +16,9 @@ code changes separately. Static instruction counts are explanatory evidence,
 not speed measurements.
 
 `completed-results.json` lists collected results with the corresponding A/A
-status. `scope_qualified` requires both a complete candidate measurement and an
-accepted matching control; a rejected control makes the comparison inconclusive.
+status. `scope_qualified` is false throughout this confounded attempt. A corrected
+claim requires matched build metadata, a complete measurement and an accepted
+control; a rejected control makes the comparison inconclusive.
 This flag covers the declared operator workload, not fitness admission or Elo.
 Attempt records preserve infrastructure interruptions and partial block counts
 without reporting partial estimates.

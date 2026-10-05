@@ -181,5 +181,7 @@
   },
   "matching_aa_file": "c8g-gcc-aa.json",
   "matching_aa_accepted": true,
+  "build_metadata_controlled": false,
+  "confound": "Baseline omits GIT_DIFFINDEX; patched trees enable it, changing version code and binary layout. Causal speed claims withdrawn.",
   "scope_qualified": false
 }

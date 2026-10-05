@@ -1,0 +1,31 @@
+--- a/src/nnue/layers/affine_transform.h
++++ b/src/nnue/layers/affine_transform.h
+@@ -226,10 +226,10 @@
+         #define vec_add_dpbusd_32 SIMD::m128_add_dpbusd_epi32
+     #elif defined(USE_NEON_DOTPROD)
+             using vec_t = int32x4_t;
+-        #define vec_set_32 vdupq_n_s32
+-        #define vec_add_dpbusd_32(acc, a, b) \
+-            SIMD::dotprod_m128_add_dpbusd_epi32(acc, vreinterpretq_s8_s32(a), \
+-                                                vreinterpretq_s8_s32(b))
++        #define vec_set_32(value) vcombine_s32(vcreate_s32(u32(value)), vdup_n_s32(0))
++        #define vec_add_dpbusd_32(acc, inputValue, weightValue) \
++            acc = vdotq_lane_s32(acc, vreinterpretq_s8_s32(weightValue), \
++                                 vreinterpret_s8_s32(vget_low_s32(inputValue)), 0)
+     #elif defined(USE_LASX)
+             using vec_t = __m256i;
+         #define vec_set_32 __lasx_xvreplgr2vr_w
+--- a/src/nnue/layers/affine_transform_sparse_input.h
++++ b/src/nnue/layers/affine_transform_sparse_input.h
+@@ -143,8 +143,9 @@
+     #elif defined(USE_NEON_DOTPROD)
+         using invec_t  = int8x16_t;
+         using outvec_t = int32x4_t;
+-        #define vec_set_32(a) vreinterpretq_s8_u32(vdupq_n_u32(a))
+-        #define vec_add_dpbusd_32 SIMD::dotprod_m128_add_dpbusd_epi32
++        #define vec_set_32(value) vcombine_s8(vcreate_s8(u32(value)), vdup_n_s8(0))
++        #define vec_add_dpbusd_32(acc, inputValue, weightValue) \
++            acc = vdotq_lane_s32(acc, weightValue, vget_low_s8(inputValue), 0)
+     #elif defined(USE_NEON)
+         using invec_t  = int8x16_t;
+         using outvec_t = int32x4_t;

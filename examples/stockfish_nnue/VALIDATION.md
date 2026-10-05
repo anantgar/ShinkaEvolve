@@ -3,10 +3,21 @@
 This is an exact implementation change: weights, NNUE outputs and search rules
 must remain unchanged. The September 30 Graviton pilot and independent synthetic
 holdout measured 2.33% and 2.26% faster fixed searches. They do not establish
-representative workload performance, portability or Elo. Preserve those frozen
+representative workload performance, portability or Elo, and require a build-
+metadata audit before interpretation. The October 3/4 speed claims are withdrawn:
+baseline and patched trees differed in `GIT_DIFFINDEX`, changing version code and
+binary layout. See the [corrected protocol](AWS_PR_VALIDATION_2026-10-05.md).
+Preserve those frozen
 campaigns and the original patch; create new validation directories and manifests.
 
 ## What to verify
+
+Before timing, verify actual compiler commands, common `GIT_SHA`, `GIT_DATE` and
+empty `GIT_DIFFINDEX`; do not rely on requested make arguments. Profile-build
+recursion can override `EXTRACXXFLAGS`. Record the actual network-embedding mode.
+For edits excluded on x86, require matching disassembly before claiming an
+unaffected regression check. Rejected build identity or A/A controls cannot
+qualify a speed claim; retain their receipts and declare any corrected protocol.
 
 1. **Correctness:** compare raw NNUE values and final evaluations against the
    unchanged baseline for both perspectives, eager/lazy accumulators, refresh,

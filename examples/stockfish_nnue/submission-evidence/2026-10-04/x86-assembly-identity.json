@@ -1,0 +1,48 @@
+{
+  "hardware": "Intel c7i.xlarge",
+  "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+  "identical_normalized_disassembly": false,
+  "normalization": "Strip objdump file-path header; retain every disassembled section, address and instruction",
+  "receipts": {
+    "baseline": {
+      "normalized_disassembly_sha256": "3cd459bf9d8b6491e82c680bcfa5fa248812873f2843740e44517ec7bcc4590d",
+      "characters": 4222478,
+      "build": {
+        "arch": "x86-64-avx2",
+        "compiler": "gcc",
+        "variant": null,
+        "replay": false,
+        "sanitize": false,
+        "make_options": [
+          "ARCH=x86-64-avx2",
+          "COMP=gcc",
+          "EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF"
+        ],
+        "binary_sha256": "103c173ba13c1b266d01e5f76d3b4c6ff5da894f99bc8c59495cd7962a5d4059",
+        "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+        "patch_sha256": null,
+        "bytes": 99274992
+      }
+    },
+    "combined": {
+      "normalized_disassembly_sha256": "71de238b845bdc9de7dc68eacd02ddbae7affc9a2c6b5f847e4540704a420799",
+      "characters": 4223552,
+      "build": {
+        "arch": "x86-64-avx2",
+        "compiler": "gcc",
+        "variant": "combined",
+        "replay": false,
+        "sanitize": false,
+        "make_options": [
+          "ARCH=x86-64-avx2",
+          "COMP=gcc",
+          "EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF"
+        ],
+        "binary_sha256": "322442e6307deb6fd413f36fd94f3a6f63c7af1dc5036ea39f7e5bc123d60114",
+        "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+        "patch_sha256": "5db8eaab72737101361da9005b09e8265d56a84dd3a1a8d087d4ad28e0b58143",
+        "bytes": 99274992
+      }
+    }
+  }
+}

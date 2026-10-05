@@ -1,12 +1,17 @@
 # Real-game NNUE candidate validation — October 3, 2026
 
+**October 5 correction:** speed claims from this run are withdrawn. Patched trees
+and baseline did not have equal build metadata (`GIT_DIFFINDEX`), which changes
+version code and binary layout. Statistics remain archived; exact-output results
+remain valid. See the [metadata-controlled replacement](AWS_PR_VALIDATION_2026-10-05.md).
+
 Status updated October 4, 2026: correctness and ARM timing are complete. Intel
 candidate timing stopped at 120 of 128 blocks and has no complete speed estimate.
 All owned workers are terminated; SSH key and security group cleanup is complete.
 Live results are written to `.work/aws-validation-20261003/RESULTS.md` after archives
 arrive. This dated launch record does not assert the run remains pending forever.
-The measurements below support speedups within the declared ARM workload.
-They do not establish general workload performance, Elo or fitness admission.
+The figures below are historical observations from confounded builds. They do
+not isolate patch speed, establish Elo or admit fitness.
 [Draft upstream PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
 is open; no Fishtest run has been submitted.
 The Shinka tree was clean at `8eab511` before starting. Local work is limited to

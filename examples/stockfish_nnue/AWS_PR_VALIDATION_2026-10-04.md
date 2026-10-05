@@ -1,5 +1,12 @@
 # Stockfish PR validation — October 4, 2026
 
+**October 5 correction:** timing claims are withdrawn because patched trees set
+`GIT_DIFFINDEX` while baseline did not. Version code and binary layout differ,
+including x86. All results and deliberately stopped partial attempts are preserved;
+owned resources are cleaned up. The [metadata-controlled replacement](AWS_PR_VALIDATION_2026-10-05.md)
+uses explicit equal metadata and a pre-timing x86 code-identity check. The launch
+protocol and chronological notes below are retained as the original attempt record.
+
 Status: three native AWS Spot workers launched; builds and preflight checks precede
 timing. No completed result is claimed by this launch record.
 

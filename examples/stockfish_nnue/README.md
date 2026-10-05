@@ -363,5 +363,6 @@ license and attribution files.
 ## Upstream patch status
 
 See [submission status](SUBMISSION.md) for the standalone Stockfish draft PR,
-completed ARM evidence and remaining validation. Intel candidate timing is
-incomplete; the October 3 AWS batch is shut down and cleaned up.
+correctness evidence and remaining validation. Earlier timing claims are
+withdrawn because build metadata differed; corrected comparisons are running.
+The October 3 and first October 4 AWS batches are shut down and cleaned up.

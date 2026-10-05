@@ -1,7 +1,6 @@
 # Prepared Fishtest configuration
 
-No test is submitted and no game result is claimed. The accessible Fishtest
-session is signed out. Complete the pointer-only timing review before submission;
+No test is submitted and no game result is claimed. The user has no Fishtest account available. Complete the pointer-only timing review before submission;
 recheck master and update both revisions if upstream changes.
 
 | Field | Prepared value |
