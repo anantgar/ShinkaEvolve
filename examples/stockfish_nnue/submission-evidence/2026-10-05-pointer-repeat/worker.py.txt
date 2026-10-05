@@ -1,0 +1,140 @@
+"""Frozen PR validation: no evolution, favorable retries or fitness admission."""
+import gzip,hashlib,json,math,os,platform,random,re,shutil,subprocess,sys,time,traceback
+from pathlib import Path
+from types import SimpleNamespace
+R=Path(__file__).resolve().parent;os.chdir(R);sys.path.insert(0,str(R/'source'))
+from examples.stockfish_nnue.corpus import read_tsv
+from examples.stockfish_nnue.evaluate import check_exact
+from examples.stockfish_nnue.validate_candidate import LocalRunner,validate
+from examples.stockfish_nnue.policy import sha256
+O=R/'evidence';O.mkdir(exist_ok=True);plan=json.loads((R/'PLAN.json').read_text());NET=R/'nn-252f33942263.nnue'
+
+def write(name,data):
+ p=O/name;p.parent.mkdir(parents=True,exist_ok=True);q=p.with_suffix('.tmp');q.write_text(json.dumps(data,indent=2)+'\n');q.replace(p)
+def status(name):write('status.json',{'stage':name,'time':time.time()});print(name,flush=True)
+def run(args,log,*,cwd=R,timeout=2400):
+ with (O/log).open('wb') as f:subprocess.run(args,cwd=cwd,stdout=f,stderr=subprocess.STDOUT,timeout=timeout,check=True)
+
+class Replay:
+ def __init__(self,binary,label):
+  self.err=(O/(label+'.stderr')).open('wb');self.p=subprocess.Popen([str(binary),str(NET)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.err,text=True,bufsize=1);self.metadata=json.loads(self.p.stdout.readline(32*1024*1024))
+ def request(self,p):
+  if p['op']=='load':
+   lines=[f"LOAD {len(p['traces'])} {p['branches']} {p['salt']}"]
+   for t in p['traces']:lines +=[str(int(t.get('chess960',False))),t['fen'],' '.join(t['moves'])]
+  else:lines=[f"RUN {p['workload']} {p['passes']} {p['offset']}"]
+  self.p.stdin.write('\n'.join(lines)+'\n');self.p.stdin.flush();return SimpleNamespace(output=json.loads(self.p.stdout.readline(32*1024*1024)))
+ def close(self):self.p.kill();self.p.wait();self.err.close()
+
+def build(label,arch,compiler,variant=None,replay=False,sanitize=False):
+ status('build-'+label);tree=R/'builds'/label;tree.parent.mkdir(exist_ok=True)
+ run(['git','clone','-q','--no-hardlinks',str(R/'stockfish'),str(tree)],label+'.clone.log')
+ if variant:run(['git','apply',str(R/(variant+'.patch'))],label+'.patch.log',cwd=tree)
+ src=tree/'src';(src/NET.name).symlink_to(NET)
+ if replay:shutil.copyfile(R/'source/examples/stockfish_nnue/harness/nnue_replay.cpp',src/'main.cpp')
+ opts=['ARCH='+arch,'COMP='+compiler] + (['EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF'] if replay else [])
+ if sanitize:opts=['ARCH='+arch,'COMP='+compiler,'debug=yes','optimize=no','sanitize=address undefined','EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF -O1 -fno-sanitize-recover=all -fno-omit-frame-pointer']
+ opts += ['GIT_SHA=49ea5ded','GIT_DATE=20260930','GIT_DIFFINDEX=']
+ run(['make','-j2','build' if replay else 'profile-build',*opts],label+'.build.log',cwd=src)
+ compile_lines=[x for x in (O/(label+'.build.log')).read_text().splitlines() if '-c -o misc.o misc.cpp' in x]
+ assert compile_lines and all('-DGIT_SHA=49ea5ded' in x and '-DGIT_DATE=20260930' in x and '-DGIT_DIFFINDEX' not in x for x in compile_lines), 'Build metadata mismatch'
+ binary=src/'stockfish';write(label+'.build.json',{'arch':arch,'compiler':compiler,'variant':variant,'replay':replay,'sanitize':sanitize,'make_options':opts,'binary_sha256':sha256(binary),'base':plan['base'],'patch_sha256':plan['patch_sha256'].get(variant),'bytes':binary.stat().st_size})
+ if not replay:
+  run([str(binary),'bench'],label+'.bench.log',cwd=src,timeout=600);sig=re.findall(r'Nodes searched\s*:\s*(\d+)',(O/(label+'.bench.log')).read_text())[-1];assert sig=='1714434',sig
+  with gzip.open(O/(label+'.assembly.txt.gz'),'wb') as f:
+   proc=subprocess.Popen(['objdump','-d','-C','--no-show-raw-insn',str(binary)],stdout=subprocess.PIPE)
+   while chunk:=proc.stdout.read(1024*1024):f.write(chunk)
+   assert proc.wait()==0
+  run(['nm','-C','--defined-only',str(binary)],label+'.symbols.txt')
+ return binary
+
+def exact(label,a,b,traces,rounds=1):
+ status('exact-'+label);r=Replay(a,label+'-baseline');c=Replay(b,label+'-candidate')
+ try:
+  n=check_exact(r,c,traces,{'branches':3},lambda _:None,random.Random(20261004),rounds=rounds);write(label+'.exact.json',{'passed':True,'checked_integer_values':n,'trace_count':len(traces),'rounds':rounds,'baseline_metadata':r.metadata,'candidate_metadata':c.metadata})
+ finally:r.close();c.close()
+
+def calibrate(binary,minimum_depth):
+ probes=[]
+ for depth in range(minimum_depth,18,2):
+  with LocalRunner(binary,NET,2) as r:
+   r.request({'op':'search_load','cases':cases,'depth':depth,'hash_mb':16});r.request({'op':'search','passes':1,'offset':0});seconds=r.request({'op':'search','passes':1,'offset':0}).elapsed_seconds
+  probes.append({'depth':depth,'seconds':seconds})
+  if seconds>=.11:break
+ passes=min(16,max(1,math.ceil(1.5/seconds)));assert seconds*passes>=1.4
+ return {'depth':depth,'passes':passes,'probes':probes}
+
+def production_pair(label,arch,compiler):
+ status('pgo-'+label);tree=R/'builds'/('pgo-'+label);tree.parent.mkdir(exist_ok=True)
+ run(['git','clone','-q','--no-hardlinks',str(R/'stockfish'),str(tree)],label+'.clone.log')
+ src=tree/'src';(src/NET.name).symlink_to(NET)
+ opts=['ARCH='+arch,'COMP='+compiler,'EXTRAPROFILEFLAGS=-Wno-error=coverage-mismatch','GIT_SHA=49ea5ded','GIT_DATE=20260930','GIT_DIFFINDEX=']
+ run(['make','-j2',compiler+'-profile-make',*opts],label+'.profile-generate.log',cwd=src)
+ run(['taskset','-c','2',str(src/'stockfish'),'bench'],label+'.profile-training.log',cwd=src,timeout=600)
+ def profile_hashes():
+  return {str(x.relative_to(src)):sha256(x) for x in sorted(src.rglob('*.gcda'))+sorted(src.glob('*.profraw'))}
+ frozen=profile_hashes();assert frozen,'Missing profile data'
+ profile_dir=O/(label+'-profile');profile_dir.mkdir()
+ for name in frozen:
+  dst=profile_dir/name;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src/name,dst)
+ write(label+'.profile.json',{'training':'baseline bench; one thread CPU 2','profile_hashes':frozen,'options':opts,'training_signature':re.findall(r'Nodes searched\s*:\s*(\d+)',(O/(label+'.profile-training.log')).read_text())[-1]})
+ outputs=[]
+ for variant in ['baseline','pointer']:
+  if variant=='pointer':run(['git','apply',str(R/'pointer.patch')],label+'.pointer.patch.log',cwd=tree)
+  run(['make','objclean',*opts],label+'.'+variant+'.clean.log',cwd=src)
+  run(['make','-j2',compiler+'-profile-use',*opts],label+'.'+variant+'.build.log',cwd=src)
+  log=(O/(label+'.'+variant+'.build.log')).read_text()
+  diagnostics=[x for x in log.splitlines() if ('warning:' in x or 'error:' in x) and 'coverage-mismatch' in x]
+  assert all('source locations for function' in x for x in diagnostics),'Structural profile mismatch'
+  assert not re.search(r'control flow of function|number of counters in profile data|missing-profile|profile.*not found|unprofiled|coverage mismatch ignored',log,re.I),'Missing or structural profile mismatch'
+  write(label+'.'+variant+'.profile-diagnostics.json',{'permitted_source_location_warnings':diagnostics,'structural_mismatch':False,'missing_profile':False})
+  lines=[x for x in log.splitlines() if '-c -o misc.o misc.cpp' in x]
+  assert lines and all('-DGIT_SHA=49ea5ded' in x and '-DGIT_DATE=20260930' in x and '-DGIT_DIFFINDEX' not in x for x in lines),'Metadata mismatch'
+  assert profile_hashes()==frozen,'Profile was modified'
+  dest=R/'binaries'/(label+'-'+variant);dest.parent.mkdir(exist_ok=True);shutil.copy2(src/'stockfish',dest)
+  run([str(dest),'bench'],label+'.'+variant+'.bench.log',cwd=src,timeout=600)
+  assert re.findall(r'Nodes searched\s*:\s*(\d+)',(O/(label+'.'+variant+'.bench.log')).read_text())[-1]=='1714434'
+  asm=subprocess.check_output(['objdump','-d','-C','--no-show-raw-insn',str(dest)])
+  with gzip.open(O/(label+'.'+variant+'.assembly.txt.gz'),'wb') as f:f.write(asm)
+  run(['nm','-C','--defined-only',str(dest)],label+'.'+variant+'.symbols.txt')
+  write(label+'.'+variant+'.build.json',{'arch':arch,'compiler':compiler,'variant':variant,'binary_sha256':sha256(dest),'bytes':dest.stat().st_size,'make_options':opts,'profile_hashes':frozen,'base':plan['base'],'patch_sha256':plan['patch_sha256']['pointer'] if variant=='pointer' else None})
+  outputs.append(dest)
+ if label=='clang' or platform.machine()!='aarch64':
+  assembly=[gzip.open(O/(label+'.'+v+'.assembly.txt.gz'),'rt').read().split('Disassembly of section',1)[1] for v in ['baseline','pointer']]
+  write(label+'.assembly-identity.json',{'identical':assembly[0]==assembly[1],'hashes':[hashlib.sha256(x.encode()).hexdigest() for x in assembly]})
+  assert assembly[0]==assembly[1],'Unexplained excluded-path code difference before timing'
+ return outputs
+
+def main():
+ global cases
+ status('prepare');assert sha256(R/'source.tar.gz')==plan['source_sha256'];assert sha256(R/'corpus.json')==plan['corpus_sha256']
+ assert sha256(R/'pointer.patch')==plan['patch_sha256']['pointer']
+ run(['curl','-fL','--retry','3','-o',str(NET),'https://media.githubusercontent.com/media/official-stockfish/networks/master/'+NET.name],'network-download.log');assert sha256(NET)=='252f33942263bc8b8f740ba8aec3fed5a159ff148113c47a55c18c33d6627ab3'
+ run(['git','clone','-q','https://github.com/official-stockfish/Stockfish.git','stockfish'],'clone.log');run(['git','checkout','-q',plan['base']],'checkout.log',cwd=R/'stockfish')
+ for cmd,name in [(['lscpu'],'lscpu.txt'),(['g++','--version'],'gcc.txt'),(['clang++','--version'],'clang.txt'),(['uname','-a'],'uname.txt')]:run(cmd,name)
+ arm=platform.machine()=='aarch64';arch='armv8-dotprod' if arm else 'x86-64-avx2';siblings={int(x) for x in Path('/sys/devices/system/cpu/cpu2/topology/thread_siblings_list').read_text().strip().split(',')};available=os.sched_getaffinity(0);allowed=available-(siblings-{2});os.sched_setaffinity(0,allowed)
+ write('identity.json',{'machine':platform.machine(),'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'engine_cpu':2,'engine_core_siblings':sorted(siblings),'controller_allowed':sorted(allowed-{2}),'plan':plan,'worker_sha256':sha256(Path(__file__))})
+ shutil.copyfile(R/'corpus.json',O/'corpus.json');shutil.copyfile(R/'PLAN.json',O/'PLAN.json');shutil.copyfile(R/'pointer.patch',O/'pointer.patch')
+ corpus=json.loads((R/'corpus.json').read_text());cases=corpus['search_cases'];traces=read_tsv(R/'source/examples/stockfish_nnue/corpus/public_traces.tsv')+cases
+ groups=[];a,b=production_pair('gcc',arch,'gcc');groups.append(('gcc',a,b,11))
+ rb=build('replay-baseline',arch,'gcc',replay=True);rc=build('replay-pointer',arch,'gcc','pointer',replay=True);exact('pointer',rb,rc,traces,3)
+ san=build('replay-sanitized',arch,'gcc','pointer',replay=True,sanitize=True);exact('sanitized',rb,san,traces)
+ if False:
+  for label,target,compiler in [('clang',arch,'clang'),('neon','armv8','gcc')]:
+   a,b=production_pair(label,target,compiler);groups.append((label,a,b,11))
+   ra=build(label+'-replay-baseline',target,compiler,replay=True);rc=build(label+'-replay-pointer',target,compiler,'pointer',replay=True);exact(label,ra,rc,traces)
+ if arm:
+  status('wait-x86-guard')
+  while not (R/'x86-guard-approved.json').exists():time.sleep(15)
+  guard=json.loads((R/'x86-guard-approved.json').read_text());assert guard.get('identical') is True
+  write('x86-guard-approved.json',guard)
+ settings={label:calibrate(a,d) for label,a,b,d in groups};baseline=groups[0][1];candidate=groups[0][2];settings['gcc-deeper']=calibrate(baseline,settings['gcc']['depth']+2);write('calibration.json',settings)
+ jobs=[('gcc-aa','gcc','aa',baseline,baseline),('gcc-pointer','gcc','candidate',baseline,candidate),('gcc-deeper-aa','gcc-deeper','aa',baseline,baseline),('gcc-deeper-pointer','gcc-deeper','candidate',baseline,candidate)]
+ for label,a,b,d in groups[1:]:jobs +=[(label+'-aa',label,'aa',a,a),(label+'-pointer',label,'candidate',a,b)]
+ write('jobs.json',[{'name':n,'settings':s,'control':c} for n,s,c,a,b in jobs]);results={}
+ for name,key,control,a,b in jobs:
+  status('timing-'+name);cfg=settings[key];args=SimpleNamespace(corpus=R/'corpus.json',baseline=a,candidate=b,network=NET,stage='finalist',control=control,depth=cfg['depth'],hash_mb=16,passes=cfg['passes'],cpu=2,output=O/('timing-'+name));result=validate(args);results[name]={'correct':result.get('correct'),'measurement_accepted':result.get('measurement_accepted'),'error':result.get('error'),'rejection':result.get('rejection'),'measurement':result.get('measurement')};write('summary.json',{'complete':False,'results':results})
+  if result.get('correct') is not True:raise RuntimeError('Correctness/workflow failure in '+name)
+ write('summary.json',{'complete':True,'results':results});status('complete')
+try:main()
+except BaseException as e:write('failure.json',{'type':type(e).__name__,'error':str(e),'traceback':traceback.format_exc()});status('failed');raise
