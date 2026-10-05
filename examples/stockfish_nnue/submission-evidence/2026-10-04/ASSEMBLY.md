@@ -10,8 +10,7 @@ lane SDOT instructions and removes the input `ld1r`. Bank-only reduces the
 function from 1,191 to 895 static instructions and vector adds from 24 to 8.
 Lane+bank yields 887 instructions; the combined patch has the same propagation
 counts. The lower dot count reflects loop/unroll structure, not fewer evaluated
-network operations. See [propagation counts](propagation-assembly.json); its
-generic `accumulator` field is a small wrapper, not the hot accumulator body.
+network operations. See [propagation counts](propagation-assembly.json).
 
 The pointer-only compiler constraints change the hot accumulator bodies:
 

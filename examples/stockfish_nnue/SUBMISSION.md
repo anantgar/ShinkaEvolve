@@ -87,6 +87,11 @@ This draft presents the evidence and ARM coverage limits for that decision;
 it does not assume an exemption. Exact-output tests validate identical computations;
 equal-time games would test playing strength.
 
+[Prepared Fishtest configuration](submission-evidence/2026-10-04/FISHTEST.md)
+pins the narrowed commit, base and bench, and explains the affected compiler/ARM
+worker scope. Submission needs account access and compatible worker capacity;
+the accessible browser session is signed out. No test has been submitted.
+
 Additional networks, production peak-memory measurements and fresh private evaluator
 slowdown/wrong-output controls would broaden qualification. The latter are necessary
 before admitting new Shinka fitness; the standalone operator results do not do that.
