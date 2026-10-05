@@ -1,0 +1,16 @@
+Oct 05 01:33:20 ip-172-31-40-157 systemd[1]: Started nnue-pr-validation.service - /bin/bash /home/ubuntu/validation/start.sh.
+Oct 05 01:33:20 ip-172-31-40-157 systemd[1]: Started nnue-pr-evidence.service - /usr/bin/taskset -c 1 /usr/bin/python3 /home/ubuntu/validation/finish.py nnue-pr-validation.
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: Stopping nnue-pr-evidence.service - /usr/bin/taskset -c 1 /usr/bin/python3 /home/ubuntu/validation/finish.py nnue-pr-validation...
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Deactivated successfully.
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: Stopped nnue-pr-evidence.service - /usr/bin/taskset -c 1 /usr/bin/python3 /home/ubuntu/validation/finish.py nnue-pr-validation.
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Consumed 3.251s CPU time, 11.7M memory peak, 0B memory swap peak.
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Failed to open /run/systemd/transient/nnue-pr-evidence.service: No such file or directory
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Failed to open /run/systemd/transient/nnue-pr-evidence.service: No such file or directory
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Failed to open /run/systemd/transient/nnue-pr-evidence.service: No such file or directory
+Oct 05 06:22:46 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Failed to open /run/systemd/transient/nnue-pr-evidence.service: No such file or directory
+Oct 05 06:22:57 ip-172-31-40-157 systemd[1]: nnue-pr-evidence.service: Failed to open /run/systemd/transient/nnue-pr-evidence.service: No such file or directory
+Oct 05 06:37:43 ip-172-31-40-157 systemd[1]: Stopping nnue-pr-validation.service - /bin/bash /home/ubuntu/validation/start.sh...
+Oct 05 06:37:43 ip-172-31-40-157 systemd[1]: nnue-pr-validation.service: Deactivated successfully.
+Oct 05 06:37:43 ip-172-31-40-157 systemd[1]: Stopped nnue-pr-validation.service - /bin/bash /home/ubuntu/validation/start.sh.
+Oct 05 06:37:43 ip-172-31-40-157 systemd[1]: nnue-pr-validation.service: Consumed 5h 10min 31.642s CPU time, 2.4G memory peak, 0B memory swap peak.
+Oct 05 06:37:43 ip-172-31-40-157 bash[27494]: mkdir: cannot create directory ‘source’: File exists

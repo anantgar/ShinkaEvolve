@@ -1,0 +1,16 @@
+{
+  "archive_collected": true,
+  "complete": false,
+  "archive_sha256": "2035a4630ed4585fb2dfa60644814eaf2df8b846ed836be058eebc721a24c411",
+  "archive_bytes": 5254583,
+  "archive_encryption": "AES256",
+  "boot_identity_sha256": "ba49b4f81d6b5479831eb98924a7a1ee9403c713ffd5f062adf564946816f8fd",
+  "failure": null,
+  "partial_comparisons": [
+    {
+      "comparison": "timing-neon-pointer",
+      "blocks": 9,
+      "estimate_reported": false
+    }
+  ]
+}

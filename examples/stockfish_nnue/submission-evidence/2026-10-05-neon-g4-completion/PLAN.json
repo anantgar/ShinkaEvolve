@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-05",
+  "base": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+  "patch_sha256": {
+    "pointer": "b84b50cdabf31d1b4e6ac127765837527f504ca7444e0d104026c36c287a8c38"
+  },
+  "source_sha256": "167b76c28c733ef5b639749618720988992b358af719ec9a6dbb6d21e98c8c77",
+  "corpus_sha256": "8cf513a99de0497ea1c64742091da3ce18f966db47488bc0d8c176b44fff7965",
+  "positions": 48,
+  "phases": {
+    "early": 16,
+    "middle": 16,
+    "late": 16
+  },
+  "blocks": 128,
+  "sample_target_seconds": 1.5,
+  "timing": "Sequential fresh-process ABBA/BAAB; A/A per compiler/ISA/depth, fixed 128-block comparisons; no favorable retries",
+  "variants": [
+    "pointer"
+  ],
+  "builds": "GCC PGO/LTO ordinary NEON",
+  "hardware": [
+    "Graviton4"
+  ],
+  "boot": "Fresh instance per family; Intel controller excludes both engine core siblings",
+  "deadline_hours": 10,
+  "spot_cap_per_worker_hour": 0.15,
+  "compute_ceiling_usd": 1.0,
+  "selection": "Infrastructure completion only; retain original partial archive and service journal, no completed NEON candidate result was available.",
+  "experiment": "ordinary-neon-g4-completion",
+  "max_hours": 4,
+  "build_metadata": {
+    "GIT_SHA": "49ea5ded",
+    "GIT_DATE": "20260930",
+    "GIT_DIFFINDEX": ""
+  },
+  "production_embedding": "normal profile-build default; external EvalFile has the same pinned network",
+  "replacement_reason": "Original Graviton4 service was externally stopped/restarted during NEON candidate at 9/128 blocks; start.sh then failed because source exists. No completed candidate result or checkpoint estimate is used. Repeat full matching A/A and candidate once to complete the interrupted comparison.",
+  "primary_submission_variant": "pointer",
+  "submission_commit": "830c5c301ad1f5698f7aa3821a23c4156f0dfff1",
+  "production_profile": "One baseline-generated immutable profile per compiler/architecture; both builds in identical source path use that same profile; no training of candidate.",
+  "comparisons": [
+    "neon-aa",
+    "neon-pointer"
+  ],
+  "x86_guard": "Exact disassembly identity using common profile, before timing",
+  "clang_guard": "Exact disassembly identity using common profile, before timing",
+  "arm_gate": "ARM workers may build and run exact checks concurrently; no calibration or candidate timing until the Intel common-profile identity receipt is approved.",
+  "profile_warning_policy": "GCC source-line location warnings only are recorded and permitted via -Wno-error=coverage-mismatch; GCC retains these counts. Control-flow/counter-count mismatches and missing profiles stop validation. No counter data modified."
+}

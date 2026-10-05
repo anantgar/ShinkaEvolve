@@ -1,6 +1,6 @@
 {
-  "all_archives_collected": false,
-  "owned_resources_cleaned": false,
+  "all_archives_collected": true,
+  "owned_resources_cleaned": true,
   "rows": [
     {
       "hardware": "c7g",
@@ -91,6 +91,111 @@
       "excluded_path_timing_equivalent": null,
       "rejection": null,
       "file": "c7g-gcc-pointer.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "clang-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 0.999587499706128,
+      "interval_95": [
+        0.9987044831364578,
+        1.0004712970055092
+      ],
+      "excluded_path_timing_equivalent": true,
+      "rejection": null,
+      "file": "c8g-clang-aa.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "clang-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0001256541422758,
+      "interval_95": [
+        0.9996750137983829,
+        1.0005764976289069
+      ],
+      "excluded_path_timing_equivalent": true,
+      "rejection": null,
+      "file": "c8g-clang-pointer.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 0.9999438035161352,
+      "interval_95": [
+        0.9996378377552328,
+        1.0002498629260006
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-aa.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-deeper-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0000806257293096,
+      "interval_95": [
+        0.9997164472833606,
+        1.0004449368388162
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-deeper-aa.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-deeper-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.005464556736665,
+      "interval_95": [
+        1.00457375918227,
+        1.0063561441984963
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-deeper-pointer.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0048364026390257,
+      "interval_95": [
+        1.0044941917166201,
+        1.0051787301457944
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-pointer.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "neon-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0000935554504922,
+      "interval_95": [
+        0.999537758120876,
+        1.0006496618336376
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-neon-aa.json"
     },
     {
       "hardware": "c7i",

@@ -71,3 +71,11 @@ The cause is not recorded; the partial control yields no estimate. A
 [bounded NEON-only completion](submission-evidence/2026-10-05-neon-completion/PLAN.json)
 uses unchanged corpus, sample budget and rejection rules on a new boot.
 Both independent repeat archives are collected and their AWS resources cleaned.
+
+Graviton4 also stopped during NEON candidate timing (9/128 blocks). The
+[retained journal](submission-evidence/2026-10-05-common-profile/c8g-service-journal.txt)
+records a worker stop/restart and a failed restart because the source directory
+already exists. The initiator is not recorded. A
+[G4 NEON-only completion](submission-evidence/2026-10-05-neon-g4-completion/PLAN.json)
+repeats the full control and candidate with unchanged rules; no partial estimate
+is used. All original primary/repeat archives and AWS resources are cleaned.
