@@ -52,3 +52,9 @@ Baseline-only calibration produced longer deeper samples on Graviton4. The
 was extended to 7h45 for the worker and 7h50 for archive handling, without
 restarting it. Repeat workers are bounded to 5h45 plus archive handling.
 Comparison budgets, samples and statistical rejection rules are unchanged.
+
+The [complete Graviton3 repeat-boot archive](submission-evidence/2026-10-05-pointer-repeat/completed-results.json)
+measured +0.918% at depth 11 (95% interval +0.843% to +0.994%) and +1.108% at
+depth 13 (+1.048% to +1.167%), with accepted matching A/A controls and verified
+immutable profiles. Other comparisons remain pending; cross-boot variation
+will be reported rather than replaced by one pooled estimate.
