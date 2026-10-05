@@ -1,0 +1,22 @@
+{
+  "status": "stopped_before_timing",
+  "metadata_equal": true,
+  "assembly_identity": {
+    "identical": false,
+    "hashes": [
+      "c6177ef304a5ff696176942d7d2bdb975c5bb062c13703a22fb1552aae9c418c",
+      "816d049e1ecd730d13c4e71b59380bad471a99eae6298cf342f7f3ec4f99faee"
+    ]
+  },
+  "normalized_function_differences": {
+    "functions": 927,
+    "changed": [
+      "Stockfish::(anonymous namespace)::set_sizes(Stockfish::(anonymous namespace)::PairsData*, unsigned char*, unsigned char const*)",
+      "Stockfish::SystemWideSharedConstant<Stockfish::Eval::NNUE::Network>::SystemWideSharedConstant(Stockfish::Eval::NNUE::Network const&, unsigned long)",
+      "Stockfish::SystemWideSharedConstant<Stockfish::Eval::NNUE::Network>::SystemWideSharedConstant(Stockfish::Eval::NNUE::Network const&, unsigned long) [clone .cold]",
+      "Stockfish::report_failed_allocation(unsigned long)",
+      "std::_Function_handler<std::optional<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > (Stockfish::Option const&), Stockfish::Engine::Engine(std::optional<std::filesystem::__cxx11::path>)::{lambda(Stockfish::Option const&)#1}>::_M_invoke(std::_Any_data const&, Stockfish::Option const&)"
+    ]
+  },
+  "interpretation": "Separate PGO builds still differ on an excluded source path. Frozen common-profile confirmation required; no causal speed estimate."
+}

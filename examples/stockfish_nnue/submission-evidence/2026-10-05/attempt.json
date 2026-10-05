@@ -1,0 +1,28 @@
+{
+  "workers": {
+    "c7g": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "cf9c82f95d34c0eefa3ab2899ccec0c68838d483c5f7c05cef51295946d9bd6c",
+      "archive_bytes": 3461530,
+      "encryption": "AES256"
+    },
+    "c8g": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "60c8fb787cf0baabd10321b60bba44506e97cb75bff7ddda8c539b709b40031b",
+      "archive_bytes": 5087734,
+      "encryption": "AES256"
+    },
+    "c7i": {
+      "state": "terminated",
+      "collected": true,
+      "archive_sha256": "742c311116852da324754ecdb6bfbda55922dbf84b0124fd47c01cd6e1991a95",
+      "archive_bytes": 1205438,
+      "encryption": "AES256"
+    }
+  },
+  "owned_resources_cleaned": true,
+  "candidate_timings_observed": false,
+  "stop_reason": "Equal metadata was insufficient; separate PGO generated excluded-path code differences."
+}

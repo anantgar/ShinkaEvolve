@@ -9,3 +9,8 @@ and normalized case digest. Pointer source now matches PR commit `830c5c3`
 including comments. Common build metadata is asserted from actual compile
 commands, and x86 code identity must pass before measurement. Runtime data is
 published only from completed receipts. No Fishtest or Elo result is claimed.
+
+The Intel [code-identity guard](x86-guard.json) failed before timing. ARM workers
+were stopped before timing. [All archives were collected and owned resources
+cleaned up](attempt.json). The [common-profile replacement](../2026-10-05-common-profile/)
+is declared separately.

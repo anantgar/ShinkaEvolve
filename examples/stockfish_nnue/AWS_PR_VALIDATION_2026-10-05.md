@@ -1,44 +1,46 @@
-# Metadata-controlled Stockfish validation — October 5, 2026
+# Controlled pointer validation — October 5, 2026
 
-Status: fresh native on-demand c7g.xlarge, c8g.xlarge and c7i.xlarge workers
-launched. No corrected speed result is claimed before completed receipts.
+Status: the common-profile x86 preflight is running. No qualified speed estimate
+is claimed. The PR remains pointer-only at `830c5c3`, based on `49ea5ded`.
 
-This replaces the confounded October 3/4 timings. Patched dirty trees enabled
-`GIT_DIFFINDEX`, unlike baseline; x86 version code and binary layout differed.
-Earlier speed claims are withdrawn. All observations and checkpoints remain
-preserved. The first October 4 resources were terminated and cleaned up.
+## Why the builds changed
 
-The [frozen plan and worker](submission-evidence/2026-10-05/) retain the same
-48-case corpus, source archive, base `49ea5ded38315cff8e67f4a677a9e7811612fbf6`,
-network SHA-256 `252f33942263bc8b8f740ba8aec3fed5a159ff148113c47a55c18c33d6627ab3`,
-128-block fresh-process ABBA/BAAB protocol, warmups, CPU/core isolation,
-baseline-only calibration and rejection rules. All variants remain fixed.
+October 3/4 speed claims are withdrawn: patched trees enabled `GIT_DIFFINDEX`,
+unlike baseline. Equal `GIT_SHA`, `GIT_DATE` and empty `GIT_DIFFINDEX` fixed this,
+but the replacement Intel preflight still found code differences in five
+functions after separate PGO training. It stopped before timing. ARM workers
+were stopped and archived; their candidate timings are not substituted for a
+controlled result. [The original plan](submission-evidence/2026-10-05/) is retained.
 
-Changes to the build preflight are declared before corrected timing:
+## Frozen common-profile protocol
 
-- Explicit common `GIT_SHA=49ea5ded`, `GIT_DATE=20260930`, `GIT_DIFFINDEX=` on every
-  build. Inspect actual `misc.cpp` compile lines and reject a mismatch.
-- Production uses normal PGO network embedding. Stockfish's profile-build
-  recursion overrides the previous requested `EXTRACXXFLAGS`; the earlier
-  production builds also embedded the default network. Replay builds retain
-  embedding-off flags. Every network and production bench is checksum/signature
-  checked, and search uses the same pinned external EvalFile.
-- On x86, full disassembly must match after stripping only objdump's file-path
-  header, before any timing. Unexpected code differences stop the worker.
-- Pointer-only source includes the final PR's two explanatory comments. Its
-  patch is the exact engine diff of `830c5c3`; combined includes that pointer
-  component plus the original lane+bank component.
-- Add a fixed pointer-only deeper comparison with the matching deeper A/A.
-  Thirteen comparisons per ARM worker; four on Intel. No favorable retries or
-  sample trimming. Rejected controls remain inconclusive.
+The [plan, worker and exact PR patch](submission-evidence/2026-10-05-common-profile/)
+record the replacement before timing:
 
-Workers have fourteen-hour shutdown backstops, encrypted auto-deleted volumes,
-IMDSv2, operator-IP SSH and automatic private archive upload/termination. Native
-builds and engines run on AWS. On-demand avoids another Spot interruption; a
-separate repeat-boot pointer confirmation will follow the verified build
-preflight. No Fishtest run or fitness admission is included.
+- Generate one baseline PGO profile per compiler/architecture using single-thread
+  `bench`. Preserve its files and SHA-256 hashes. Compile baseline and pointer
+  candidate at the same source path from this profile; reject missing/mismatched
+  profiles or changed hashes. Independent boots generate independent profiles.
+- Verify equal version macros in actual compile commands. Use normal production
+  network embedding and checksum-pinned external EvalFile. Every production
+  build must retain bench `1714434`. Replay builds use embedding-off flags.
+- Require identical full disassembly, after only the objdump file-path header is
+  removed, on excluded x86 and Clang paths before timing. Any unexplained
+  difference stops the worker.
+- Retain the same fixed 48 search cases, 128 fresh-process ABBA/BAAB blocks,
+  warmups, core isolation, baseline-only duration calibration and rejection
+  rules. Run pointer main/deeper comparisons with matching A/A controls, plus
+  ordinary NEON and Clang comparisons. Rejected controls remain inconclusive;
+  no favorable retries or sample trimming.
+- Check exact replay and ASan/UBSan with recovery disabled before timing.
 
-Archives use private prefix `stockfish-nnue-validation/2026-10-05-metadata/`;
-operator access and concrete cases stay under `.work/aws-pr-validation-20261005-metadata/`.
-The original frozen plan is not rewritten, and old data is not substituted with
-favorable new estimates. This is a declared correction of a build confound.
+Source, corpus and network identities are pinned in the plan. Common baseline
+PGO isolates the source change under one profile; it does not measure the effect
+of independently retraining each release binary's profile. Historical component
+comparisons remain diagnostic; the submission contains only pointer materialization.
+
+Native builds and engines run on bounded on-demand AWS workers. Encrypted volumes
+are auto-deleted; workers upload private archives and terminate. Concrete cases
+and operator credentials remain private. No game test or evolution fitness
+admission is included. Fishtest requires a maintainer/account holder because the
+user has no account.
