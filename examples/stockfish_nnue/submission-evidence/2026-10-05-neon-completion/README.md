@@ -1,6 +1,8 @@
-# Graviton3 ordinary NEON completion
+# Ordinary NEON completion
 
-The original worker stopped during A/A (103/128 blocks), before NEON candidate
-timing. Its partial control is inconclusive. This frozen plan completes only
-NEON with unchanged inputs, sample budget and rejection rules on a fresh boot.
-The cause of the original shutdown is not established.
+See [complete receipts](completed-results.json) and [method/results](../../AWS_PR_VALIDATION_2026-10-05.md).
+Plans, workers and interrupted-attempt receipts are retained. Archives and owned
+AWS resources are cleaned up. `scope_qualified` means a complete controlled
+measurement with matching accepted A/A and immutable profiles; original
+`supports_speed_claim=false` is retained because these checks do not qualify
+an evolution worker pool or establish Elo/retrained release-PGO gains.

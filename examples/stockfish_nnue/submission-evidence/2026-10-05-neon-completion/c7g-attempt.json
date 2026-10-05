@@ -1,0 +1,10 @@
+{
+  "archive_collected": true,
+  "complete": true,
+  "archive_sha256": "50e17938dc3cfddec2f99faae4929e63a3e249b6a4727e6e6a7763af1c206186",
+  "archive_bytes": 1533578,
+  "archive_encryption": "AES256",
+  "boot_identity_sha256": "9a54562c8927bff79896b7795e1d7edcccbf4567124c2c9ca2cad952a1b2e223",
+  "failure": null,
+  "partial_comparisons": []
+}

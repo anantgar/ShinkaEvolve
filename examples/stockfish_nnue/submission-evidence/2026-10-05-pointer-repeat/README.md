@@ -1,10 +1,8 @@
 # Independent-boot pointer confirmation
 
-Both Graviton archives are collected and workers, key pair and security group
-cleaned. See [complete receipts](completed-results.json) and
-[the protocol and interpretation](../../AWS_PR_VALIDATION_2026-10-05.md).
-
-`scope_qualified` denotes a complete controlled measurement with an accepted
-matching A/A control and immutable common profile. The original
-`supports_speed_claim=false` flag remains: these operator checks do not qualify
-an evolution worker pool or establish Elo or independently trained release-PGO gains.
+See [complete receipts](completed-results.json) and [method/results](../../AWS_PR_VALIDATION_2026-10-05.md).
+Plans, workers and interrupted-attempt receipts are retained. Archives and owned
+AWS resources are cleaned up. `scope_qualified` means a complete controlled
+measurement with matching accepted A/A and immutable profiles; original
+`supports_speed_claim=false` is retained because these checks do not qualify
+an evolution worker pool or establish Elo/retrained release-PGO gains.

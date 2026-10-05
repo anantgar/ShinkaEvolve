@@ -1,0 +1,36 @@
+{
+  "all_archives_collected": true,
+  "owned_resources_cleaned": true,
+  "rows": [
+    {
+      "hardware": "c8g",
+      "comparison": "neon-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0000439990810064,
+      "interval_95": [
+        0.9993893331195315,
+        1.0006990938918865
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-neon-aa.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "neon-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0062112179921174,
+      "interval_95": [
+        1.0056019099045712,
+        1.0068208952678506
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-neon-pointer.json"
+    }
+  ]
+}

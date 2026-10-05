@@ -1,14 +1,11 @@
 # Validate and submit the NNUE performance patch
 
-This is an exact implementation change: weights, NNUE outputs and search rules
-must remain unchanged. The September 30 Graviton pilot and independent synthetic
-holdout measured 2.33% and 2.26% faster fixed searches. They do not establish
-representative workload performance, portability or Elo, and require a build-
-metadata audit before interpretation. The October 3/4 speed claims are withdrawn:
-baseline and patched trees differed in `GIT_DIFFINDEX`, changing version code and
-binary layout. See the [corrected protocol](AWS_PR_VALIDATION_2026-10-05.md).
-Preserve those frozen
-campaigns and the original patch; create new validation directories and manifests.
+The submitted change must preserve weights, NNUE outputs and search rules.
+The [current pointer-only protocol](AWS_PR_VALIDATION_2026-10-05.md) controls
+build metadata and uses one immutable baseline PGO profile per pair.
+Historical pilot/combined-patch timings do not establish performance of this
+submission. October 3/4 speed claims are withdrawn because `GIT_DIFFINDEX`
+changed version code and layout. Preserve frozen campaigns and raw receipts.
 
 ## What to verify
 
@@ -122,58 +119,30 @@ evolution fitness and completed 128-block campaigns are unchanged.
 
 ## Upstream submission
 
-The first portability check on October 3 rebased the saved patch without conflicts
-onto Stockfish master `49ea5ded38315cff8e67f4a677a9e7811612fbf6` and built the native
-Apple/Clang baseline and candidate. Both default benches searched **1,714,434
-nodes**; fresh-process depth-7 smoke searches matched all recorded fingerprints.
-The public compile helper also passed Apple SIMD and scalar object builds. The
-local standalone branch is `codex/nnue-neon-inference`, commit `233068f`, in
-`.work/submission-master`; the tested optimization contains only the three NNUE files. The published
-branch also adds the first-contribution AUTHORS entry; see
-[submission status and remaining work](SUBMISSION.md).
-These are portability/correctness checks, not local speed evidence. The new
-agent image recipe has not been built: the local Docker daemon was unavailable.
-Master uses `nn-252f33942263.nnue`, different from the pilot's
-network; earlier performance evidence does not transfer automatically. Preserve
-the baseline SHA, network SHA and compiler for every new result.
+[Draft PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
+contains only GCC NEON pointer materialization in `nnue_accumulator.cpp` and
+AUTHORS, commit `830c5c3`. Lane-dot and accumulator-bank changes were removed
+after review. No README is added to Stockfish. Track current checks and remaining
+work in [SUBMISSION.md](SUBMISSION.md).
 
-Before publication, recheck current master and form a small standalone Stockfish
-branch containing only the three NNUE changes. Verify ARM with and without
-dot-product support, GCC and Clang, plus scalar/x86 builds. The GCC-only pointer
-constraints also affect ordinary NEON. Test another ARM CPU family, not just
-another VM of the same type. Consider separating lane-dot/bank changes from
-pointer-scheduling changes if the latter are not consistently beneficial.
+Recheck master, preserve the network/compiler identities, and verify GCC with
+and without dot-product support, Clang and x86. The pointer constraint affects
+ordinary NEON too. Use independent CPU families and boots, matching A/A controls,
+and excluded-path code identity. Common baseline PGO isolates this source change;
+independently retrained release profiles require separate evidence.
 
-Stockfish requests current-master patches, portable code, readable evidence and
-the appropriate bench/functional-change declaration. Its speedup guidance asks
-for repeated benchmarks on different machines and generally Fishtest; gains too small to verify on Fishtest but independently verifiable (for example
-in assembly) may instead go directly to a PR. Our ARM-specific
-gain needs ARM-capable testing: an x86-only match fleet will not measure its benefit.
-Discuss the applicable worker coverage with maintainers before consuming Fishtest
-capacity. More complex patches may require normal STC and LTC tests.
-([Contribution rules](https://github.com/official-stockfish/Stockfish/blob/master/CONTRIBUTING.md),
-[Speedup and submission guidance](https://official-stockfish.github.io/docs/fishtest-wiki/Creating-my-first-test.html#speedups))
+Follow Stockfish's [contribution rules](https://github.com/official-stockfish/Stockfish/blob/master/CONTRIBUTING.md)
+and [speedup guidance](https://official-stockfish.github.io/docs/fishtest-wiki/Creating-my-first-test.html#speedups):
+keep the PR concise, add AUTHORS for a first contribution, use clang-format 20,
+and retain matching bench signatures and a `No functional change` declaration.
+Inspect the actual formatting step; the workflow can mask its failure.
+Performance changes generally need Fishtest unless maintainers accept direct
+evidence under the documented exception. Fishtest is deferred by the user;
+no game result or exemption is claimed. A future test needs affected ARM/GCC
+coverage, not only x86 or Clang workers.
 
-Prepare one clear commit ending with `No functional change`, verified matching
-default bench signatures, hardware/compiler/build details, raw speed scripts and
-results, correctness/sanitizer coverage, and any Fishtest links. Add the author
-to AUTHORS if required for a first contribution. Publish the Stockfish branch
-and open its PR when this evidence is ready; Shinka's infrastructure commits
-do not belong in that PR. [Upstream draft PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208)
-is open with the completed ARM evidence.
-No public Fishtest test has been submitted. Track review readiness in
-[SUBMISSION.md](SUBMISSION.md).
-
-The October 3 AWS launch and preflight receipts are described in
-[AWS_VALIDATION_2026-10-03.md](AWS_VALIDATION_2026-10-03.md). The operator API restores
-its caller's CPU affinity on return, including failures; separate CLI processes
-are also suitable for A/A and candidate phases. Keep frozen campaign files intact.
-On ARM, the generic `general-64` GCC target supplies an unsupported `-m64`; use the
-ARM target for NEON coverage and check generic scalar code on x86. For future
-sanitizer builds, declare `-O1` with debug assertions and sanitizers retained:
-unoptimized ARM checks can spend most runtime in ASan's fake-stack allocator.
-
-For the current PR, [October 4 validation](AWS_PR_VALIDATION_2026-10-04.md) declares
-expanded positions, separate component builds, whole-core Intel isolation and new
-fixed-budget runs. Inspect the actual formatting step: the GitHub workflow permits
-it to fail while leaving the overall job green.
+The operator driver restores caller CPU affinity, including on failure. For
+sanitizer checks use `-O1` while retaining debug assertions and recovery-disabled
+ASan/UBSan. Use an ARM target for ordinary NEON; GCC `general-64` adds unsupported
+`-m64` on ARM. Historic native Apple/Clang and scalar checks are recorded in the
+[October 3 audit](AWS_VALIDATION_2026-10-03.md), rather than treated as speed evidence.

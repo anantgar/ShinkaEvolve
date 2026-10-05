@@ -1,0 +1,36 @@
+{
+  "all_archives_collected": true,
+  "owned_resources_cleaned": true,
+  "rows": [
+    {
+      "hardware": "c7g",
+      "comparison": "neon-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.000082121125644,
+      "interval_95": [
+        0.9995406288719507,
+        1.0006239067279543
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c7g-neon-aa.json"
+    },
+    {
+      "hardware": "c7g",
+      "comparison": "neon-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.00676493875034,
+      "interval_95": [
+        1.0061991347397454,
+        1.0073310609227848
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c7g-neon-pointer.json"
+    }
+  ]
+}

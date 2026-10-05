@@ -1,6 +1,8 @@
-# Graviton4 ordinary NEON completion
+# Ordinary NEON completion
 
-The original service journal records an external worker stop/restart. The restart
-failed because its source directory exists. NEON candidate timing ended at 9/128
-blocks; no checkpoint estimate is used. This frozen plan completes both A/A and
-candidate on a fresh bounded boot, retaining the failed attempt and all rejection rules.
+See [complete receipts](completed-results.json) and [method/results](../../AWS_PR_VALIDATION_2026-10-05.md).
+Plans, workers and interrupted-attempt receipts are retained. Archives and owned
+AWS resources are cleaned up. `scope_qualified` means a complete controlled
+measurement with matching accepted A/A and immutable profiles; original
+`supports_speed_claim=false` is retained because these checks do not qualify
+an evolution worker pool or establish Elo/retrained release-PGO gains.

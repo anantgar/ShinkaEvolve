@@ -1,0 +1,41 @@
+{
+  "verified_utc": "2026-10-05T07:57:10.851322+00:00",
+  "cohorts": [
+    {
+      "cohort": "common-profile-locations",
+      "workers": 3,
+      "instances_terminated_or_purged": true,
+      "all_archives_collected": true,
+      "key_pair_absent": true,
+      "security_group_absent": true,
+      "local_private_key_absent": true
+    },
+    {
+      "cohort": "pointer-repeat",
+      "workers": 2,
+      "instances_terminated_or_purged": true,
+      "all_archives_collected": true,
+      "key_pair_absent": true,
+      "security_group_absent": true,
+      "local_private_key_absent": true
+    },
+    {
+      "cohort": "neon-completion",
+      "workers": 1,
+      "instances_terminated_or_purged": true,
+      "all_archives_collected": true,
+      "key_pair_absent": true,
+      "security_group_absent": true,
+      "local_private_key_absent": true
+    },
+    {
+      "cohort": "neon-g4-completion",
+      "workers": 1,
+      "instances_terminated_or_purged": true,
+      "all_archives_collected": true,
+      "key_pair_absent": true,
+      "security_group_absent": true,
+      "local_private_key_absent": true
+    }
+  ]
+}

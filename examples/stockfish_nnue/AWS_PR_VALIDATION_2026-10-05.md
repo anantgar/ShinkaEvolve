@@ -1,81 +1,73 @@
 # Controlled pointer validation — October 5, 2026
 
-Status: [x86 code identity passed](submission-evidence/2026-10-05-common-profile/x86-code-identity.json).
-GCC pointer and independent-boot comparisons are complete. Clang controls pass.
-Ordinary NEON remains pending. The PR remains pointer-only at `830c5c3`, based on `49ea5ded`.
+All planned checks are complete for [draft PR #7208](https://github.com/official-stockfish/Stockfish/pull/7208),
+commit `830c5c3` against `49ea5ded`. Fishtest is deferred by the user.
 
-## Why the builds changed
+## Results
 
-October 3/4 speed claims are withdrawn: patched trees enabled `GIT_DIFFINDEX`,
-unlike baseline. Equal `GIT_SHA`, `GIT_DATE` and empty `GIT_DIFFINDEX` fixed this,
-but the replacement Intel preflight still found code differences in five
-functions after separate PGO training. It stopped before timing. ARM workers
-were stopped and archived; their candidate timings are not substituted for a
-controlled result. [The original plan](submission-evidence/2026-10-05/) is retained.
+GCC dot-product gains are positive at both depths on both Graviton families and
+independent boots. Graviton3 deeper gains vary across boots; no pooled estimate
+is substituted. Ordinary NEON also passes. Intel and Clang timing intervals are
+inside the predefined ±0.3% equivalence band. All **15 completed A/A controls** pass.
 
-## Frozen common-profile protocol
+| Hardware | Compiler / ISA | Boot | Depth | Gain | 95% interval |
+|---|---|---|---:|---:|---:|
+| Graviton3 | GCC / dotprod | primary | 11 | [+0.835%](submission-evidence/2026-10-05-common-profile/c7g-gcc-pointer.json) | +0.761% to +0.909% |
+| Graviton3 | GCC / dotprod | primary | 13 | [+0.905%](submission-evidence/2026-10-05-common-profile/c7g-gcc-deeper-pointer.json) | +0.841% to +0.969% |
+| Graviton3 | GCC / dotprod | repeat | 11 | [+0.918%](submission-evidence/2026-10-05-pointer-repeat/c7g-gcc-pointer.json) | +0.843% to +0.994% |
+| Graviton3 | GCC / dotprod | repeat | 13 | [+1.108%](submission-evidence/2026-10-05-pointer-repeat/c7g-gcc-deeper-pointer.json) | +1.048% to +1.167% |
+| Graviton3 | GCC / NEON | NEON completion | 11 | [+0.676%](submission-evidence/2026-10-05-neon-completion/c7g-neon-pointer.json) | +0.620% to +0.733% |
+| Graviton3 | Clang / dotprod | primary | 11 | [-0.039%](submission-evidence/2026-10-05-common-profile/c7g-clang-pointer.json) | -0.090% to +0.012% |
+| Graviton4 | GCC / dotprod | primary | 11 | [+0.484%](submission-evidence/2026-10-05-common-profile/c8g-gcc-pointer.json) | +0.449% to +0.518% |
+| Graviton4 | GCC / dotprod | primary | 13 | [+0.546%](submission-evidence/2026-10-05-common-profile/c8g-gcc-deeper-pointer.json) | +0.457% to +0.636% |
+| Graviton4 | GCC / dotprod | repeat | 11 | [+0.518%](submission-evidence/2026-10-05-pointer-repeat/c8g-gcc-pointer.json) | +0.478% to +0.557% |
+| Graviton4 | GCC / dotprod | repeat | 13 | [+0.529%](submission-evidence/2026-10-05-pointer-repeat/c8g-gcc-deeper-pointer.json) | +0.486% to +0.571% |
+| Graviton4 | GCC / NEON | NEON completion | 11 | [+0.621%](submission-evidence/2026-10-05-neon-g4-completion/c8g-neon-pointer.json) | +0.560% to +0.682% |
+| Graviton4 | Clang / dotprod | primary | 11 | [+0.013%](submission-evidence/2026-10-05-common-profile/c8g-clang-pointer.json) | -0.032% to +0.058% |
+| Intel | GCC / AVX2 | primary | 11 | [-0.042%](submission-evidence/2026-10-05-common-profile/c7i-gcc-pointer.json) | -0.170% to +0.086% |
+| Intel | GCC / AVX2 | primary | 13 | [-0.012%](submission-evidence/2026-10-05-common-profile/c7i-gcc-deeper-pointer.json) | -0.130% to +0.107% |
 
-The [plan, worker and exact PR patch](submission-evidence/2026-10-05-common-profile/)
-record the replacement before timing:
+## Method and scope
 
-- Generate one baseline PGO profile per compiler/architecture using single-thread
-  `bench`. Preserve its files and SHA-256 hashes. Compile baseline and pointer
-  candidate at the same source path from this profile; reject missing profiles, changed CFG/counter counts
-  or changed hashes. Source-line warnings are recorded and permitted under
-  the [GCC compatibility policy](submission-evidence/2026-10-05-common-profile/profile-policy.md). Independent boots generate independent profiles.
-- Verify equal version macros in actual compile commands. Use normal production
-  network embedding and checksum-pinned external EvalFile. Every production
-  build must retain bench `1714434`. Replay builds use embedding-off flags.
-- Require identical full disassembly, after only the objdump file-path header is
-  removed, on excluded x86 and Clang paths before timing. Any unexplained
-  difference stops the worker.
-- Retain the same fixed 48 search cases, 128 fresh-process ABBA/BAAB blocks,
-  warmups, core isolation, baseline-only duration calibration and rejection
-  rules. Run pointer main/deeper comparisons with matching A/A controls, plus
-  ordinary NEON and Clang comparisons. Rejected controls remain inconclusive;
-  no favorable retries or sample trimming.
-- Check exact replay and ASan/UBSan with recovery disabled before timing.
+Each pair uses the same immutable, baseline-generated PGO profile, source path,
+compiler and version macros. Raw profile hashes are checked; missing profiles or
+CFG/counter-count mismatches stop validation. Only recorded source-line warnings
+are permitted under the [GCC policy](submission-evidence/2026-10-05-common-profile/profile-policy.md).
+Intel executables are byte-identical; Clang full disassemblies are identical.
 
-Source, corpus and network identities are pinned in the plan. Common baseline
-PGO isolates the source change under one profile; it does not measure the effect
-of independently retraining each release binary's profile. Historical component
-comparisons remain diagnostic; the submission contains only pointer materialization.
+The fixed corpus contains 48 positions sampled across three game phases from
+games already used for correctness replay. Each comparison uses 128 fresh-process
+ABBA/BAAB blocks, 256 paired rounds, warmups, pinned engine cores and baseline-only
+duration calibration. Budgets and rejection rules are unchanged; no sample trimming.
+Plans, exact patches, workers, calibration and receipts are retained in the
+[primary](submission-evidence/2026-10-05-common-profile/),
+[repeat](submission-evidence/2026-10-05-pointer-repeat/),
+[G3 NEON](submission-evidence/2026-10-05-neon-completion/) and
+[G4 NEON](submission-evidence/2026-10-05-neon-g4-completion/) records.
 
-Native builds and engines run on bounded on-demand AWS workers. Encrypted volumes
-are auto-deleted; workers upload private archives and terminate. Concrete cases
-and operator credentials remain private. No game test or evolution fitness
-admission is included. Fishtest requires a maintainer/account holder because the
-user has no account.
+Every production bench is **1714434**. Exact pointer replay, ordinary NEON/Clang
+replay and ASan/UBSan pass. clang-format 20 and
+[all 59 fork CI jobs](https://github.com/anantgar/Stockfish/actions/runs/37245204905)
+pass. [Assembly evidence](submission-evidence/2026-10-05-common-profile/accumulator-assembly.json)
+records paired-load changes as static counts, without inferring dynamic load counts.
 
-Baseline-only calibration produced longer deeper samples on Graviton4. The
-[ARM runtime bound](submission-evidence/2026-10-05-common-profile/runtime-bound.json)
-was extended to 7h45 for the worker and 7h50 for archive handling, without
-restarting it. Repeat workers are bounded to 5h45 plus archive handling.
-Comparison budgets, samples and statistical rejection rules are unchanged.
+These are fixed-corpus, fixed-network, common-profile speed measurements, not Elo,
+independently retrained release-PGO gains or evolution worker-pool qualification.
+October 3/4 speed claims remain withdrawn because version metadata differed.
+Equal metadata initially exposed separate-PGO differences on x86; that attempt
+stopped before timing. Historical receipts remain in the audit records.
 
-The [complete Graviton3 repeat-boot archive](submission-evidence/2026-10-05-pointer-repeat/completed-results.json)
-measured +0.918% at depth 11 (95% interval +0.843% to +0.994%) and +1.108% at
-depth 13 (+1.048% to +1.167%), with accepted matching A/A controls and verified
-immutable profiles. Other comparisons remain pending; cross-boot variation
-will be reported rather than replaced by one pooled estimate.
+## Interrupted attempts and cleanup
 
-The [complete Intel receipts](submission-evidence/2026-10-05-common-profile/completed-results.json)
-pass the predefined equivalence band at both depths: −0.042% at depth 11
-(95% interval −0.170% to +0.086%) and −0.012% at depth 13
-(−0.130% to +0.107%). Matching A/A controls pass and the paired executables
-are byte-identical. The archive is collected and the owned Intel worker terminated.
+The primary G3 NEON control stopped at 103/128 blocks; its cause is unrecorded.
+The [G4 journal](submission-evidence/2026-10-05-common-profile/c8g-service-journal.txt)
+records a worker stop/restart during NEON candidate timing at 9/128, followed by
+failure because the source directory existed. Its initiator is unrecorded.
+Neither partial comparison yields an estimate. Bounded fresh boots complete only
+NEON with the same rules; the prior accepted G4 A/A control is retained too.
 
-The primary Graviton3 worker stopped during NEON A/A at 103/128 blocks,
-before NEON candidate timing. Its six completed comparisons are archived.
-The cause is not recorded; the partial control yields no estimate. A
-[bounded NEON-only completion](submission-evidence/2026-10-05-neon-completion/PLAN.json)
-uses unchanged corpus, sample budget and rejection rules on a new boot.
-Both independent repeat archives are collected and their AWS resources cleaned.
-
-Graviton4 also stopped during NEON candidate timing (9/128 blocks). The
-[retained journal](submission-evidence/2026-10-05-common-profile/c8g-service-journal.txt)
-records a worker stop/restart and a failed restart because the source directory
-already exists. The initiator is not recorded. A
-[G4 NEON-only completion](submission-evidence/2026-10-05-neon-g4-completion/PLAN.json)
-repeats the full control and candidate with unchanged rules; no partial estimate
-is used. All original primary/repeat archives and AWS resources are cleaned.
+All seven primary/repeat/completion workers are terminated, encrypted archives
+collected and hash-verified, and temporary keys/security groups/private keys
+removed. Failed earlier cohorts are also archived and cleaned. Fishtest remains
+a future maintainer/account-holder test or an explicit maintainer exception;
+no game result or exemption is claimed.

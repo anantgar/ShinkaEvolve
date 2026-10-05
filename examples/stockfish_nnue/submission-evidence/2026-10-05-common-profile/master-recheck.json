@@ -1,0 +1,10 @@
+{
+  "checked_utc": "2026-10-05T07:57:32.454131+00:00",
+  "upstream_master": "49ea5ded38315cff8e67f4a677a9e7811612fbf6",
+  "pr_head": "830c5c301ad1f5698f7aa3821a23c4156f0dfff1",
+  "changed_files": [
+    "AUTHORS",
+    "src/nnue/nnue_accumulator.cpp"
+  ],
+  "working_tree_clean": true
+}
