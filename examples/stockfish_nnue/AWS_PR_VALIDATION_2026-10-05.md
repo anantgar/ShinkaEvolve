@@ -1,8 +1,8 @@
 # Controlled pointer validation — October 5, 2026
 
 Status: [x86 code identity passed](submission-evidence/2026-10-05-common-profile/x86-code-identity.json).
-Primary ARM checks and independent-boot confirmations are running. No qualified
-speed estimate is claimed. The PR remains pointer-only at `830c5c3`, based on `49ea5ded`.
+GCC pointer and independent-boot comparisons are complete. Clang controls pass.
+Ordinary NEON remains pending. The PR remains pointer-only at `830c5c3`, based on `49ea5ded`.
 
 ## Why the builds changed
 
@@ -64,3 +64,10 @@ pass the predefined equivalence band at both depths: −0.042% at depth 11
 (95% interval −0.170% to +0.086%) and −0.012% at depth 13
 (−0.130% to +0.107%). Matching A/A controls pass and the paired executables
 are byte-identical. The archive is collected and the owned Intel worker terminated.
+
+The primary Graviton3 worker stopped during NEON A/A at 103/128 blocks,
+before NEON candidate timing. Its six completed comparisons are archived.
+The cause is not recorded; the partial control yields no estimate. A
+[bounded NEON-only completion](submission-evidence/2026-10-05-neon-completion/PLAN.json)
+uses unchanged corpus, sample budget and rejection rules on a new boot.
+Both independent repeat archives are collected and their AWS resources cleaned.

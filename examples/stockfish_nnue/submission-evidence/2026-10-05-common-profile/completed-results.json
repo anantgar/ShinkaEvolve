@@ -3,6 +3,96 @@
   "owned_resources_cleaned": false,
   "rows": [
     {
+      "hardware": "c7g",
+      "comparison": "clang-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0000575123861517,
+      "interval_95": [
+        0.9996072592030315,
+        1.0005079683768514
+      ],
+      "excluded_path_timing_equivalent": true,
+      "rejection": null,
+      "file": "c7g-clang-aa.json"
+    },
+    {
+      "hardware": "c7g",
+      "comparison": "clang-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 0.9996117370941289,
+      "interval_95": [
+        0.999101106757009,
+        1.0001226284091813
+      ],
+      "excluded_path_timing_equivalent": true,
+      "rejection": null,
+      "file": "c7g-clang-pointer.json"
+    },
+    {
+      "hardware": "c7g",
+      "comparison": "gcc-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0000743003657515,
+      "interval_95": [
+        0.9994712340804608,
+        1.0006777305323946
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c7g-gcc-aa.json"
+    },
+    {
+      "hardware": "c7g",
+      "comparison": "gcc-deeper-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 0.9997043886973886,
+      "interval_95": [
+        0.999030923671259,
+        1.0003783077186155
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c7g-gcc-deeper-aa.json"
+    },
+    {
+      "hardware": "c7g",
+      "comparison": "gcc-deeper-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0090501248220725,
+      "interval_95": [
+        1.0084060426016588,
+        1.0096946184262832
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c7g-gcc-deeper-pointer.json"
+    },
+    {
+      "hardware": "c7g",
+      "comparison": "gcc-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0083458124373879,
+      "interval_95": [
+        1.007606812581255,
+        1.009085354291432
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c7g-gcc-pointer.json"
+    },
+    {
       "hardware": "c7i",
       "comparison": "gcc-aa",
       "accepted": true,

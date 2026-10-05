@@ -1,0 +1,16 @@
+{
+  "archive_collected": true,
+  "complete": false,
+  "archive_sha256": "50f1d675205f29abbf85b814db42a10b062de8d16595d12c736630bd2f12bdf5",
+  "archive_bytes": 5178848,
+  "archive_encryption": "AES256",
+  "boot_identity_sha256": "e80661f7a14bbfeeebf25538f42ae5ecdd8240881f57e2dda018b96c743ae92a",
+  "failure": null,
+  "partial_comparisons": [
+    {
+      "comparison": "timing-neon-aa",
+      "blocks": 103,
+      "estimate_reported": false
+    }
+  ]
+}

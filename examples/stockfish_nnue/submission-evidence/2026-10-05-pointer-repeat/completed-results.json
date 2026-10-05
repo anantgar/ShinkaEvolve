@@ -1,6 +1,6 @@
 {
-  "all_archives_collected": false,
-  "owned_resources_cleaned": false,
+  "all_archives_collected": true,
+  "owned_resources_cleaned": true,
   "rows": [
     {
       "hardware": "c7g",
@@ -61,6 +61,66 @@
       "excluded_path_timing_equivalent": null,
       "rejection": null,
       "file": "c7g-gcc-pointer.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 0.9998656703587183,
+      "interval_95": [
+        0.9994695760537804,
+        1.0002619216376174
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-aa.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-deeper-aa",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 0.9996498300706248,
+      "interval_95": [
+        0.9990104878460904,
+        1.0002895814585113
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-deeper-aa.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-deeper-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0052860941996393,
+      "interval_95": [
+        1.0048629085254215,
+        1.0057094580933073
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-deeper-pointer.json"
+    },
+    {
+      "hardware": "c8g",
+      "comparison": "gcc-pointer",
+      "accepted": true,
+      "matching_aa_accepted": true,
+      "scope_qualified": true,
+      "speedup": 1.0051790584513407,
+      "interval_95": [
+        1.0047842428619385,
+        1.0055740291778787
+      ],
+      "excluded_path_timing_equivalent": null,
+      "rejection": null,
+      "file": "c8g-gcc-pointer.json"
     }
   ]
 }

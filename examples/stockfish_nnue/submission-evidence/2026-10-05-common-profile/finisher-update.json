@@ -1,0 +1,7 @@
+{
+  "hardware": "c8g",
+  "worker_pid_unchanged": true,
+  "worker_pid": 3015,
+  "change": "Finisher requires three explicit inactive/failed worker states; records service journal before archiving. Only evidence unit restarted; timing worker remains active.",
+  "reason": "G3 partial archive without a recorded worker failure; cause unknown."
+}

@@ -1,0 +1,49 @@
+"""Controller-core evidence preservation and owned-worker termination."""
+import hashlib,json,subprocess,time,urllib.request,sys
+from pathlib import Path
+r=Path('/home/ubuntu/validation')
+# The validator is a different systemd unit; no polling of benchmark outputs.
+unit=sys.argv[1] if len(sys.argv)>1 else 'nnue-pr-validation'
+inactive_count=0
+while True:
+ state=subprocess.run(['systemctl','show',unit,'-p','ActiveState','--value'],capture_output=True,text=True)
+ if state.returncode==0 and state.stdout.strip() in {'inactive','failed'}:inactive_count+=1
+ else:inactive_count=0
+ if inactive_count>=3:break
+ try:
+  token=urllib.request.urlopen(urllib.request.Request('http://169.254.169.254/latest/api/token',method='PUT',headers={'X-aws-ec2-metadata-token-ttl-seconds':'60'}),timeout=2).read().decode()
+  req=urllib.request.Request('http://169.254.169.254/latest/meta-data/spot/instance-action',headers={'X-aws-ec2-metadata-token':token})
+  with urllib.request.urlopen(req,timeout=2) as response: action=response.read().decode()
+  (r/'evidence/spot-interruption.json').write_text(action+'\n')
+  subprocess.run(['sudo','systemctl','stop',unit],timeout=20)
+  break
+ except Exception: pass
+ time.sleep(15)
+with (r/'evidence/service-journal.txt').open('wb') as log:
+ subprocess.run(['sudo','journalctl','-u',unit,'-u','nnue-pr-evidence','--no-pager'],stdout=log,stderr=subprocess.STDOUT)
+binary_files=[str(p.relative_to(r)) for p in [r/'gcc-pgo-baseline/src/stockfish',r/'gcc-pgo-candidate/src/stockfish'] if p.exists()]
+if binary_files:
+ subprocess.run(['tar','-czf',str(r/'production-binaries.tar.gz'),*binary_files],cwd=r,check=True)
+archive=r/'evidence.tar.gz'
+files=[p.name for p in r.iterdir() if p.name in {'evidence','worker.log','dependencies.log','requirements.lock','deployment.receipt','inputs.json','worker.py','candidate.patch','start.sh','PLAN.json','preparation-v1.tar.gz','inputs-v2.json'}]
+subprocess.run(['tar','-czf',str(archive),*files],cwd=r,check=True)
+digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+request=json.loads((r/'upload.json').read_text())
+# Keep scoped upload authorization out of logs and archived evidence.
+for attempt in range(3):
+ try:
+  binary_archive=r/'production-binaries.tar.gz'
+  if binary_archive.exists() and request.get('binary_url'):
+   req=urllib.request.Request(request['binary_url'],data=binary_archive.read_bytes(),method='PUT',headers={'x-amz-server-side-encryption':'AES256','Content-Type':'application/gzip'})
+   with urllib.request.urlopen(req,timeout=120) as response:
+    if response.status!=200: raise RuntimeError('Binary upload failed')
+  with archive.open('rb') as f:
+   req=urllib.request.Request(request['url'],data=f.read(),method='PUT',headers={'x-amz-server-side-encryption':'AES256','Content-Type':'application/gzip'})
+  with urllib.request.urlopen(req,timeout=120) as response:
+   if response.status!=200: raise RuntimeError('Upload returned unexpected status')
+  (r/'upload.receipt').write_text(json.dumps({'key':request['key'],'sha256':digest,'bytes':archive.stat().st_size})+'\n')
+  subprocess.run(['sudo','shutdown','-h','now'],check=True)
+  break
+ except Exception as e:
+  # Do not render request objects or credential-bearing URLs.
+  (r/'upload.failure').write_text(type(e).__name__+'\n');time.sleep(30)
